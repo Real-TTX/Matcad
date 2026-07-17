@@ -215,35 +215,42 @@ table.data tr:last-child td { border-bottom: none; }
 .stat .value { font-size: 1.8rem; font-weight: 700; }
 .stat .label { color: var(--text-muted); font-size: .85rem; }
 
-/* Route table: routes grouped by base domain (derived from the host), rendered
-   as a real table so every column (Sub-Label, Host, Ziel, …) lines up. */
+/* Route table: routes grouped by base domain (derived from the host).
+   A domain is a bold parent row; its routes are indented children marked with
+   a ↳ branch. Separators appear only BETWEEN domain groups, never between the
+   individual rows of a group. */
 .route-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-.route-table th, .route-table td {
-    padding: .55rem .8rem; text-align: left; border-bottom: 1px solid var(--border);
-    white-space: nowrap; vertical-align: middle;
+.route-table thead th {
+    text-transform: uppercase; font-size: .72rem; letter-spacing: .06em;
+    color: var(--text-muted); font-weight: 600; text-align: left;
+    padding: .65rem .9rem; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
-.route-table th { background: var(--surface-2); font-weight: 600; }
-.route-table tbody tr:hover:not(.group-row) { background: var(--surface-2); }
-.route-table tr:last-child td { border-bottom: none; }
+.route-table td { padding: .6rem .9rem; vertical-align: middle; white-space: nowrap; }
 
-/* Domain group header row */
-.route-table .group-row td {
-    background: var(--surface-2); font-weight: 700; font-size: .95rem;
-    border-bottom: 1px solid var(--border);
-}
-.route-table .group-row .domain-head { display: inline-flex; align-items: center; gap: .45rem; }
+/* Only the group blocks carry a bottom border. */
+.route-table tbody.group { border-bottom: 1px solid var(--border); }
+.route-table tbody.group:last-child { border-bottom: none; }
+.route-table tbody.group tr:hover td { background: var(--surface-2); }
 
-/* Columns */
-.route-table .rlabel {
-    padding-left: 1.6rem; font-family: ui-monospace, Consolas, monospace;
-    font-weight: 600; color: var(--primary);
-}
-.route-table .rlabel.apex { color: var(--text-muted); font-style: italic; }
-.route-table .c-host { font-weight: 600; }
+.route-table tr.parent td { padding-top: .85rem; padding-bottom: .35rem; }
+.route-table .grp-name { display: inline-flex; align-items: center; gap: .45rem; font-weight: 700; }
+.route-table .grp-count { color: var(--text-muted); font-weight: 400; font-size: .8rem; }
+
+.route-table tr.child .c-name { padding-left: .5rem; }
+.route-table .branch { color: var(--text-muted); margin-right: .45rem; }
+.route-table .sub { font-weight: 600; }
+.route-table .sub-domain { color: var(--text-muted); }
+.route-table .apex { color: var(--text-muted); font-style: italic; }
+
 .route-table .rtarget { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; color: var(--text-muted); }
-.route-table .c-actions { width: 1%; text-align: right; }
 .route-table .c-meta { color: var(--text-muted); font-size: .85rem; }
-.route-table tr.route-off td { opacity: .55; }
+.route-table .c-actions { text-align: right; width: 1%; }
+.route-table tr.route-off td { opacity: .5; }
+
+/* Status dot (green = aktiv, grau = inaktiv) */
+.dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .45rem; vertical-align: middle; }
+.dot-ok { background: var(--success); }
+.dot-off { background: var(--text-muted); }
 
 /* Real-time log stream */
 .log-stream { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .82rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-height: 420px; overflow-y: auto; }

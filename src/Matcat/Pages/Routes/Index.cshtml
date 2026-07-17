@@ -21,7 +21,6 @@
         <table class="route-table">
             <thead>
                 <tr>
-                    <th>Sub-Label</th>
                     <th>Host</th>
                     <th>Ziel</th>
                     <th>Auth</th>
@@ -29,24 +28,40 @@
                     <th class="c-actions"></th>
                 </tr>
             </thead>
-            <tbody>
-                @if (Model.Groups.Count == 0)
-                {
-                    <tr><td colspan="6" class="empty">Keine Routen gefunden.</td></tr>
-                }
-                @foreach (var group in Model.Groups)
-                {
-                    <tr class="group-row">
-                        <td colspan="6"><span class="domain-head"><icon name="network" /> @group.BaseDomain</span></td>
+            @if (Model.Groups.Count == 0)
+            {
+                <tbody><tr><td colspan="5" class="empty">Keine Routen gefunden.</td></tr></tbody>
+            }
+            @foreach (var group in Model.Groups)
+            {
+                <tbody class="group">
+                    <tr class="parent">
+                        <td colspan="5">
+                            <span class="grp-name"><icon name="network" /> @group.BaseDomain</span>
+                            <span class="grp-count">· @group.Routes.Count</span>
+                        </td>
                     </tr>
                     @foreach (var r in group.Routes)
                     {
                         var label = Model.SubLabel(r.Host);
                         var apex = label == "@";
                         var authName = Model.AuthName(r);
-                        <tr class="@(r.Enabled ? "" : "route-off")">
-                            <td><span class="rlabel @(apex ? "apex" : "")">@(apex ? "(root)" : label)</span></td>
-                            <td class="c-host">@r.Host @if (r.Wildcard) { <span class="badge badge-warn">Wildcard</span> }</td>
+                        <tr class="child @(r.Enabled ? "" : "route-off")">
+                            <td class="c-name">
+                                <span class="branch">↳</span>
+                                @if (apex)
+                                {
+                                    <span class="apex">(root)</span>
+                                }
+                                else
+                                {
+                                    <span class="sub">@label</span><span class="sub-domain">.@group.BaseDomain</span>
+                                }
+                                @if (r.Wildcard)
+                                {
+                                    <span class="badge badge-warn">Wildcard</span>
+                                }
+                            </td>
                             <td class="rtarget">
                                 @if (!string.IsNullOrEmpty(r.Upstream))
                                 {
@@ -74,11 +89,11 @@
                             <td>
                                 @if (r.Enabled)
                                 {
-                                    <span class="badge badge-success">Aktiv</span>
+                                    <span><span class="dot dot-ok"></span> Aktiv</span>
                                 }
                                 else
                                 {
-                                    <span class="badge badge-muted">Inaktiv</span>
+                                    <span><span class="dot dot-off"></span> Inaktiv</span>
                                 }
                             </td>
                             <td class="c-actions">
@@ -86,8 +101,8 @@
                             </td>
                         </tr>
                     }
-                }
-            </tbody>
+                </tbody>
+            }
         </table>
     </div>
 
