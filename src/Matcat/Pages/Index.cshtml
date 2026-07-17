@@ -31,64 +31,69 @@
     }
     else
     {
-        <ul class="tree">
-            @foreach (var group in Model.Groups)
-            {
-                <li class="domain-group">
-                    <div class="domain-head"><icon name="network" /> @group.BaseDomain</div>
-                    <ul>
+        <div class="table-wrap">
+            <table class="route-table">
+                <thead>
+                    <tr>
+                        <th>Sub-Label</th>
+                        <th>Host</th>
+                        <th>Ziel</th>
+                        <th>Letzter Zugriff</th>
+                        <th>IP</th>
+                        <th class="c-actions"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var group in Model.Groups)
+                    {
+                        <tr class="group-row">
+                            <td colspan="6"><span class="domain-head"><icon name="network" /> @group.BaseDomain</span></td>
+                        </tr>
                         @foreach (var row in group.Routes)
                         {
                             var r = row.Route;
-                            <li>
-                                <div class="route-row @(r.Enabled ? "" : "route-off")">
-                                    <span class="rlabel">@row.Label</span>
-                                    <span class="host">@r.Host</span>
-                                    @if (r.Wildcard)
+                            var apex = row.Label == "@";
+                            <tr class="@(r.Enabled ? "" : "route-off")">
+                                <td><span class="rlabel @(apex ? "apex" : "")">@(apex ? "(root)" : row.Label)</span></td>
+                                <td class="c-host">@r.Host @if (r.Wildcard) { <span class="badge badge-warn">Wildcard</span> }</td>
+                                <td class="rtarget">
+                                    @if (!string.IsNullOrEmpty(r.Upstream))
                                     {
-                                        <span class="badge badge-warn">Wildcard</span>
+                                        @r.Upstream
                                     }
-                                    @if (!r.Enabled)
+                                    else if (!string.IsNullOrEmpty(r.FallbackUrl))
                                     {
-                                        <span class="badge badge-muted">Inaktiv</span>
+                                        <text>↪ @r.FallbackUrl</text>
                                     }
-                                    <span class="rtarget text-muted">
-                                        @if (!string.IsNullOrEmpty(r.Upstream))
-                                        {
-                                            @r.Upstream
-                                        }
-                                        else if (!string.IsNullOrEmpty(r.FallbackUrl))
-                                        {
-                                            <text>↪ @r.FallbackUrl</text>
-                                        }
-                                        else
-                                        {
-                                            <text>—</text>
-                                        }
-                                    </span>
-                                    <span class="meta">
-                                        @if (row.LastAccess is DateTime la)
-                                        {
-                                            <span title="@la.ToString("u")"><icon name="clock" /> @la.ToLocalTime().ToString("dd.MM. HH:mm")</span>
-                                            <span>@row.LastIp</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">kein Zugriff</span>
-                                        }
-                                        @if (!r.Wildcard)
-                                        {
-                                            <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Öffnen"><icon name="open" /></a>
-                                        }
-                                        <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
-                                    </span>
-                                </div>
-                            </li>
+                                    else
+                                    {
+                                        <text>—</text>
+                                    }
+                                </td>
+                                <td class="c-meta">
+                                    @if (row.LastAccess is DateTime la)
+                                    {
+                                        <span title="@la.ToString("u")">@la.ToLocalTime().ToString("dd.MM. HH:mm")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">kein Zugriff</span>
+                                    }
+                                </td>
+                                <td class="c-meta">@(row.LastIp ?? "—")</td>
+                                <td class="c-actions">
+                                    @if (!r.Wildcard)
+                                    {
+                                        <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Öffnen"><icon name="open" /></a>
+                                    }
+                                    <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
+                                </td>
+                            </tr>
                         }
-                    </ul>
-                </li>
-            }
-        </ul>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 </div>
 

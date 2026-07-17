@@ -17,64 +17,79 @@
         <button type="submit" class="btn"><icon name="search" /> Suchen</button>
     </form>
 
-    @if (Model.Groups.Count == 0)
-    {
-        <p class="empty">Keine Routen gefunden.</p>
-    }
-    else
-    {
-        <ul class="tree">
-            @foreach (var group in Model.Groups)
-            {
-                <li class="domain-group">
-                    <div class="domain-head"><icon name="network" /> @group.BaseDomain</div>
-                    <ul>
-                        @foreach (var r in group.Routes)
-                        {
-                            <li>
-                                <div class="route-row @(r.Enabled ? "" : "route-off")">
-                                    <span class="rlabel">@Model.SubLabel(r.Host)</span>
-                                    <span class="host">@r.Host</span>
-                                    @if (r.Wildcard)
-                                    {
-                                        <span class="badge badge-warn">Wildcard</span>
-                                    }
-                                    @{
-                                        var authName = Model.AuthName(r);
-                                    }
-                                    @if (authName != null)
-                                    {
-                                        <span class="badge badge-info">@authName</span>
-                                    }
-                                    @if (!r.Enabled)
-                                    {
-                                        <span class="badge badge-muted">Inaktiv</span>
-                                    }
-                                    <span class="rtarget text-muted">
-                                        @if (!string.IsNullOrEmpty(r.Upstream))
-                                        {
-                                            @r.Upstream
-                                        }
-                                        else if (!string.IsNullOrEmpty(r.FallbackUrl))
-                                        {
-                                            <text>↪ @r.FallbackUrl</text>
-                                        }
-                                        else
-                                        {
-                                            <text>—</text>
-                                        }
-                                    </span>
-                                    <span class="meta">
-                                        <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
-                                    </span>
-                                </div>
-                            </li>
-                        }
-                    </ul>
-                </li>
-            }
-        </ul>
-    }
+    <div class="table-wrap">
+        <table class="route-table">
+            <thead>
+                <tr>
+                    <th>Sub-Label</th>
+                    <th>Host</th>
+                    <th>Ziel</th>
+                    <th>Auth</th>
+                    <th>Status</th>
+                    <th class="c-actions"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Groups.Count == 0)
+                {
+                    <tr><td colspan="6" class="empty">Keine Routen gefunden.</td></tr>
+                }
+                @foreach (var group in Model.Groups)
+                {
+                    <tr class="group-row">
+                        <td colspan="6"><span class="domain-head"><icon name="network" /> @group.BaseDomain</span></td>
+                    </tr>
+                    @foreach (var r in group.Routes)
+                    {
+                        var label = Model.SubLabel(r.Host);
+                        var apex = label == "@";
+                        var authName = Model.AuthName(r);
+                        <tr class="@(r.Enabled ? "" : "route-off")">
+                            <td><span class="rlabel @(apex ? "apex" : "")">@(apex ? "(root)" : label)</span></td>
+                            <td class="c-host">@r.Host @if (r.Wildcard) { <span class="badge badge-warn">Wildcard</span> }</td>
+                            <td class="rtarget">
+                                @if (!string.IsNullOrEmpty(r.Upstream))
+                                {
+                                    @r.Upstream
+                                }
+                                else if (!string.IsNullOrEmpty(r.FallbackUrl))
+                                {
+                                    <text>↪ @r.FallbackUrl</text>
+                                }
+                                else
+                                {
+                                    <text>—</text>
+                                }
+                            </td>
+                            <td>
+                                @if (authName != null)
+                                {
+                                    <span class="badge badge-info">@authName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                @if (r.Enabled)
+                                {
+                                    <span class="badge badge-success">Aktiv</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-muted">Inaktiv</span>
+                                }
+                            </td>
+                            <td class="c-actions">
+                                <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
 
     <div class="list-actions">
         <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> Neue Route</a>
