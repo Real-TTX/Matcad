@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+# NOTE: do NOT add a "data" ignore here. On the Windows Docker client the
+# dockerignore matcher is case-insensitive and would exclude the source folder
+# src/Matcat/Data/. Runtime data lives on the /data volume, not in the context.
+**/.localdata/
+*.db
+.git/

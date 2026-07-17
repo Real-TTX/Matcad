@@ -1,0 +1,77 @@
+namespace Matcat.Config;
+
+/// <summary>
+/// Configuration objects are persisted as JSON on the data volume (JSON is the
+/// primary store for configs per project convention). Each carries a long Id so
+/// routes can reference providers/authentications, plus lightweight audit info.
+/// </summary>
+public abstract class ConfigEntity
+{
+    public long Id { get; set; }
+    public DateTime CreateDate { get; set; }
+    public long? CreateUserId { get; set; }
+    public DateTime? UpdateDate { get; set; }
+    public long? UpdateUserId { get; set; }
+}
+
+/// <summary>A DNS provider (e.g. Netcup). Credentials are provider-specific key/value pairs.</summary>
+public class ProviderConfig : ConfigEntity
+{
+    public string Name { get; set; } = "";
+    /// <summary>Caddy DNS module id, e.g. "netcup".</summary>
+    public string Type { get; set; } = "netcup";
+    /// <summary>e.g. netcup: customer_number, api_key, api_password.</summary>
+    public Dictionary<string, string> Credentials { get; set; } = new();
+}
+
+public enum AuthType
+{
+    BasicAuth = 0,
+    /// <summary>Matcat forward-auth portal (login page + redirect back to endpoint).</summary>
+    Matcat = 1
+}
+
+public class BasicAuthUser
+{
+    public string Username { get; set; } = "";
+    /// <summary>bcrypt hash (Caddy accepts bcrypt for basic_auth).</summary>
+    public string PasswordHash { get; set; } = "";
+}
+
+/// <summary>A reusable authentication that can be attached to any route.</summary>
+public class AuthenticationConfig : ConfigEntity
+{
+    public string Name { get; set; } = "";
+    public AuthType Type { get; set; } = AuthType.BasicAuth;
+    public List<BasicAuthUser> Users { get; set; } = new();
+}
+
+/// <summary>
+/// A route in the hierarchical domain tree. A route may be a wildcard host and
+/// may have children (e.g. sub.example.com under *.example.com).
+/// </summary>
+public class RouteConfig : ConfigEntity
+{
+    public long? ParentId { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
+    public string Host { get; set; } = "";
+    public bool Wildcard { get; set; }
+    /// <summary>Reverse-proxy target, e.g. http://backend:8080.</summary>
+    public string? Upstream { get; set; }
+    /// <summary>Used when no upstream matches / as a catch-all redirect.</summary>
+    public string? FallbackUrl { get; set; }
+    public long? AuthenticationId { get; set; }
+    /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
+    public long? ProviderId { get; set; }
+    public bool Enabled { get; set; } = true;
+}
+
+public class MatcatSettings
+{
+    public string BaseDomain { get; set; } = "";
+    public int LogRetentionDays { get; set; } = 30;
+    public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
+    /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
+    public string AcmeEmail { get; set; } = "";
+}

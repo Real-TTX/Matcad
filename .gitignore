@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Runtime data. Note: we deliberately do NOT ignore a folder literally named
+# "data" because on case-insensitive filesystems that also matches the source
+# folder src/Matcat/Data/. Local dev writes runtime data to .localdata/ instead.
+.localdata/
+*.db
+*.db-shm
+*.db-wal
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

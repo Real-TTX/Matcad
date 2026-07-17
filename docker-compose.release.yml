@@ -1,0 +1,47 @@
+name: matcat
+
+services:
+  matcat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${MATCAT_VERSION:-0.0.0}
+    image: matcat:${MATCAT_VERSION:-latest}
+    depends_on:
+      - caddy
+    ports:
+      - "4433:4433"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Matcat__DataDir=/data
+      - Matcat__ConfigDir=/data/config
+      - Matcat__CaddyLogDir=/caddy-logs
+      - Matcat__Caddy__AdminUrl=http://caddy:2019
+    volumes:
+      - matcat-data:/data
+      - caddy-logs:/caddy-logs
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile
+    image: matcat-caddy:${MATCAT_VERSION:-latest}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    # Admin API is intentionally NOT published to the host in release;
+    # it is only reachable inside the docker network by the matcat service.
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/caddy-logs
+    restart: unless-stopped
+
+volumes:
+  matcat-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:
