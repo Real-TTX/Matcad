@@ -30,6 +30,8 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<CaddyConfigGenerator>();
 builder.Services.AddSingleton<CaddyService>();
+builder.Services.AddSingleton<LogBroadcaster>();
+builder.Services.AddHostedService<LogIngestService>();
 
 // Persist Data Protection keys on the volume so antiforgery tokens and any
 // protected payloads stay valid across container restarts.
@@ -85,5 +87,31 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
+
+// Real-time log stream (Server-Sent Events). Dependency-free live updates.
+app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, CancellationToken ct) =>
+{
+    ctx.Response.Headers.ContentType = "text/event-stream";
+    ctx.Response.Headers.CacheControl = "no-cache";
+    ctx.Response.Headers["X-Accel-Buffering"] = "no";
+
+    var jsonOpts = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+    async Task Send(LogEntry e)
+    {
+        await ctx.Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(e, jsonOpts)}\n\n", ct);
+        await ctx.Response.Body.FlushAsync(ct);
+    }
+
+    var (reader, lease) = broadcaster.Subscribe();
+    using (lease)
+    {
+        foreach (var e in broadcaster.Recent().Reverse()) await Send(e);
+        try
+        {
+            await foreach (var e in reader.ReadAllAsync(ct)) await Send(e);
+        }
+        catch (OperationCanceledException) { }
+    }
+}).RequireAuthorization();
 
 app.Run();

@@ -3,7 +3,74 @@
 @{
     ViewData["Title"] = "Dashboard";
 }
-<div class="card">
-    <h2>Willkommen bei Matcat</h2>
-    <p class="text-muted">Caddy-Verwaltung · Version @Model.Version</p>
+
+<div class="stat-grid">
+    <div class="stat">
+        <div class="value">@Model.Requests24h</div>
+        <div class="label">Requests (24 h)</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.TotalRequests</div>
+        <div class="label">Requests gesamt</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.ClientErrors24h</div>
+        <div class="label">4xx (24 h)</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.ServerErrors24h</div>
+        <div class="label">5xx (24 h)</div>
+    </div>
 </div>
+
+<div class="card">
+    <h2><icon name="routes" /> Routen</h2>
+    @if (Model.Tree.Count == 0)
+    {
+        <p class="empty">Noch keine Routen. <a asp-page="/Routes/Edit">Erste Route anlegen</a>.</p>
+    }
+    else
+    {
+        <ul class="tree">
+            @foreach (var node in Model.Tree)
+            {
+                <partial name="_RouteNode" model="node" />
+            }
+        </ul>
+    }
+</div>
+
+<div class="card">
+    <h2><icon name="clock" /> Letzte Zugriffe (Echtzeit)</h2>
+    <div class="log-stream" id="log-stream"></div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const stream = document.getElementById('log-stream');
+            const fmt = n => (n < 10 ? '0' : '') + n;
+            function addLine(e) {
+                const d = new Date(e.timestamp);
+                const t = fmt(d.getHours()) + ':' + fmt(d.getMinutes()) + ':' + fmt(d.getSeconds());
+                const cls = 'st-' + Math.floor(e.status / 100);
+                const row = document.createElement('div');
+                row.className = 'log-line';
+                row.innerHTML =
+                    '<span class="text-muted">' + t + '</span>' +
+                    '<span class="' + cls + '">' + e.status + '</span>' +
+                    '<span>' + e.method + '</span>' +
+                    '<span>' + escapeHtml(e.host) + escapeHtml(e.path) + '</span>' +
+                    '<span class="text-muted">' + escapeHtml(e.remoteIp) + '</span>' +
+                    '<span class="text-muted">' + Math.round(e.durationMs) + ' ms</span>';
+                stream.insertBefore(row, stream.firstChild);
+                while (stream.childElementCount > 200) stream.removeChild(stream.lastChild);
+            }
+            function escapeHtml(s) {
+                return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            }
+            const es = new EventSource('/logs/stream');
+            es.onmessage = ev => { try { addLine(JSON.parse(ev.data)); } catch (e) { } };
+        })();
+    </script>
+}
