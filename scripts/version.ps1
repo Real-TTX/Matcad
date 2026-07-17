@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Computes the Matcat version string and (for release/nightly) increments the
+  Computes the Matcad version string and (for release/nightly) increments the
   build counter in version.json.
 
 .PARAMETER Mode

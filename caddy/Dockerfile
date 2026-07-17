@@ -7,5 +7,5 @@ RUN xcaddy build \
 
 FROM caddy:2
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
-# Bootstrap config: enable the admin API so Matcat can push config at runtime.
+# Bootstrap config: enable the admin API so Matcad can push config at runtime.
 COPY Caddyfile /etc/caddy/Caddyfile

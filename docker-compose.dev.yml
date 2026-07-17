@@ -1,25 +1,25 @@
-name: matcat-dev
+name: matcad-dev
 
 services:
-  matcat:
+  matcad:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION: ${MATCAT_VERSION:-local}
-    image: matcat:dev
+        VERSION: ${MATCAD_VERSION:-local}
+    image: matcad:dev
     depends_on:
       - caddy
     ports:
       - "4433:4433"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - Matcat__DataDir=/data
-      - Matcat__ConfigDir=/data/config
-      - Matcat__CaddyLogDir=/caddy-logs
-      - Matcat__Caddy__AdminUrl=http://caddy:2019
+      - Matcad__DataDir=/data
+      - Matcad__ConfigDir=/data/config
+      - Matcad__CaddyLogDir=/caddy-logs
+      - Matcad__Caddy__AdminUrl=http://caddy:2019
     volumes:
-      - matcat-data:/data
+      - matcad-data:/data
       - caddy-logs:/caddy-logs
       # Read-only socket for the Docker discovery mode.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -29,7 +29,7 @@ services:
     build:
       context: ./caddy
       dockerfile: Dockerfile
-    image: matcat-caddy:dev
+    image: matcad-caddy:dev
     ports:
       - "8080:80"
       - "8443:443"
@@ -45,12 +45,12 @@ services:
   whoami:
     image: traefik/whoami
     labels:
-      matcat.enable: "true"
-      matcat.port: "80"
+      matcad.enable: "true"
+      matcad.port: "80"
     restart: unless-stopped
 
 volumes:
-  matcat-data:
+  matcad-data:
   caddy-data:
   caddy-config:
   caddy-logs:

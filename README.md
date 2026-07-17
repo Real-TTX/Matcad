@@ -1,4 +1,4 @@
-# Matcat
+# Matcad
 
 Eine Web-UI zur Verwaltung von [Caddy](https://caddyserver.com/) inkl. DNS-Provider-Modulen
 (z. B. Netcup), hierarchischen Routen (Wildcard / Fallback), zentral verwalteten
@@ -6,7 +6,7 @@ Authentications, Log-Statistiken und lokalem Benutzer-/Rollensystem.
 
 ## Stack
 
-- **matcat** — ASP.NET Core (.NET 10, Razor Pages), UI auf Port **4433**
+- **matcad** — ASP.NET Core (.NET 10, Razor Pages), UI auf Port **4433**
 - **caddy** — eigenes Image (xcaddy) mit DNS-Modulen; Config wird zur Laufzeit per Admin-API gepusht
 - **SQLite** — Logik (Users, Sessions, Request-Logs) auf dem Daten-Volume
 - **JSON** — Configs (Providers, Routes, Authentications, Settings) auf dem Daten-Volume
@@ -28,17 +28,17 @@ Live-Reload = Container neu bauen und Stack redeployen:
 ## Authentication-Typen
 
 - **Basic Auth** — verwaltete Benutzerliste (bcrypt) → Caddy `basic_auth`.
-- **Matcat** — Login-Portal mit Weiterleitung (Caddy `forward_auth`). Nicht
-  angemeldete Zugriffe werden zum Matcat-Portal umgeleitet, nach der Anmeldung
+- **Matcad** — Login-Portal mit Weiterleitung (Caddy `forward_auth`). Nicht
+  angemeldete Zugriffe werden zum Matcad-Portal umgeleitet, nach der Anmeldung
   zurück zum Endpunkt. Voraussetzung (unter *Settings*):
   - **Basis-Domain** (z. B. `example.com`) — der Portal-Cookie gilt
     subdomain-übergreifend.
-  - **Login-Portal-URL** — ein *ungeschützter* Host, der auf Matcat zeigt
-    (z. B. eine Route `auth.example.com` → `http://matcat:4433`).
+  - **Login-Portal-URL** — ein *ungeschützter* Host, der auf Matcad zeigt
+    (z. B. eine Route `auth.example.com` → `http://matcad:4433`).
 
 ## Echtzeit-Logs
 
-Caddy schreibt JSON-Access-Logs auf ein gemeinsames Volume; Matcat liest sie
+Caddy schreibt JSON-Access-Logs auf ein gemeinsames Volume; Matcad liest sie
 ein (SQLite) und streamt neue Einträge per Server-Sent Events ins Dashboard.
 
 ## Versionierung

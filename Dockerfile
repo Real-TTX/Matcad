@@ -4,10 +4,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG VERSION=0.0.0-local
 WORKDIR /src
-COPY src/Matcat/Matcat.csproj src/Matcat/
-RUN dotnet restore src/Matcat/Matcat.csproj
+COPY src/Matcad/Matcad.csproj src/Matcad/
+RUN dotnet restore src/Matcad/Matcad.csproj
 COPY src/ src/
-RUN dotnet publish src/Matcat/Matcat.csproj -c Release -o /app \
+RUN dotnet publish src/Matcad/Matcad.csproj -c Release -o /app \
     -p:InformationalVersion=${VERSION}
 
 # ---- Runtime stage ----
@@ -18,4 +18,4 @@ COPY --from=build /app ./
 VOLUME ["/data"]
 EXPOSE 4433
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENTRYPOINT ["dotnet", "Matcat.dll"]
+ENTRYPOINT ["dotnet", "Matcad.dll"]

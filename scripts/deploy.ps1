@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Rebuilds the images and (re)deploys the full Matcat stack.
+  Rebuilds the images and (re)deploys the full Matcad stack.
   This is the live-reload / testing workflow: always rebuild + redeploy.
 
 .PARAMETER Mode
@@ -22,14 +22,14 @@ Set-Location $repoRoot
 
 if ($Mode -eq 'release') {
     $composeFile = 'docker-compose.release.yml'
-    $env:MATCAT_VERSION = & "$PSScriptRoot/version.ps1" -Mode release
+    $env:MATCAD_VERSION = & "$PSScriptRoot/version.ps1" -Mode release
 } else {
     $composeFile = 'docker-compose.dev.yml'
-    $env:MATCAT_VERSION = & "$PSScriptRoot/version.ps1" -Mode local
+    $env:MATCAD_VERSION = & "$PSScriptRoot/version.ps1" -Mode local
 }
 
-Write-Host "Deploying Matcat ($Mode) version $($env:MATCAT_VERSION)..." -ForegroundColor Cyan
+Write-Host "Deploying Matcad ($Mode) version $($env:MATCAD_VERSION)..." -ForegroundColor Cyan
 docker compose -f $composeFile up -d --build
 if ($LASTEXITCODE -ne 0) { throw "docker compose failed with exit code $LASTEXITCODE" }
 
-Write-Host "Done. Matcat UI: http://localhost:4433" -ForegroundColor Green
+Write-Host "Done. Matcad UI: http://localhost:4433" -ForegroundColor Green

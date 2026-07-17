@@ -1,0 +1,11 @@
+@page
+@model Matcad.Pages.Authentications.IndexModel
+@{
+    ViewData["Title"] = "Authentications";
+}
+<div class="card">
+    <partial name="Controls/_DataTable" model="Model.Table" />
+    <div class="list-actions">
+        <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> Neue Authentication</a>
+    </div>
+</div>
