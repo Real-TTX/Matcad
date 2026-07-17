@@ -85,6 +85,8 @@ public class DataColumn
 public class DataRow
 {
     public List<IHtmlContent> Cells { get; set; } = new();
+    /// <summary>When set, the table renders a trailing "edit" icon button linking here.</summary>
+    public string? EditUrl { get; set; }
     public DataRow() { }
     public DataRow(params IHtmlContent[] cells) { Cells = cells.ToList(); }
 }

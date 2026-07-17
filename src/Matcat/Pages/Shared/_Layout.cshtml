@@ -40,6 +40,14 @@
                 </div>
             </header>
             <main class="content">
+                @if (TempData["Flash"] is string flash)
+                {
+                    <div class="alert alert-success">@flash</div>
+                }
+                @if (TempData["FlashError"] is string flashError)
+                {
+                    <div class="alert alert-error">@flashError</div>
+                }
                 @RenderBody()
             </main>
         </div>

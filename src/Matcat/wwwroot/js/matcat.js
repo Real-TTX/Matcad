@@ -23,13 +23,21 @@ function initTabs(root) {
 }
 
 // --- Delete confirmation ----------------------------------------------------
-// Any form with [data-confirm] asks before submitting.
+// [data-confirm] on a form asks before submit; on a button/link it asks before
+// the click proceeds.
 function initConfirms(root) {
     root.querySelectorAll('form[data-confirm]').forEach(form => {
         if (form.dataset.confirmBound) return;
         form.dataset.confirmBound = '1';
         form.addEventListener('submit', e => {
             if (!confirm(form.getAttribute('data-confirm'))) e.preventDefault();
+        });
+    });
+    root.querySelectorAll('button[data-confirm], a[data-confirm]').forEach(el => {
+        if (el.dataset.confirmBound) return;
+        el.dataset.confirmBound = '1';
+        el.addEventListener('click', e => {
+            if (!confirm(el.getAttribute('data-confirm'))) e.preventDefault();
         });
     });
 }

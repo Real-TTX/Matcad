@@ -1,5 +1,6 @@
 using Matcat.Auth;
 using Matcat.Config;
+using Microsoft.AspNetCore.DataProtection;
 using Matcat.Data;
 using Matcat.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -23,6 +24,14 @@ builder.Services.AddRazorPages(o =>
 builder.Services.AddDbContext<MatcatDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
+
+// Persist Data Protection keys on the volume so antiforgery tokens and any
+// protected payloads stay valid across container restarts.
+var keysDir = Path.Combine(dataDir, "keys");
+Directory.CreateDirectory(keysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDir))
+    .SetApplicationName("Matcat");
 
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)

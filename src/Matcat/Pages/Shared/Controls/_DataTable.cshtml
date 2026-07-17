@@ -1,4 +1,8 @@
 @model Matcat.Controls.DataTable
+@{
+    var hasEdit = Model.Rows.Any(r => r.EditUrl != null);
+    var colCount = Model.Columns.Count + (hasEdit ? 1 : 0);
+}
 
 <div class="data-table" id="@Model.Id">
     <form method="get" class="toolbar">
@@ -53,12 +57,16 @@
                             }
                         </th>
                     }
+                    @if (hasEdit)
+                    {
+                        <th style="width:1%"></th>
+                    }
                 </tr>
             </thead>
             <tbody>
                 @if (Model.Rows.Count == 0)
                 {
-                    <tr><td colspan="@Model.Columns.Count" class="empty">@Model.EmptyText</td></tr>
+                    <tr><td colspan="@colCount" class="empty">@Model.EmptyText</td></tr>
                 }
                 else
                 {
@@ -68,6 +76,15 @@
                             @foreach (var cell in row.Cells)
                             {
                                 <td>@cell</td>
+                            }
+                            @if (hasEdit)
+                            {
+                                <td>
+                                    @if (row.EditUrl != null)
+                                    {
+                                        <a class="btn btn-sm btn-ghost" href="@row.EditUrl" title="Bearbeiten"><icon name="edit" /></a>
+                                    }
+                                </td>
                             }
                         </tr>
                     }
