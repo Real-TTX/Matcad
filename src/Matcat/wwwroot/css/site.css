@@ -189,6 +189,14 @@ table.data tr:last-child td { border-bottom: none; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
+/* Read-only code view (e.g. generated Caddy config) */
+.code-view {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem; overflow: auto; max-height: 520px; margin: 0;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .82rem; line-height: 1.5;
+}
+.code-view code { white-space: pre; }
+
 /* --------------------------------------------------------------- Badges */
 .badge { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .5rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
 .badge-success { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }

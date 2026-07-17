@@ -7,6 +7,7 @@
     <div class="tabbar">
         <button class="tab active" data-tab="general"><icon name="settings" /> Einstellungen</button>
         <button class="tab" data-tab="users"><icon name="auth" /> Benutzer</button>
+        <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy-Config</button>
     </div>
 
     <div class="tab-panel active" data-panel="general">
@@ -78,4 +79,30 @@
             <a class="btn btn-primary" asp-page="User"><icon name="add" /> Neuer Benutzer</a>
         </div>
     </div>
+
+    <div class="tab-panel" data-panel="caddy">
+        <p class="hint">
+            Automatisch generierte Caddy-Konfiguration (JSON), die Matcat über die
+            Admin-API an Caddy überträgt. <strong>Nur-Lesen</strong> – Änderungen erfolgen
+            über Routes, Providers und Authentications. Matcat nutzt bewusst die
+            JSON-API, kein klassisches Caddyfile.
+        </p>
+        <div class="btn-row" style="margin-top:0">
+            <button type="button" class="btn btn-sm" onclick="matcatCopyConfig(this)"><icon name="save" /> Kopieren</button>
+        </div>
+        <pre class="code-view"><code id="caddy-config">@Model.CaddyConfigJson</code></pre>
+    </div>
 </div>
+
+@section Scripts {
+    <script>
+        function matcatCopyConfig(btn) {
+            const text = document.getElementById('caddy-config').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const old = btn.innerHTML;
+                btn.textContent = 'Kopiert ✓';
+                setTimeout(() => btn.innerHTML = old, 1500);
+            });
+        }
+    </script>
+}

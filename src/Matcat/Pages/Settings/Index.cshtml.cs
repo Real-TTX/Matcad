@@ -24,11 +24,14 @@ public class IndexModel : PageModel
 
     public List<User> Users { get; private set; } = new();
     public string? CaddyStatus { get; private set; }
+    /// <summary>The Caddy JSON config Matcat generates and pushes (read-only view).</summary>
+    public string CaddyConfigJson { get; private set; } = "";
 
     public async Task OnGetAsync()
     {
         Load();
         Users = await _auth.ListUsers();
+        CaddyConfigJson = _caddy.BuildJson();
         var running = await _caddy.GetRunningConfigAsync();
         CaddyStatus = running != null ? "erreichbar" : "nicht erreichbar";
     }
