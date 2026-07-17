@@ -21,6 +21,8 @@ services:
     volumes:
       - matcat-data:/data
       - caddy-logs:/caddy-logs
+      # Read-only socket for the Docker discovery mode.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
   caddy:
@@ -39,8 +41,12 @@ services:
     restart: unless-stopped
 
   # Test upstream so routes have something to proxy to during development.
+  # Labeled so the Docker discovery mode has something to find.
   whoami:
     image: traefik/whoami
+    labels:
+      matcat.enable: "true"
+      matcat.port: "80"
     restart: unless-stopped
 
 volumes:

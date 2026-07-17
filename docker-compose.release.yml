@@ -21,6 +21,8 @@ services:
     volumes:
       - matcat-data:/data
       - caddy-logs:/caddy-logs
+      # Read-only socket for the optional Docker discovery mode.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
   caddy:

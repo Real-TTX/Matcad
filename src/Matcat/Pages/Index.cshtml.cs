@@ -10,7 +10,9 @@ public class IndexModel : PageModel
 {
     private readonly MatcatDbContext _db;
     private readonly ConfigStore _store;
-    public IndexModel(MatcatDbContext db, ConfigStore store) { _db = db; _store = store; }
+    private readonly Matcat.Services.RouteProvider _routes;
+    public IndexModel(MatcatDbContext db, ConfigStore store, Matcat.Services.RouteProvider routes)
+    { _db = db; _store = store; _routes = routes; }
 
     public string Version { get; private set; } = "";
     public int TotalRequests { get; private set; }
@@ -43,9 +45,11 @@ public class IndexModel : PageModel
         ClientErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 400 && r.Status < 500);
         ServerErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 500);
 
+        var allRoutes = _routes.All();
+
         // Latest access time per host (one small query per configured route host).
         var lastByHost = new Dictionary<string, DateTime>();
-        foreach (var host in _store.Routes.Select(r => r.Host).Distinct())
+        foreach (var host in allRoutes.Select(r => r.Host).Distinct())
         {
             var last = await _db.RequestLogs.Where(r => r.Host == host)
                 .OrderByDescending(r => r.Timestamp).FirstOrDefaultAsync();
@@ -53,7 +57,7 @@ public class IndexModel : PageModel
         }
 
         // Build the domain tree automatically from the host names.
-        foreach (var group in RouteTree.Build(_store.Routes))
+        foreach (var group in RouteTree.Build(allRoutes))
         {
             var g = new DomainGroup { BaseDomain = group.BaseDomain };
             foreach (var route in group.Routes)

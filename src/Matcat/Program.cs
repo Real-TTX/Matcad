@@ -30,10 +30,14 @@ builder.Services.AddDbContext<MatcatDbContext>(o => o.UseSqlite($"Data Source={d
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<DockerRouteCache>();
+builder.Services.AddSingleton<RouteProvider>();
 builder.Services.AddSingleton<CaddyConfigGenerator>();
 builder.Services.AddSingleton<CaddyService>();
 builder.Services.AddSingleton<LogBroadcaster>();
 builder.Services.AddHostedService<LogIngestService>();
+builder.Services.AddSingleton<DockerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerService>());
 
 // Persist Data Protection keys on the volume so antiforgery tokens and any
 // protected payloads stay valid across container restarts.

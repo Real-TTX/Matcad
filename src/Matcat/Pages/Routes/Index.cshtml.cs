@@ -7,7 +7,8 @@ namespace Matcat.Pages.Routes;
 public class IndexModel : PageModel
 {
     private readonly ConfigStore _store;
-    public IndexModel(ConfigStore store) => _store = store;
+    private readonly Matcat.Services.RouteProvider _routes;
+    public IndexModel(ConfigStore store, Matcat.Services.RouteProvider routes) { _store = store; _routes = routes; }
 
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
     [BindProperty(SupportsGet = true)] public string? Status { get; set; }
@@ -21,7 +22,7 @@ public class IndexModel : PageModel
 
     public void OnGet()
     {
-        var items = _store.Routes.AsEnumerable();
+        var items = _routes.All().AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(Q))
             items = items.Where(r =>

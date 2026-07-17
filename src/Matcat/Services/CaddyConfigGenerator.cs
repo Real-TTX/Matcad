@@ -16,11 +16,13 @@ namespace Matcat.Services;
 public class CaddyConfigGenerator
 {
     private readonly ConfigStore _store;
+    private readonly RouteProvider _routes;
     private readonly IConfiguration _cfg;
 
-    public CaddyConfigGenerator(ConfigStore store, IConfiguration cfg)
+    public CaddyConfigGenerator(ConfigStore store, RouteProvider routes, IConfiguration cfg)
     {
         _store = store;
+        _routes = routes;
         _cfg = cfg;
     }
 
@@ -33,7 +35,8 @@ public class CaddyConfigGenerator
     public object Build()
     {
         var settings = _store.Settings;
-        var routes = _store.Routes.Where(r => r.Enabled && !string.IsNullOrWhiteSpace(r.Host)).ToList();
+        // Manual routes merged with Docker-derived routes (manual wins on collision).
+        var routes = _routes.All().Where(r => r.Enabled && !string.IsNullOrWhiteSpace(r.Host)).ToList();
 
         // Specific hosts must be matched before wildcards.
         var ordered = routes.OrderBy(r => r.Wildcard ? 1 : 0).ThenBy(r => r.Host).ToList();

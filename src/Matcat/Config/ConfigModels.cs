@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Matcat.Config;
 
 /// <summary>
@@ -64,6 +66,13 @@ public class RouteConfig : ConfigEntity
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
     public bool Enabled { get; set; } = true;
+
+    // --- Derived routes (e.g. from Docker); not persisted to routes.json. ---
+    /// <summary>null = manually managed; "docker" = derived from a container.</summary>
+    [JsonIgnore] public string? Source { get; set; }
+    /// <summary>Origin detail, e.g. the container name.</summary>
+    [JsonIgnore] public string? SourceDetail { get; set; }
+    [JsonIgnore] public bool IsDerived => Source != null;
 }
 
 public class MatcatSettings
@@ -80,4 +89,29 @@ public class MatcatSettings
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
     public string AcmeEmail { get; set; } = "";
+    public DockerSettings Docker { get; set; } = new();
+}
+
+/// <summary>
+/// Docker discovery mode: read labels/names from a Docker host and derive routes.
+/// </summary>
+public class DockerSettings
+{
+    public bool Enabled { get; set; }
+    /// <summary>Docker Engine endpoint. Local socket by default.</summary>
+    public string Endpoint { get; set; } = "unix:///var/run/docker.sock";
+    /// <summary>Base domain for auto-naming (containername.&lt;BaseDomain&gt;).
+    /// Falls back to the global BaseDomain when empty.</summary>
+    public string BaseDomain { get; set; } = "";
+    /// <summary>Only bind containers that carry matcat.enable=true (opt-in).</summary>
+    public bool RequireEnableLabel { get; set; } = true;
+}
+
+/// <summary>Container label keys understood by the Docker discovery.</summary>
+public static class DockerLabels
+{
+    public const string Enable = "matcat.enable";
+    public const string Host = "matcat.host";
+    public const string Port = "matcat.port";
+    public const string Auth = "matcat.auth";
 }
