@@ -52,7 +52,6 @@ public class AuthenticationConfig : ConfigEntity
 /// </summary>
 public class RouteConfig : ConfigEntity
 {
-    public long? ParentId { get; set; }
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
     public string Host { get; set; } = "";

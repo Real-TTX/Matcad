@@ -25,16 +25,68 @@
 
 <div class="card">
     <h2><icon name="routes" /> Routen</h2>
-    @if (Model.Tree.Count == 0)
+    @if (Model.Groups.Count == 0)
     {
         <p class="empty">Noch keine Routen. <a asp-page="/Routes/Edit">Erste Route anlegen</a>.</p>
     }
     else
     {
         <ul class="tree">
-            @foreach (var node in Model.Tree)
+            @foreach (var group in Model.Groups)
             {
-                <partial name="_RouteNode" model="node" />
+                <li class="domain-group">
+                    <div class="domain-head"><icon name="network" /> @group.BaseDomain</div>
+                    <ul>
+                        @foreach (var row in group.Routes)
+                        {
+                            var r = row.Route;
+                            <li>
+                                <div class="route-row @(r.Enabled ? "" : "route-off")">
+                                    <span class="rlabel">@row.Label</span>
+                                    <span class="host">@r.Host</span>
+                                    @if (r.Wildcard)
+                                    {
+                                        <span class="badge badge-warn">Wildcard</span>
+                                    }
+                                    @if (!r.Enabled)
+                                    {
+                                        <span class="badge badge-muted">Inaktiv</span>
+                                    }
+                                    <span class="rtarget text-muted">
+                                        @if (!string.IsNullOrEmpty(r.Upstream))
+                                        {
+                                            @r.Upstream
+                                        }
+                                        else if (!string.IsNullOrEmpty(r.FallbackUrl))
+                                        {
+                                            <text>↪ @r.FallbackUrl</text>
+                                        }
+                                        else
+                                        {
+                                            <text>—</text>
+                                        }
+                                    </span>
+                                    <span class="meta">
+                                        @if (row.LastAccess is DateTime la)
+                                        {
+                                            <span title="@la.ToString("u")"><icon name="clock" /> @la.ToLocalTime().ToString("dd.MM. HH:mm")</span>
+                                            <span>@row.LastIp</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">kein Zugriff</span>
+                                        }
+                                        @if (!r.Wildcard)
+                                        {
+                                            <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Öffnen"><icon name="open" /></a>
+                                        }
+                                        <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
+                                    </span>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </li>
             }
         </ul>
     }

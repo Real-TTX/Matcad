@@ -4,7 +4,78 @@
     ViewData["Title"] = "Routes";
 }
 <div class="card">
-    <partial name="Controls/_DataTable" model="Model.Table" />
+    <form method="get" class="toolbar">
+        <div class="search">
+            <icon name="search" />
+            <input type="search" name="Q" value="@Model.Q" placeholder="Route suchen…" />
+        </div>
+        <select name="Status" onchange="this.form.submit()">
+            <option value="" selected="@(string.IsNullOrEmpty(Model.Status))">Alle</option>
+            <option value="enabled" selected="@(Model.Status == "enabled")">Aktiv</option>
+            <option value="disabled" selected="@(Model.Status == "disabled")">Inaktiv</option>
+        </select>
+        <button type="submit" class="btn"><icon name="search" /> Suchen</button>
+    </form>
+
+    @if (Model.Groups.Count == 0)
+    {
+        <p class="empty">Keine Routen gefunden.</p>
+    }
+    else
+    {
+        <ul class="tree">
+            @foreach (var group in Model.Groups)
+            {
+                <li class="domain-group">
+                    <div class="domain-head"><icon name="network" /> @group.BaseDomain</div>
+                    <ul>
+                        @foreach (var r in group.Routes)
+                        {
+                            <li>
+                                <div class="route-row @(r.Enabled ? "" : "route-off")">
+                                    <span class="rlabel">@Model.SubLabel(r.Host)</span>
+                                    <span class="host">@r.Host</span>
+                                    @if (r.Wildcard)
+                                    {
+                                        <span class="badge badge-warn">Wildcard</span>
+                                    }
+                                    @{
+                                        var authName = Model.AuthName(r);
+                                    }
+                                    @if (authName != null)
+                                    {
+                                        <span class="badge badge-info">@authName</span>
+                                    }
+                                    @if (!r.Enabled)
+                                    {
+                                        <span class="badge badge-muted">Inaktiv</span>
+                                    }
+                                    <span class="rtarget text-muted">
+                                        @if (!string.IsNullOrEmpty(r.Upstream))
+                                        {
+                                            @r.Upstream
+                                        }
+                                        else if (!string.IsNullOrEmpty(r.FallbackUrl))
+                                        {
+                                            <text>↪ @r.FallbackUrl</text>
+                                        }
+                                        else
+                                        {
+                                            <text>—</text>
+                                        }
+                                    </span>
+                                    <span class="meta">
+                                        <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
+                                    </span>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </li>
+            }
+        </ul>
+    }
+
     <div class="list-actions">
         <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> Neue Route</a>
     </div>

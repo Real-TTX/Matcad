@@ -18,23 +18,13 @@
             <div class="form-group">
                 <label asp-for="Host">Host</label>
                 <input asp-for="Host" autofocus placeholder="app.example.com oder *.example.com" />
-                <div class="hint">Beginnt der Host mit <code>*.</code>, wird die Route als Wildcard behandelt.</div>
+                <div class="hint">Beginnt der Host mit <code>*.</code>, wird die Route als Wildcard behandelt.
+                    Die hierarchische Anzeige wird automatisch aus dem Host abgeleitet (Gruppierung nach Basis-Domain).</div>
             </div>
             <div class="form-group">
                 <label asp-for="Name">Name</label>
                 <input asp-for="Name" placeholder="optional – sonst wird der Host verwendet" />
             </div>
-        </div>
-
-        <div class="form-group">
-            <label asp-for="ParentId">Übergeordnete Route</label>
-            <select asp-for="ParentId">
-                @foreach (var (value, text) in Model.ParentOptions)
-                {
-                    <option value="@value" selected="@(Sel(Model.ParentId, value) == "selected")">@text</option>
-                }
-            </select>
-            <div class="hint">Für die hierarchische Anzeige (z. B. Subdomains unter <code>*.example.com</code>).</div>
         </div>
 
         <div class="form-row">

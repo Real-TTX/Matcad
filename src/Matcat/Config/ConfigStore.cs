@@ -147,15 +147,7 @@ public class ConfigStore
 
     public void DeleteRoute(long id)
     {
-        lock (_lock)
-        {
-            // Re-parent children to the deleted route's parent so the tree stays valid.
-            var route = Routes.FirstOrDefault(x => x.Id == id);
-            if (route == null) return;
-            foreach (var child in Routes.Where(x => x.ParentId == id))
-                child.ParentId = route.ParentId;
-            Routes.RemoveAll(x => x.Id == id);
-            SaveRoutes();
-        }
+        // The route tree is derived from host names, so no re-parenting is needed.
+        lock (_lock) { Routes.RemoveAll(x => x.Id == id); SaveRoutes(); }
     }
 }

@@ -16,7 +16,6 @@ public class EditModel : PageModel
     [BindProperty] public string Name { get; set; } = "";
     [BindProperty] public string Host { get; set; } = "";
     [BindProperty] public bool Wildcard { get; set; }
-    [BindProperty] public long? ParentId { get; set; }
     [BindProperty] public string? Upstream { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
@@ -26,7 +25,6 @@ public class EditModel : PageModel
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
 
-    public List<(string Value, string Text)> ParentOptions { get; private set; } = new();
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
 
@@ -36,7 +34,7 @@ public class EditModel : PageModel
         {
             var r = _store.Routes.FirstOrDefault(x => x.Id == Id);
             if (r == null) return RedirectToPage("Index");
-            Name = r.Name; Host = r.Host; Wildcard = r.Wildcard; ParentId = r.ParentId;
+            Name = r.Name; Host = r.Host; Wildcard = r.Wildcard;
             Upstream = r.Upstream; FallbackUrl = r.FallbackUrl;
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
         }
@@ -59,7 +57,6 @@ public class EditModel : PageModel
         route.Name = string.IsNullOrWhiteSpace(Name) ? Host : Name;
         route.Host = Host.Trim();
         route.Wildcard = Wildcard;
-        route.ParentId = ParentId is > 0 ? ParentId : null;
         route.Upstream = string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
         route.FallbackUrl = string.IsNullOrWhiteSpace(FallbackUrl) ? null : FallbackUrl!.Trim();
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
@@ -91,10 +88,6 @@ public class EditModel : PageModel
 
     private void BuildOptions()
     {
-        ParentOptions.Add(("", "— keine (Root) —"));
-        foreach (var r in _store.Routes.Where(r => r.Id != Id).OrderBy(r => r.Host))
-            ParentOptions.Add((r.Id.ToString(), $"{r.Host}"));
-
         AuthOptions.Add(("", "— keine —"));
         foreach (var a in _store.Authentications.OrderBy(a => a.Name))
             AuthOptions.Add((a.Id.ToString(), $"{a.Name} ({a.Type})"));

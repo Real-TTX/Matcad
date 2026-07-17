@@ -17,12 +17,18 @@ public class IndexModel : PageModel
     public int Requests24h { get; private set; }
     public int ClientErrors24h { get; private set; }
     public int ServerErrors24h { get; private set; }
-    public List<RouteNode> Tree { get; private set; } = new();
+    public List<DomainGroup> Groups { get; private set; } = new();
 
-    public class RouteNode
+    public class DomainGroup
+    {
+        public string BaseDomain { get; init; } = "";
+        public List<RouteRow> Routes { get; } = new();
+    }
+
+    public class RouteRow
     {
         public RouteConfig Route { get; init; } = null!;
-        public List<RouteNode> Children { get; } = new();
+        public string Label { get; init; } = "";
         public DateTime? LastAccess { get; set; }
         public string? LastIp { get; set; }
     }
@@ -38,7 +44,7 @@ public class IndexModel : PageModel
         ClientErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 400 && r.Status < 500);
         ServerErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 500);
 
-        // Latest access per host (one small query per configured route).
+        // Latest access per host (one small query per configured route host).
         var lastByHost = new Dictionary<string, (DateTime Ts, string Ip)>();
         foreach (var host in _store.Routes.Select(r => r.Host).Distinct())
         {
@@ -47,22 +53,17 @@ public class IndexModel : PageModel
             if (last != null) lastByHost[host] = (last.Timestamp, last.RemoteIp);
         }
 
-        // Build the hierarchical tree.
-        var nodes = _store.Routes.ToDictionary(r => r.Id, r => new RouteNode { Route = r });
-        foreach (var node in nodes.Values)
+        // Build the domain tree automatically from the host names.
+        foreach (var group in RouteTree.Build(_store.Routes))
         {
-            if (lastByHost.TryGetValue(node.Route.Host, out var la))
+            var g = new DomainGroup { BaseDomain = group.BaseDomain };
+            foreach (var route in group.Routes)
             {
-                node.LastAccess = la.Ts;
-                node.LastIp = la.Ip;
+                var row = new RouteRow { Route = route, Label = RouteTree.SubLabel(route.Host) };
+                if (lastByHost.TryGetValue(route.Host, out var la)) { row.LastAccess = la.Ts; row.LastIp = la.Ip; }
+                g.Routes.Add(row);
             }
-        }
-        foreach (var node in nodes.Values)
-        {
-            if (node.Route.ParentId is long pid && nodes.TryGetValue(pid, out var parent))
-                parent.Children.Add(node);
-            else
-                Tree.Add(node);
+            Groups.Add(g);
         }
     }
 }
