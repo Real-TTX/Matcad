@@ -14,12 +14,26 @@
     <form method="post">
         <input type="hidden" asp-for="Id" />
 
+        <div class="form-group">
+            <label>Typ</label>
+            <div class="segmented">
+                <label class="seg-option">
+                    <input type="radio" asp-for="RouteType" value="single" onchange="matcatRouteType('single')" />
+                    <span><icon name="routes" /> Einzeldomain</span>
+                </label>
+                <label class="seg-option">
+                    <input type="radio" asp-for="RouteType" value="wildcard" onchange="matcatRouteType('wildcard')" />
+                    <span><icon name="network" /> Wildcard</span>
+                </label>
+            </div>
+            <div class="hint" id="type-hint"></div>
+        </div>
+
         <div class="form-row">
             <div class="form-group">
                 <label asp-for="Host">Host</label>
-                <input asp-for="Host" autofocus placeholder="app.example.com oder *.example.com" />
-                <div class="hint">Beginnt der Host mit <code>*.</code>, wird die Route als Wildcard behandelt.
-                    Die hierarchische Anzeige wird automatisch aus dem Host abgeleitet (Gruppierung nach Basis-Domain).</div>
+                <input asp-for="Host" id="host-input" autofocus />
+                <div class="hint" id="host-hint"></div>
             </div>
             <div class="form-group">
                 <label asp-for="Name">Name</label>
@@ -48,14 +62,16 @@
                     }
                 </select>
             </div>
-            <div class="form-group">
-                <label asp-for="ProviderId">DNS-Provider (für Wildcard-Zertifikat)</label>
+            <div class="form-group" id="provider-block">
+                <label asp-for="ProviderId">DNS-Provider <span class="text-muted">(für Wildcard-Zertifikat erforderlich)</span></label>
                 <select asp-for="ProviderId">
                     @foreach (var (value, text) in Model.ProviderOptions)
                     {
                         <option value="@value" selected="@(Sel(Model.ProviderId, value) == "selected")">@text</option>
                     }
                 </select>
+                <div class="hint">Ein Wildcard-Zertifikat (<code>*.domain</code>) deckt alle Subdomains ab –
+                    Subdomain-Routen brauchen dann keinen eigenen Provider.</div>
             </div>
         </div>
 
@@ -79,3 +95,26 @@
         </div>
     </form>
 </div>
+
+@section Scripts {
+    <script>
+        function matcatRouteType(type) {
+            const host = document.getElementById('host-input');
+            const provider = document.getElementById('provider-block');
+            const hostHint = document.getElementById('host-hint');
+            const typeHint = document.getElementById('type-hint');
+            if (type === 'wildcard') {
+                provider.style.display = '';
+                host.placeholder = '*.example.com (oder example.com – wird zu *.)';
+                hostHint.textContent = 'Deckt alle Subdomains ab. Erfordert einen DNS-Provider (DNS-01).';
+                typeHint.textContent = 'Ein Zertifikat für die ganze Domain; einzelne Subdomains erben es.';
+            } else {
+                provider.style.display = 'none';
+                host.placeholder = 'app.example.com';
+                hostHint.textContent = 'Genau ein Host. Zertifikat via HTTP-Challenge – oder abgedeckt durch eine Wildcard-Route.';
+                typeHint.textContent = 'Ein einzelner konkreter Host.';
+            }
+        }
+        matcatRouteType(document.querySelector('input[name="RouteType"]:checked')?.value || 'single');
+    </script>
+}

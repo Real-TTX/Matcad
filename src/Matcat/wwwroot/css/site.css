@@ -145,6 +145,17 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 input[type=checkbox] { width: auto; }
 .form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .form-row > .form-group { flex: 1; min-width: 200px; }
+
+/* Segmented control (e.g. route type Einzeldomain / Wildcard) */
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented .seg-option { position: relative; margin: 0; }
+.segmented .seg-option input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.segmented .seg-option span {
+    display: inline-flex; align-items: center; gap: .4rem; padding: .5rem .9rem;
+    font-size: .9rem; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text-muted);
+}
+.segmented .seg-option + .seg-option span { border-left: 1px solid var(--border); }
+.segmented .seg-option input:checked + span { background: var(--primary); color: #fff; }
 .field-validation-error, .validation-summary-errors { color: var(--danger); font-size: .85rem; }
 
 /* ---------------------------------------------------------------- Tables */

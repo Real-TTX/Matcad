@@ -15,7 +15,8 @@ public class EditModel : PageModel
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
     [BindProperty] public string Host { get; set; } = "";
-    [BindProperty] public bool Wildcard { get; set; }
+    /// <summary>"single" or "wildcard" — chosen explicitly when creating a route.</summary>
+    [BindProperty] public string RouteType { get; set; } = "single";
     [BindProperty] public string? Upstream { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
@@ -34,7 +35,8 @@ public class EditModel : PageModel
         {
             var r = _store.Routes.FirstOrDefault(x => x.Id == Id);
             if (r == null) return RedirectToPage("Index");
-            Name = r.Name; Host = r.Host; Wildcard = r.Wildcard;
+            Name = r.Name; Host = r.Host;
+            RouteType = r.Wildcard ? "wildcard" : "single";
             Upstream = r.Upstream; FallbackUrl = r.FallbackUrl;
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
         }
@@ -44,19 +46,41 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (string.IsNullOrWhiteSpace(Host))
+        var host = (Host ?? "").Trim().ToLowerInvariant();
+        var wildcard = RouteType == "wildcard";
+
+        IActionResult Fail(string message)
         {
-            Error = "Host ist erforderlich (z. B. app.example.com oder *.example.com).";
+            Error = message;
             BuildOptions();
             return Page();
         }
-        Wildcard = Host.StartsWith("*.");
+
+        if (string.IsNullOrWhiteSpace(host))
+            return Fail("Host ist erforderlich.");
+
+        if (wildcard)
+        {
+            // Normalize to the *.domain form and enforce a DNS provider (wildcards
+            // can only be validated via DNS-01, so a provider is mandatory).
+            if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
+            if (host.Count(c => c == '.') < 2)
+                return Fail("Wildcard-Host muss eine Domain enthalten, z. B. *.example.com.");
+            if (ProviderId is not > 0)
+                return Fail("Für eine Wildcard-Route ist ein DNS-Provider erforderlich (DNS-01-Challenge).");
+        }
+        else
+        {
+            if (host.StartsWith("*."))
+                return Fail("Eine Einzeldomain darf nicht mit „*.“ beginnen. Wähle stattdessen den Typ „Wildcard“.");
+            ProviderId = null; // not applicable for single domains
+        }
 
         var route = _store.Routes.FirstOrDefault(x => x.Id == Id) ?? new RouteConfig();
         route.Id = Id ?? 0;
-        route.Name = string.IsNullOrWhiteSpace(Name) ? Host : Name;
-        route.Host = Host.Trim();
-        route.Wildcard = Wildcard;
+        route.Name = string.IsNullOrWhiteSpace(Name) ? host : Name.Trim();
+        route.Host = host;
+        route.Wildcard = wildcard;
         route.Upstream = string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
         route.FallbackUrl = string.IsNullOrWhiteSpace(FallbackUrl) ? null : FallbackUrl!.Trim();
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
