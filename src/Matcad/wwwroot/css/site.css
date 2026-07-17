@@ -239,7 +239,7 @@ table.data tr:last-child td { border-bottom: none; }
 .login-body { display: grid; place-items: center; min-height: 100vh; }
 .login-wrap { width: 100%; max-width: 360px; padding: 1.5rem; }
 .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 2rem; }
-.login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; margin-bottom: 1.5rem; }
+.login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: .08em; }
 
 /* ------------------------------------------------------- Dashboard stats */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
