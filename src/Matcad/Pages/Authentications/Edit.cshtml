@@ -2,7 +2,7 @@
 @using Matcad.Config
 @model Matcad.Pages.Authentications.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Authentication anlegen" : "Authentication bearbeiten";
+    ViewData["Title"] = Model.IsNew ? "Create authentication" : "Edit authentication";
 }
 <div class="card">
     @if (Model.Error != null)
@@ -16,25 +16,25 @@
             <input asp-for="Name" autofocus placeholder="z. B. Interner Bereich" />
         </div>
         <div class="form-group">
-            <label asp-for="Type">Typ</label>
+            <label asp-for="Type">Type</label>
             <select asp-for="Type" onchange="matcadAuthType(this.value)">
-                <option value="BasicAuth">Basic Auth (Browser-Dialog)</option>
-                <option value="Matcad">Matcad (Login-Portal mit Weiterleitung)</option>
+                <option value="BasicAuth">Basic Auth (browser dialog)</option>
+                <option value="Matcad">Matcad (login portal with redirect)</option>
             </select>
         </div>
 
         <div id="basic-block" style="@(Model.Type == AuthType.BasicAuth ? "" : "display:none")">
-            <h2>Benutzer</h2>
-            <p class="hint">Passwort leer lassen, um ein bestehendes Passwort beizubehalten.</p>
+            <h2>Users</h2>
+            <p class="hint">Leave the password empty to keep an existing password.</p>
             <div class="table-wrap">
                 <table class="data" id="basic-users">
-                    <thead><tr><th>Benutzername</th><th>Passwort</th><th style="width:1%"></th></tr></thead>
+                    <thead><tr><th>Username</th><th>Password</th><th style="width:1%"></th></tr></thead>
                     <tbody>
                         @foreach (var u in Model.ExistingUsers)
                         {
                             <tr>
                                 <td><input name="Usernames" value="@u.Username" /></td>
-                                <td><input name="Passwords" type="password" placeholder="•••••••• (unverändert)" autocomplete="new-password" /></td>
+                                <td><input name="Passwords" type="password" placeholder="•••••••• (unchanged)" autocomplete="new-password" /></td>
                                 <td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('tr').remove()"><icon name="delete" /></button></td>
                             </tr>
                         }
@@ -42,28 +42,28 @@
                 </table>
             </div>
             <div class="list-actions">
-                <button type="button" class="btn" onclick="matcadAddUser()"><icon name="add" /> Benutzer hinzufügen</button>
+                <button type="button" class="btn" onclick="matcadAddUser()"><icon name="add" /> Add user</button>
             </div>
         </div>
 
         <div id="matcad-block" style="@(Model.Type == AuthType.Matcad ? "" : "display:none")">
             <div class="alert alert-warn">
-                Beim Typ <strong>Matcad</strong> werden nicht authentifizierte Zugriffe zum
-                Matcad-Login-Portal umgeleitet. Nach erfolgreicher Anmeldung wird der Benutzer
-                zum ursprünglichen Endpunkt zurückgeleitet (Caddy <code>forward_auth</code>).
-                Portal-URL und Basis-Domain werden unter <a asp-page="/Settings/Index">Settings</a> konfiguriert.
+                With the <strong>Matcad</strong> type, unauthenticated requests are redirected to
+                the Matcad login portal. After a successful sign-in the user is sent back to the
+                originally requested endpoint (Caddy <code>forward_auth</code>).
+                Portal URL and base domain are configured under <a asp-page="/Settings/Index">Settings</a>.
             </div>
         </div>
 
         <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Zurück</a>
+            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
             @if (!Model.IsNew)
             {
                 <span class="spacer"></span>
                 <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Authentication wirklich löschen?">
-                    <icon name="delete" /> Löschen
+                        formnovalidate data-confirm="Delete this authentication?">
+                    <icon name="delete" /> Delete
                 </button>
             }
         </div>

@@ -11,7 +11,7 @@
     </div>
     <div class="stat">
         <div class="value">@Model.TotalRequests</div>
-        <div class="label">Requests gesamt</div>
+        <div class="label">Requests total</div>
     </div>
     <div class="stat">
         <div class="value">@Model.ClientErrors24h</div>
@@ -24,10 +24,10 @@
 </div>
 
 <div class="card">
-    <h2><icon name="routes" /> Routen</h2>
+    <h2><icon name="routes" /> Routes</h2>
     @if (Model.Groups.Count == 0)
     {
-        <p class="empty">Noch keine Routen. <a asp-page="/Routes/Edit">Erste Route anlegen</a>.</p>
+        <p class="empty">No routes yet. <a asp-page="/Routes/Edit">Create the first route</a>.</p>
     }
     else
     {
@@ -36,8 +36,8 @@
                 <thead>
                     <tr>
                         <th>Host</th>
-                        <th>Ziel</th>
-                        <th>Letzter Zugriff</th>
+                        <th>Target</th>
+                        <th>Last access</th>
                         <th>Status</th>
                         <th class="c-actions"></th>
                     </tr>
@@ -92,23 +92,23 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted">kein Zugriff</span>
+                                        <span class="text-muted">no access yet</span>
                                     }
                                 </td>
                                 <td>
                                     @if (r.Enabled)
                                     {
-                                        <span><span class="dot dot-ok"></span> Aktiv</span>
+                                        <span><span class="dot dot-ok"></span> Active</span>
                                     }
                                     else
                                     {
-                                        <span><span class="dot dot-off"></span> Inaktiv</span>
+                                        <span><span class="dot dot-off"></span> Inactive</span>
                                     }
                                 </td>
                                 <td class="c-actions">
                                     @if (!r.Wildcard)
                                     {
-                                        <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Öffnen"><icon name="open" /></a>
+                                        <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Open"><icon name="open" /></a>
                                     }
                                     <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
                                 </td>
@@ -122,7 +122,7 @@
 </div>
 
 <div class="card">
-    <h2><icon name="clock" /> Letzte Zugriffe (Echtzeit)</h2>
+    <h2><icon name="clock" /> Recent requests (live)</h2>
     <div class="log-stream" id="log-stream"></div>
 </div>
 

@@ -32,7 +32,7 @@ public class DataTable
     public int Page { get; set; } = 1;
     public int TotalPages { get; set; } = 1;
 
-    public string EmptyText { get; set; } = "Keine Einträge vorhanden.";
+    public string EmptyText { get; set; } = "No entries.";
 
     /// <summary>Extra query params (besides search/filter/sort) to preserve in links.</summary>
     public Dictionary<string, string?> ExtraQuery { get; set; } = new();

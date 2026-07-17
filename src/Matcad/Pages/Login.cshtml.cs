@@ -21,7 +21,7 @@ public class LoginModel : PageModel
         var user = await _auth.ValidateCredentials(Username, Password);
         if (user == null)
         {
-            Error = "Benutzername oder Passwort ist falsch.";
+            Error = "Incorrect username or password.";
             return Page();
         }
 

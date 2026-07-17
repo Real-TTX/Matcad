@@ -5,8 +5,8 @@
 }
 <div class="card" data-tab-group>
     <div class="tabbar">
-        <button class="tab active" data-tab="general"><icon name="settings" /> Einstellungen</button>
-        <button class="tab" data-tab="users"><icon name="auth" /> Benutzer</button>
+        <button class="tab active" data-tab="general"><icon name="settings" /> Settings</button>
+        <button class="tab" data-tab="users"><icon name="auth" /> Users</button>
         <button class="tab" data-tab="docker"><icon name="provider" /> Docker</button>
         <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy-Config</button>
     </div>
@@ -15,14 +15,14 @@
         <form method="post">
             <div class="form-row">
                 <div class="form-group">
-                    <label asp-for="BaseDomain">Basis-Domain</label>
+                    <label asp-for="BaseDomain">Base domain</label>
                     <input asp-for="BaseDomain" placeholder="example.com" />
-                    <div class="hint">Für subdomain-übergreifende Matcad-Anmeldung (forward_auth-Cookie).</div>
+                    <div class="hint">For subdomain-wide Matcad sign-in (forward_auth cookie).</div>
                 </div>
                 <div class="form-group">
-                    <label asp-for="AuthPortalUrl">Login-Portal-URL</label>
+                    <label asp-for="AuthPortalUrl">Login portal URL</label>
                     <input asp-for="AuthPortalUrl" placeholder="https://auth.example.com" />
-                    <div class="hint">Ungeschützter Host, der auf Matcad zeigt.</div>
+                    <div class="hint">An unprotected host that points to Matcad.</div>
                 </div>
             </div>
             <div class="form-row">
@@ -33,19 +33,19 @@
                 <div class="form-group">
                     <label asp-for="AcmeEmail">ACME-E-Mail</label>
                     <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
-                    <div class="hint">Für Let's-Encrypt-Registrierung.</div>
+                    <div class="hint">For Let's Encrypt registration.</div>
                 </div>
             </div>
             <div class="form-group" style="max-width:220px">
-                <label asp-for="LogRetentionDays">Log-Aufbewahrung (Tage)</label>
+                <label asp-for="LogRetentionDays">Log retention (days)</label>
                 <input asp-for="LogRetentionDays" type="number" min="1" />
             </div>
 
             <p class="hint">Caddy Admin-API: <strong>@Model.CaddyStatus</strong></p>
 
             <div class="btn-row">
-                <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
-                <button type="submit" class="btn" asp-page-handler="Repush"><icon name="refresh" /> Config neu übertragen</button>
+                <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+                <button type="submit" class="btn" asp-page-handler="Repush"><icon name="refresh" /> Re-push config</button>
             </div>
         </form>
     </div>
@@ -53,7 +53,7 @@
     <div class="tab-panel" data-panel="users">
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th style="width:1%"></th></tr></thead>
+                <thead><tr><th>Username</th><th>Role</th><th>Created</th><th style="width:1%"></th></tr></thead>
                 <tbody>
                     @foreach (var u in Model.Users)
                     {
@@ -77,55 +77,55 @@
             </table>
         </div>
         <div class="list-actions">
-            <a class="btn btn-primary" asp-page="User"><icon name="add" /> Neuer Benutzer</a>
+            <a class="btn btn-primary" asp-page="User"><icon name="add" /> New user</a>
         </div>
     </div>
 
     <div class="tab-panel" data-panel="docker">
         <p class="hint">
-            Bindet laufende Container automatisch als Routen ein. Standardname:
-            <code>&lt;containername&gt;.&lt;Basis-Domain&gt;</code>. Feinsteuerung über Labels –
+            Automatically binds running containers as routes. Default name:
+            <code>&lt;containername&gt;.&lt;base-domain&gt;</code>. Fine-tune via labels –
             <code>matcad.enable=true</code>, <code>matcad.host</code>, <code>matcad.port</code>,
-            <code>matcad.auth</code>. Docker-Routen erscheinen in der Routes-Liste mit Badge
-            „Docker" und sind dort schreibgeschützt.
+            <code>matcad.auth</code>. Docker routes appear in the Routes list with a
+            “Docker” badge and are read-only there.
         </p>
         <form method="post" asp-page-handler="Docker">
             <div class="form-group">
-                <label><input type="checkbox" asp-for="DockerEnabled" /> Docker-Discovery aktiv</label>
+                <label><input type="checkbox" asp-for="DockerEnabled" /> Docker discovery active</label>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label asp-for="DockerEndpoint">Docker-Endpoint</label>
+                    <label asp-for="DockerEndpoint">Docker endpoint</label>
                     <input asp-for="DockerEndpoint" placeholder="unix:///var/run/docker.sock" />
-                    <div class="hint">Socket muss ins Matcad-Compose gemountet sein (read-only).</div>
+                    <div class="hint">The socket must be mounted into the Matcad compose (read-only).</div>
                 </div>
                 <div class="form-group">
-                    <label asp-for="DockerBaseDomain">Basis-Domain (Auto-Naming)</label>
-                    <input asp-for="DockerBaseDomain" placeholder="leer = globale Basis-Domain" />
+                    <label asp-for="DockerBaseDomain">Base domain (auto-naming)</label>
+                    <input asp-for="DockerBaseDomain" placeholder="empty = global base domain" />
                 </div>
             </div>
             <div class="form-group">
-                <label><input type="checkbox" asp-for="DockerRequireLabel" /> Nur Container mit <code>matcad.enable=true</code> (empfohlen)</label>
+                <label><input type="checkbox" asp-for="DockerRequireLabel" /> Only containers with <code>matcad.enable=true</code> (recommended)</label>
             </div>
             <div class="btn-row">
-                <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
+                <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
             </div>
         </form>
 
-        <h2 style="margin-top:1.5rem">Erkannte Container</h2>
+        <h2 style="margin-top:1.5rem">Discovered containers</h2>
         @if (Model.DockerError != null)
         {
-            <div class="alert alert-error">Docker nicht erreichbar: @Model.DockerError</div>
+            <div class="alert alert-error">Docker not reachable: @Model.DockerError</div>
         }
         @if (Model.DockerDiscovered.Count == 0)
         {
-            <p class="empty">Keine Container erfasst.</p>
+            <p class="empty">No containers detected.</p>
         }
         else
         {
             <div class="table-wrap">
                 <table class="route-table">
-                    <thead><tr><th>Container</th><th>Host</th><th>Ziel</th><th>Auth</th></tr></thead>
+                    <thead><tr><th>Container</th><th>Host</th><th>Target</th><th>Auth</th></tr></thead>
                     <tbody class="group">
                         @foreach (var r in Model.DockerDiscovered)
                         {
@@ -144,16 +144,16 @@
 
     <div class="tab-panel" data-panel="caddy">
         <p class="hint">
-            Automatisch generierte Caddy-Konfiguration (JSON), die Matcad über die
-            Admin-API an Caddy überträgt. <strong>Nur-Lesen</strong> – Änderungen erfolgen
-            über Routes, Providers und Authentications. Matcad nutzt bewusst die
-            JSON-API, kein klassisches Caddyfile.
+            Automatically generated Caddy configuration (JSON) that Matcad pushes to Caddy
+            via the admin API. <strong>Read-only</strong> – changes are made through
+            Routes, Providers and Authentications. Matcad deliberately uses the
+            JSON API, not a classic Caddyfile.
         </p>
         <div class="btn-row" style="margin-top:0; gap:.4rem">
             <button type="button" class="btn btn-sm btn-primary" id="cfg-btn-live" onclick="matcadShowConfig('live')">Live (Caddy)</button>
-            <button type="button" class="btn btn-sm" id="cfg-btn-generated" onclick="matcadShowConfig('generated')">Generiert (Matcad)</button>
+            <button type="button" class="btn btn-sm" id="cfg-btn-generated" onclick="matcadShowConfig('generated')">Generated (Matcad)</button>
             <span class="spacer"></span>
-            <button type="button" class="btn btn-sm" onclick="matcadCopyConfig(this)"><icon name="save" /> Kopieren</button>
+            <button type="button" class="btn btn-sm" onclick="matcadCopyConfig(this)"><icon name="save" /> Copy</button>
         </div>
         <pre class="code-view" id="cfg-live-pre"><code id="cfg-live">@Model.CaddyLiveJson</code></pre>
         <pre class="code-view" id="cfg-generated-pre" style="display:none"><code id="cfg-generated">@Model.CaddyConfigJson</code></pre>
@@ -174,7 +174,7 @@
             const text = document.getElementById(matcadCfgView === 'live' ? 'cfg-live' : 'cfg-generated').textContent;
             navigator.clipboard.writeText(text).then(() => {
                 const old = btn.innerHTML;
-                btn.textContent = 'Kopiert ✓';
+                btn.textContent = 'Copied ✓';
                 setTimeout(() => btn.innerHTML = old, 1500);
             });
         }

@@ -38,28 +38,28 @@ public class IndexModel : PageModel
         {
             Id = "auths",
             SearchValue = Q,
-            SearchPlaceholder = "Authentication suchen…",
+            SearchPlaceholder = "Search authentications…",
             Sort = sort,
             Dir = Dir ?? "asc",
             Filters =
             {
                 new TableFilter
                 {
-                    Param = "type", Label = "Typ", Selected = Type,
-                    Options = { ("", "Alle"), ("BasicAuth", "Basic Auth"), ("Matcad", "Matcad") }
+                    Param = "type", Label = "Type", Selected = Type,
+                    Options = { ("", "All"), ("BasicAuth", "Basic Auth"), ("Matcad", "Matcad") }
                 }
             },
             Columns =
             {
                 new DataColumn("Name", "name"),
-                new DataColumn("Typ", "type"),
+                new DataColumn("Type", "type"),
                 new DataColumn("Details"),
-                new DataColumn("Verwendet von")
+                new DataColumn("Used by")
             },
             Rows = items.Select(a => new DataRow(
                 Cell.Text(a.Name),
                 a.Type == AuthType.BasicAuth ? Cell.Badge("Basic Auth", "info") : Cell.Badge("Matcad", "warn"),
-                a.Type == AuthType.BasicAuth ? Cell.Muted($"{a.Users.Count} Benutzer") : Cell.Muted("Login-Portal"),
+                a.Type == AuthType.BasicAuth ? Cell.Muted($"{a.Users.Count} users") : Cell.Muted("Login portal"),
                 Cell.Muted($"{_store.Routes.Count(r => r.AuthenticationId == a.Id)} Route(n)")
             ) { EditUrl = $"/Authentications/Edit?id={a.Id}" }).ToList()
         };

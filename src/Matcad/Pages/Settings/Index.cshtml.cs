@@ -86,8 +86,8 @@ public class IndexModel : PageModel
 
         var (ok, error) = await _caddy.ApplyAsync();
         TempData[ok ? "Flash" : "FlashError"] = ok
-            ? "Einstellungen gespeichert und Caddy-Konfiguration aktualisiert."
-            : $"Einstellungen gespeichert. Caddy-Push fehlgeschlagen: {error}";
+            ? "Settings saved and Caddy configuration updated."
+            : $"Settings saved. Caddy push failed: {error}";
         return RedirectToPage("Index");
     }
 
@@ -101,7 +101,7 @@ public class IndexModel : PageModel
         _store.SaveSettings(s);
 
         _docker.RequestRefresh(); // pick up the change immediately
-        TempData["Flash"] = "Docker-Einstellungen gespeichert. Container werden neu erfasst.";
+        TempData["Flash"] = "Docker settings saved. Containers are being re-scanned.";
         return RedirectToPage("Index");
     }
 
@@ -109,7 +109,7 @@ public class IndexModel : PageModel
     {
         var (ok, error) = await _caddy.ApplyAsync();
         TempData[ok ? "Flash" : "FlashError"] = ok
-            ? "Caddy-Konfiguration erneut übertragen."
+            ? "Caddy configuration re-pushed."
             : $"Caddy-Push fehlgeschlagen: {error}";
         return RedirectToPage("Index");
     }

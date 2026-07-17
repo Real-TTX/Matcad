@@ -1,7 +1,7 @@
 @page
 @model Matcad.Pages.LoginModel
 @{
-    ViewData["Title"] = "Anmelden";
+    ViewData["Title"] = "Sign in";
     Layout = "_LoginLayout";
 }
 <div class="login-card">
@@ -13,15 +13,15 @@
     <form method="post">
         <input type="hidden" asp-for="ReturnUrl" />
         <div class="form-group">
-            <label asp-for="Username">Benutzername</label>
+            <label asp-for="Username">Username</label>
             <input asp-for="Username" autocomplete="username" autofocus />
         </div>
         <div class="form-group">
-            <label asp-for="Password">Passwort</label>
+            <label asp-for="Password">Password</label>
             <input asp-for="Password" type="password" autocomplete="current-password" />
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-            <icon name="logout" /> Anmelden
+            <icon name="logout" /> Sign in
         </button>
     </form>
 </div>

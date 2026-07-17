@@ -16,9 +16,9 @@ public static class ProviderTypes
     {
         new ProviderType("netcup", "Netcup", "netcup", new()
         {
-            new CredentialField("customer_number", "Kundennummer", Secret: false),
-            new CredentialField("api_key", "API-Key"),
-            new CredentialField("api_password", "API-Passwort"),
+            new CredentialField("customer_number", "Customer number", Secret: false),
+            new CredentialField("api_key", "API key"),
+            new CredentialField("api_password", "API password"),
         }),
     };
 

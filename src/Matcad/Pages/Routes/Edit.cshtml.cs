@@ -57,7 +57,7 @@ public class EditModel : PageModel
         }
 
         if (string.IsNullOrWhiteSpace(host))
-            return Fail("Host ist erforderlich.");
+            return Fail("Host is required.");
 
         if (wildcard)
         {
@@ -65,14 +65,14 @@ public class EditModel : PageModel
             // can only be validated via DNS-01, so a provider is mandatory).
             if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
             if (host.Count(c => c == '.') < 2)
-                return Fail("Wildcard-Host muss eine Domain enthalten, z. B. *.example.com.");
+                return Fail("A wildcard host must include a domain, e.g. *.example.com.");
             if (ProviderId is not > 0)
-                return Fail("Für eine Wildcard-Route ist ein DNS-Provider erforderlich (DNS-01-Challenge).");
+                return Fail("A wildcard route requires a DNS provider (DNS-01 challenge).");
         }
         else
         {
             if (host.StartsWith("*."))
-                return Fail("Eine Einzeldomain darf nicht mit „*.“ beginnen. Wähle stattdessen den Typ „Wildcard“.");
+                return Fail("A single domain must not start with “*.”. Choose the “Wildcard” type instead.");
             ProviderId = null; // not applicable for single domains
         }
 
@@ -88,7 +88,7 @@ public class EditModel : PageModel
         route.Enabled = Enabled;
         _store.UpsertRoute(route, User.GetUserId());
 
-        await ApplyAndFlash($"Route „{route.Host}“ gespeichert.");
+        await ApplyAndFlash($"Route “{route.Host}” saved.");
         return RedirectToPage("Index");
     }
 
@@ -98,7 +98,7 @@ public class EditModel : PageModel
         {
             var host = _store.Routes.FirstOrDefault(x => x.Id == Id)?.Host;
             _store.DeleteRoute(Id.Value);
-            await ApplyAndFlash($"Route „{host}“ gelöscht.");
+            await ApplyAndFlash($"Route “{host}” deleted.");
         }
         return RedirectToPage("Index");
     }
@@ -107,16 +107,16 @@ public class EditModel : PageModel
     {
         var (ok, error) = await _caddy.ApplyAsync();
         if (ok) TempData["Flash"] = success + " Caddy-Konfiguration aktualisiert.";
-        else TempData["FlashError"] = success + $" Aber Caddy-Push fehlgeschlagen: {error}";
+        else TempData["FlashError"] = success + $" But the Caddy push failed: {error}";
     }
 
     private void BuildOptions()
     {
-        AuthOptions.Add(("", "— keine —"));
+        AuthOptions.Add(("", "— none —"));
         foreach (var a in _store.Authentications.OrderBy(a => a.Name))
             AuthOptions.Add((a.Id.ToString(), $"{a.Name} ({a.Type})"));
 
-        ProviderOptions.Add(("", "— keine —"));
+        ProviderOptions.Add(("", "— none —"));
         foreach (var p in _store.Providers.OrderBy(p => p.Name))
             ProviderOptions.Add((p.Id.ToString(), p.Name));
     }

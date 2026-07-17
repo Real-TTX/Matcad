@@ -38,7 +38,7 @@ public class EditModel : PageModel
         var type = ProviderTypes.Find(Type);
         if (string.IsNullOrWhiteSpace(Name) || type == null)
         {
-            Error = "Bitte Name und einen gültigen Typ angeben.";
+            Error = "Please provide a name and a valid type.";
             return Page();
         }
 
@@ -56,7 +56,7 @@ public class EditModel : PageModel
         provider.Credentials = credentials;
         _store.UpsertProvider(provider, User.GetUserId());
 
-        TempData["Flash"] = $"Provider „{Name}“ gespeichert.";
+        TempData["Flash"] = $"Provider “{Name}” saved.";
         return RedirectToPage("Index");
     }
 
@@ -67,11 +67,11 @@ public class EditModel : PageModel
             var name = _store.Providers.FirstOrDefault(x => x.Id == Id)?.Name;
             if (_store.Routes.Any(r => r.ProviderId == Id))
             {
-                TempData["FlashError"] = "Provider wird von mindestens einer Route verwendet und kann nicht gelöscht werden.";
+                TempData["FlashError"] = "Provider is used by at least one route and cannot be deleted.";
                 return RedirectToPage("Edit", new { id = Id });
             }
             _store.DeleteProvider(Id.Value);
-            TempData["Flash"] = $"Provider „{name}“ gelöscht.";
+            TempData["Flash"] = $"Provider “{name}” deleted.";
         }
         return RedirectToPage("Index");
     }

@@ -2,7 +2,7 @@
 @using Matcad.Config
 @model Matcad.Pages.Providers.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Provider anlegen" : "Provider bearbeiten";
+    ViewData["Title"] = Model.IsNew ? "Create provider" : "Edit provider";
 }
 <div class="card">
     @if (Model.Error != null)
@@ -16,7 +16,7 @@
             <input id="Name" asp-for="Name" autofocus placeholder="z. B. Netcup Produktiv" />
         </div>
         <div class="form-group">
-            <label for="Type">Typ</label>
+            <label for="Type">Type</label>
             <select id="Type" asp-for="Type" onchange="matcadToggleCreds(this.value)">
                 @foreach (var t in ProviderTypes.All)
                 {
@@ -28,7 +28,7 @@
         @foreach (var t in ProviderTypes.All)
         {
             <div class="cred-block" data-cred-type="@t.Id" style="@(t.Id == Model.Type ? "" : "display:none")">
-                <h2>Zugangsdaten · @t.DisplayName</h2>
+                <h2>Credentials · @t.DisplayName</h2>
                 @foreach (var field in t.Fields)
                 {
                     var key = $"{t.Id}:{field.Key}";
@@ -44,14 +44,14 @@
         }
 
         <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Zurück</a>
+            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
             @if (!Model.IsNew)
             {
                 <span class="spacer"></span>
                 <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Provider wirklich löschen?">
-                    <icon name="delete" /> Löschen
+                        formnovalidate data-confirm="Delete this provider?">
+                    <icon name="delete" /> Delete
                 </button>
             }
         </div>

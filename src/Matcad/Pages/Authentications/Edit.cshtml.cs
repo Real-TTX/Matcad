@@ -37,7 +37,7 @@ public class EditModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(Name))
         {
-            Error = "Name ist erforderlich.";
+            Error = "Name is required.";
             return Page();
         }
 
@@ -73,7 +73,7 @@ public class EditModel : PageModel
         }
 
         _store.UpsertAuthentication(auth, User.GetUserId());
-        await ApplyAndFlash($"Authentication „{Name}“ gespeichert.");
+        await ApplyAndFlash($"Authentication “{Name}” saved.");
         return RedirectToPage("Index");
     }
 
@@ -83,12 +83,12 @@ public class EditModel : PageModel
         {
             if (_store.Routes.Any(r => r.AuthenticationId == Id))
             {
-                TempData["FlashError"] = "Authentication wird von mindestens einer Route verwendet und kann nicht gelöscht werden.";
+                TempData["FlashError"] = "Authentication is used by at least one route and cannot be deleted.";
                 return RedirectToPage("Edit", new { id = Id });
             }
             var name = _store.Authentications.FirstOrDefault(x => x.Id == Id)?.Name;
             _store.DeleteAuthentication(Id.Value);
-            await ApplyAndFlash($"Authentication „{name}“ gelöscht.");
+            await ApplyAndFlash($"Authentication “{name}” deleted.");
         }
         return RedirectToPage("Index");
     }
@@ -97,6 +97,6 @@ public class EditModel : PageModel
     {
         var (ok, error) = await _caddy.ApplyAsync();
         if (ok) TempData["Flash"] = success + " Caddy-Konfiguration aktualisiert.";
-        else TempData["FlashError"] = success + $" Aber Caddy-Push fehlgeschlagen: {error}";
+        else TempData["FlashError"] = success + $" But the Caddy push failed: {error}";
     }
 }

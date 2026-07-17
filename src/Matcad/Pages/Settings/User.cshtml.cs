@@ -36,7 +36,7 @@ public class UserModel : PageModel
         Username = Username.Trim();
         if (string.IsNullOrEmpty(Username))
         {
-            Error = "Benutzername ist erforderlich.";
+            Error = "Username is required.";
             return Page();
         }
 
@@ -44,12 +44,12 @@ public class UserModel : PageModel
         {
             if (string.IsNullOrEmpty(Password))
             {
-                Error = "Für einen neuen Benutzer ist ein Passwort erforderlich.";
+                Error = "A password is required for a new user.";
                 return Page();
             }
             if (await _auth.FindUser(Username) != null)
             {
-                Error = "Benutzername ist bereits vergeben.";
+                Error = "That username is already taken.";
                 return Page();
             }
             await _auth.CreateUser(Username, Password, Role, User.GetUserId());
@@ -61,7 +61,7 @@ public class UserModel : PageModel
             // Guard: keep at least one admin.
             if (u.Role == UserRole.Admin && Role != UserRole.Admin && await IsLastAdmin(u.Id))
             {
-                Error = "Der letzte Admin kann nicht herabgestuft werden.";
+                Error = "The last admin cannot be demoted.";
                 return Page();
             }
             u.Username = Username;
@@ -69,7 +69,7 @@ public class UserModel : PageModel
             await _auth.UpdateUser(u, Password, User.GetUserId());
         }
 
-        TempData["Flash"] = $"Benutzer „{Username}“ gespeichert.";
+        TempData["Flash"] = $"User “{Username}” saved.";
         return RedirectToPage("Index");
     }
 
@@ -82,11 +82,11 @@ public class UserModel : PageModel
             {
                 if (u.Role == UserRole.Admin && await IsLastAdmin(u.Id))
                 {
-                    TempData["FlashError"] = "Der letzte Admin kann nicht gelöscht werden.";
+                    TempData["FlashError"] = "The last admin cannot be deleted.";
                     return RedirectToPage("User", new { id = Id });
                 }
                 await _auth.DeleteUser(Id.Value);
-                TempData["Flash"] = $"Benutzer „{u.Username}“ gelöscht.";
+                TempData["Flash"] = $"User “{u.Username}” deleted.";
             }
         }
         return RedirectToPage("Index");

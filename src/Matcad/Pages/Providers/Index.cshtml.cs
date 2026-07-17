@@ -37,14 +37,14 @@ public class IndexModel : PageModel
         {
             Id = "providers",
             SearchValue = Q,
-            SearchPlaceholder = "Provider suchen…",
+            SearchPlaceholder = "Search providers…",
             Sort = sort,
             Dir = Dir ?? "asc",
             Columns =
             {
                 new DataColumn("Name", "name"),
-                new DataColumn("Typ", "type"),
-                new DataColumn("Zugangsdaten")
+                new DataColumn("Type", "type"),
+                new DataColumn("Credentials")
             },
             Rows = items.Select(p => new DataRow(
                 Cell.Text(p.Name),

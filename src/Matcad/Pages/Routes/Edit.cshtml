@@ -1,7 +1,7 @@
 @page
 @model Matcad.Pages.Routes.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Route anlegen" : "Route bearbeiten";
+    ViewData["Title"] = Model.IsNew ? "Create route" : "Edit route";
 
     string Sel(long? current, string value) =>
         (current?.ToString() ?? "") == value ? "selected" : "";
@@ -15,11 +15,11 @@
         <input type="hidden" asp-for="Id" />
 
         <div class="form-group">
-            <label>Typ</label>
+            <label>Type</label>
             <div class="segmented">
                 <label class="seg-option">
                     <input type="radio" asp-for="RouteType" value="single" onchange="matcadRouteType('single')" />
-                    <span><icon name="routes" /> Einzeldomain</span>
+                    <span><icon name="routes" /> Single domain</span>
                 </label>
                 <label class="seg-option">
                     <input type="radio" asp-for="RouteType" value="wildcard" onchange="matcadRouteType('wildcard')" />
@@ -37,18 +37,18 @@
             </div>
             <div class="form-group">
                 <label asp-for="Name">Name</label>
-                <input asp-for="Name" placeholder="optional – sonst wird der Host verwendet" />
+                <input asp-for="Name" placeholder="optional – otherwise the host is used" />
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label asp-for="Upstream">Upstream (Reverse-Proxy-Ziel)</label>
-                <input asp-for="Upstream" placeholder="http://backend:8080 oder whoami:80" />
+                <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
+                <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
             </div>
             <div class="form-group">
-                <label asp-for="FallbackUrl">Fallback-URL</label>
-                <input asp-for="FallbackUrl" placeholder="https://... (Redirect, wenn kein Upstream)" />
+                <label asp-for="FallbackUrl">Fallback URL</label>
+                <input asp-for="FallbackUrl" placeholder="https://... (redirect when no upstream)" />
             </div>
         </div>
 
@@ -63,33 +63,33 @@
                 </select>
             </div>
             <div class="form-group" id="provider-block">
-                <label asp-for="ProviderId">DNS-Provider <span class="text-muted">(für Wildcard-Zertifikat erforderlich)</span></label>
+                <label asp-for="ProviderId">DNS provider <span class="text-muted">(required for the wildcard certificate)</span></label>
                 <select asp-for="ProviderId">
                     @foreach (var (value, text) in Model.ProviderOptions)
                     {
                         <option value="@value" selected="@(Sel(Model.ProviderId, value) == "selected")">@text</option>
                     }
                 </select>
-                <div class="hint">Ein Wildcard-Zertifikat (<code>*.domain</code>) deckt alle Subdomains ab –
-                    Subdomain-Routen brauchen dann keinen eigenen Provider.</div>
+                <div class="hint">A wildcard certificate (<code>*.domain</code>) covers all subdomains –
+                    subdomain routes then don't need their own provider.</div>
             </div>
         </div>
 
         <div class="form-group">
             <label>
-                <input type="checkbox" asp-for="Enabled" /> Route aktiv
+                <input type="checkbox" asp-for="Enabled" /> Route active
             </label>
         </div>
 
         <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Zurück</a>
+            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
             @if (!Model.IsNew)
             {
                 <span class="spacer"></span>
                 <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Route wirklich löschen?">
-                    <icon name="delete" /> Löschen
+                        formnovalidate data-confirm="Delete this route?">
+                    <icon name="delete" /> Delete
                 </button>
             }
         </div>
@@ -105,14 +105,14 @@
             const typeHint = document.getElementById('type-hint');
             if (type === 'wildcard') {
                 provider.style.display = '';
-                host.placeholder = '*.example.com (oder example.com – wird zu *.)';
-                hostHint.textContent = 'Deckt alle Subdomains ab. Erfordert einen DNS-Provider (DNS-01).';
-                typeHint.textContent = 'Ein Zertifikat für die ganze Domain; einzelne Subdomains erben es.';
+                host.placeholder = '*.example.com (or example.com – becomes *.)';
+                hostHint.textContent = 'Covers all subdomains. Requires a DNS provider (DNS-01).';
+                typeHint.textContent = 'One certificate for the whole domain; individual subdomains inherit it.';
             } else {
                 provider.style.display = 'none';
                 host.placeholder = 'app.example.com';
-                hostHint.textContent = 'Genau ein Host. Zertifikat via HTTP-Challenge – oder abgedeckt durch eine Wildcard-Route.';
-                typeHint.textContent = 'Ein einzelner konkreter Host.';
+                hostHint.textContent = 'Exactly one host. Certificate via HTTP challenge – or covered by a wildcard route.';
+                typeHint.textContent = 'A single concrete host.';
             }
         }
         matcadRouteType(document.querySelector('input[name="RouteType"]:checked')?.value || 'single');
