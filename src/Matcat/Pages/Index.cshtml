@@ -1,7 +1,9 @@
 @page
 @model Matcat.Pages.IndexModel
 @{
-    ViewData["Title"] = "Matcat";
+    ViewData["Title"] = "Dashboard";
 }
-<h1>Matcat</h1>
-<p>Caddy Management UI — Gerüst läuft. Version @Model.Version</p>
+<div class="card">
+    <h2>Willkommen bei Matcat</h2>
+    <p class="text-muted">Caddy-Verwaltung · Version @Model.Version</p>
+</div>

@@ -10,6 +10,8 @@
          InformationalVersion at publish time (see Dockerfile / version.ps1). -->
     <Version>0.1.0</Version>
     <InformationalVersion>local</InformationalVersion>
+    <!-- Keep the friendly version string clean (no +commit-hash suffix). -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
