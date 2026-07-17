@@ -69,7 +69,14 @@ public class RouteConfig : ConfigEntity
 
 public class MatcatSettings
 {
+    /// <summary>Parent domain shared by protected routes, e.g. "example.com".
+    /// The Matcat forward-auth cookie is scoped to ".{BaseDomain}" so a single
+    /// login works across all subdomains.</summary>
     public string BaseDomain { get; set; } = "";
+    /// <summary>Absolute URL of the Matcat login portal, e.g.
+    /// "https://auth.example.com". Used by forward-auth to redirect
+    /// unauthenticated users. If empty, a relative /auth/portal is used.</summary>
+    public string AuthPortalUrl { get; set; } = "";
     public int LogRetentionDays { get; set; } = 30;
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>

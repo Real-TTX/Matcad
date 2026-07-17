@@ -20,6 +20,9 @@ builder.Services.AddRazorPages(o =>
 {
     o.Conventions.AllowAnonymousToPage("/Login");
     o.Conventions.AllowAnonymousToPage("/Logout");
+    // Forward-auth endpoints must be reachable without an admin session.
+    o.Conventions.AllowAnonymousToPage("/Auth/Verify");
+    o.Conventions.AllowAnonymousToPage("/Auth/Portal");
 });
 builder.Services.AddDbContext<MatcatDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<ConfigStore>();

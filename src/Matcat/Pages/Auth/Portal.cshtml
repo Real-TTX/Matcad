@@ -1,0 +1,26 @@
+@page "/auth/portal"
+@model Matcat.Pages.Auth.PortalModel
+@{
+    ViewData["Title"] = "Anmelden";
+    Layout = "_LoginLayout";
+}
+<div class="login-card">
+    <h1 class="login-brand"><icon name="shield" /> Matcat</h1>
+    <p class="text-muted" style="text-align:center;margin-top:-.5rem">Geschützter Bereich – bitte anmelden</p>
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+    <form method="post">
+        <input type="hidden" asp-for="Rd" />
+        <div class="form-group">
+            <label asp-for="Username">Benutzername</label>
+            <input asp-for="Username" autocomplete="username" autofocus />
+        </div>
+        <div class="form-group">
+            <label asp-for="Password">Passwort</label>
+            <input asp-for="Password" type="password" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block"><icon name="logout" /> Anmelden</button>
+    </form>
+</div>
