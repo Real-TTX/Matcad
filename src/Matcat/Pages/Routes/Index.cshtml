@@ -1,0 +1,11 @@
+@page
+@model Matcat.Pages.Routes.IndexModel
+@{
+    ViewData["Title"] = "Routes";
+}
+<div class="card">
+    <partial name="Controls/_DataTable" model="Model.Table" />
+    <div class="list-actions">
+        <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> Neue Route</a>
+    </div>
+</div>

@@ -24,6 +24,9 @@ builder.Services.AddRazorPages(o =>
 builder.Services.AddDbContext<MatcatDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<CaddyConfigGenerator>();
+builder.Services.AddSingleton<CaddyService>();
 
 // Persist Data Protection keys on the volume so antiforgery tokens and any
 // protected payloads stay valid across container restarts.
@@ -60,6 +63,19 @@ using (var scope = app.Services.CreateScope())
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsureSeedAdmin(app.Logger);
 }
+
+// Push the current desired config to Caddy on startup (best effort; Caddy may
+// still be starting). Route changes re-push at runtime.
+_ = Task.Run(async () =>
+{
+    for (var attempt = 0; attempt < 10; attempt++)
+    {
+        var caddy = app.Services.GetRequiredService<CaddyService>();
+        var (ok, _) = await caddy.ApplyAsync();
+        if (ok) break;
+        await Task.Delay(TimeSpan.FromSeconds(3));
+    }
+});
 
 app.UseStaticFiles();
 app.UseRouting();
