@@ -38,7 +38,6 @@
                         <th>Host</th>
                         <th>Ziel</th>
                         <th>Letzter Zugriff</th>
-                        <th>IP</th>
                         <th>Status</th>
                         <th class="c-actions"></th>
                     </tr>
@@ -47,7 +46,7 @@
                 {
                     <tbody class="group">
                         <tr class="parent">
-                            <td colspan="6">
+                            <td colspan="5">
                                 <span class="grp-name"><icon name="network" /> @group.BaseDomain</span>
                                 <span class="grp-count">· @group.Routes.Count</span>
                             </td>
@@ -96,7 +95,6 @@
                                         <span class="text-muted">kein Zugriff</span>
                                     }
                                 </td>
-                                <td class="c-meta">@(row.LastIp ?? "—")</td>
                                 <td>
                                     @if (r.Enabled)
                                     {

@@ -30,7 +30,6 @@ public class IndexModel : PageModel
         public RouteConfig Route { get; init; } = null!;
         public string Label { get; init; } = "";
         public DateTime? LastAccess { get; set; }
-        public string? LastIp { get; set; }
     }
 
     public async Task OnGetAsync()
@@ -44,13 +43,13 @@ public class IndexModel : PageModel
         ClientErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 400 && r.Status < 500);
         ServerErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 500);
 
-        // Latest access per host (one small query per configured route host).
-        var lastByHost = new Dictionary<string, (DateTime Ts, string Ip)>();
+        // Latest access time per host (one small query per configured route host).
+        var lastByHost = new Dictionary<string, DateTime>();
         foreach (var host in _store.Routes.Select(r => r.Host).Distinct())
         {
             var last = await _db.RequestLogs.Where(r => r.Host == host)
                 .OrderByDescending(r => r.Timestamp).FirstOrDefaultAsync();
-            if (last != null) lastByHost[host] = (last.Timestamp, last.RemoteIp);
+            if (last != null) lastByHost[host] = last.Timestamp;
         }
 
         // Build the domain tree automatically from the host names.
@@ -60,7 +59,7 @@ public class IndexModel : PageModel
             foreach (var route in group.Routes)
             {
                 var row = new RouteRow { Route = route, Label = RouteTree.SubLabel(route.Host) };
-                if (lastByHost.TryGetValue(route.Host, out var la)) { row.LastAccess = la.Ts; row.LastIp = la.Ip; }
+                if (lastByHost.TryGetValue(route.Host, out var la)) row.LastAccess = la;
                 g.Routes.Add(row);
             }
             Groups.Add(g);
