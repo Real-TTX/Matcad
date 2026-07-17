@@ -19,7 +19,7 @@
     <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden />
     <div class="layout">
         <aside class="sidebar">
-            <div class="sidebar-brand"><icon name="network" /> <span>Matcat</span></div>
+            <div class="sidebar-brand"><icon name="cat" /> <span>Matcat</span></div>
             <nav class="nav">
                 <a class="nav-item @CurrentPage("/Index")" asp-page="/Index"><icon name="dashboard" /> <span>Dashboard</span></a>
                 <a class="nav-item @CurrentPage("/Routes")" asp-page="/Routes/Index"><icon name="routes" /> <span>Routes</span></a>
@@ -30,17 +30,19 @@
                     <a class="nav-item @CurrentPage("/Settings")" asp-page="/Settings/Index"><icon name="settings" /> <span>Settings</span></a>
                 }
             </nav>
-            <div class="sidebar-footer">v@(version)</div>
+            <div class="sidebar-footer">
+                <div class="sidebar-user">
+                    <span class="user-badge"><icon name="auth" /> <span>@userName</span></span>
+                    <a class="btn btn-ghost btn-sm" asp-page="/Logout" title="Abmelden"><icon name="logout" /> Abmelden</a>
+                </div>
+                <div class="sidebar-version">v@(version)</div>
+            </div>
         </aside>
 
         <div class="main">
             <header class="topbar">
                 <label for="nav-toggle" class="nav-burger" aria-label="Menü"><icon name="menu" /></label>
                 <div class="topbar-title">@ViewData["Title"]</div>
-                <div class="topbar-actions">
-                    <span class="user-badge"><icon name="auth" /> @userName</span>
-                    <a class="btn btn-ghost" asp-page="/Logout" title="Abmelden"><icon name="logout" /> <span class="hide-mobile">Abmelden</span></a>
-                </div>
             </header>
             <main class="content">
                 @if (TempData["Flash"] is string flash)
