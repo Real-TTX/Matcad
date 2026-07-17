@@ -73,6 +73,18 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsureSeedAdmin(app.Logger);
+
+    // On a fresh install, seed illustrative example data (disabled routes,
+    // a provider, authentications, settings and a demo user).
+    var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
+    if (Matcad.Config.ExampleData.IsEmpty(store))
+    {
+        var admin = await auth.FindUser("admin");
+        Matcad.Config.ExampleData.Seed(store, admin?.Id);
+        if (await auth.FindUser("demo") == null)
+            await auth.CreateUser("demo", "demo", UserRole.User, admin?.Id);
+        app.Logger.LogInformation("Seeded example data (disabled example routes).");
+    }
 }
 
 // Push the current desired config to Caddy on startup (best effort; Caddy may
