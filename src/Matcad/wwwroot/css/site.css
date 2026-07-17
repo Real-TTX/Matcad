@@ -75,6 +75,7 @@ h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
     border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .sidebar-brand .icon { font-size: 1.4rem; color: var(--primary); }
+.sidebar-brand span { text-transform: uppercase; letter-spacing: .08em; }
 .brand-logo { color: var(--primary); flex: 0 0 auto; vertical-align: -.2em; }
 .nav { display: flex; flex-direction: column; padding: .6rem; gap: 2px; flex: 1; }
 .nav-item {
