@@ -23,6 +23,8 @@ builder.Services.AddRazorPages(o =>
     // Forward-auth endpoints must be reachable without an admin session.
     o.Conventions.AllowAnonymousToPage("/Auth/Verify");
     o.Conventions.AllowAnonymousToPage("/Auth/Portal");
+    // Settings and user management are admin-only.
+    o.Conventions.AuthorizeFolder("/Settings", "Admin");
 });
 builder.Services.AddDbContext<MatcatDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<ConfigStore>();

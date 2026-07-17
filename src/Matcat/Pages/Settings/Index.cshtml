@@ -1,0 +1,81 @@
+@page
+@model Matcat.Pages.Settings.IndexModel
+@{
+    ViewData["Title"] = "Settings";
+}
+<div class="card" data-tab-group>
+    <div class="tabbar">
+        <button class="tab active" data-tab="general"><icon name="settings" /> Einstellungen</button>
+        <button class="tab" data-tab="users"><icon name="auth" /> Benutzer</button>
+    </div>
+
+    <div class="tab-panel active" data-panel="general">
+        <form method="post">
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="BaseDomain">Basis-Domain</label>
+                    <input asp-for="BaseDomain" placeholder="example.com" />
+                    <div class="hint">Für subdomain-übergreifende Matcat-Anmeldung (forward_auth-Cookie).</div>
+                </div>
+                <div class="form-group">
+                    <label asp-for="AuthPortalUrl">Login-Portal-URL</label>
+                    <input asp-for="AuthPortalUrl" placeholder="https://auth.example.com" />
+                    <div class="hint">Ungeschützter Host, der auf Matcat zeigt.</div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="CaddyAdminUrl">Caddy Admin-URL</label>
+                    <input asp-for="CaddyAdminUrl" placeholder="http://caddy:2019" />
+                </div>
+                <div class="form-group">
+                    <label asp-for="AcmeEmail">ACME-E-Mail</label>
+                    <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
+                    <div class="hint">Für Let's-Encrypt-Registrierung.</div>
+                </div>
+            </div>
+            <div class="form-group" style="max-width:220px">
+                <label asp-for="LogRetentionDays">Log-Aufbewahrung (Tage)</label>
+                <input asp-for="LogRetentionDays" type="number" min="1" />
+            </div>
+
+            <p class="hint">Caddy Admin-API: <strong>@Model.CaddyStatus</strong></p>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary"><icon name="save" /> Speichern</button>
+                <button type="submit" class="btn" asp-page-handler="Repush"><icon name="refresh" /> Config neu übertragen</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="tab-panel" data-panel="users">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th style="width:1%"></th></tr></thead>
+                <tbody>
+                    @foreach (var u in Model.Users)
+                    {
+                        <tr>
+                            <td>@u.Username</td>
+                            <td>
+                                @if (u.Role == Matcat.Data.UserRole.Admin)
+                                {
+                                    <span class="badge badge-info">Admin</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-muted">User</span>
+                                }
+                            </td>
+                            <td class="text-muted">@u.CreateDate.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                            <td><a class="btn btn-sm btn-ghost" asp-page="User" asp-route-id="@u.Id" title="Bearbeiten"><icon name="edit" /></a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="list-actions">
+            <a class="btn btn-primary" asp-page="User"><icon name="add" /> Neuer Benutzer</a>
+        </div>
+    </div>
+</div>

@@ -22,6 +22,24 @@ Live-Reload = Container neu bauen und Stack redeployen:
 
 - UI: <http://localhost:4433>
 - Caddy Admin (nur dev): <http://localhost:2019/config/>
+- Standard-Login beim ersten Start: **admin / admin** — bitte sofort unter
+  *Settings → Benutzer* ändern.
+
+## Authentication-Typen
+
+- **Basic Auth** — verwaltete Benutzerliste (bcrypt) → Caddy `basic_auth`.
+- **Matcat** — Login-Portal mit Weiterleitung (Caddy `forward_auth`). Nicht
+  angemeldete Zugriffe werden zum Matcat-Portal umgeleitet, nach der Anmeldung
+  zurück zum Endpunkt. Voraussetzung (unter *Settings*):
+  - **Basis-Domain** (z. B. `example.com`) — der Portal-Cookie gilt
+    subdomain-übergreifend.
+  - **Login-Portal-URL** — ein *ungeschützter* Host, der auf Matcat zeigt
+    (z. B. eine Route `auth.example.com` → `http://matcat:4433`).
+
+## Echtzeit-Logs
+
+Caddy schreibt JSON-Access-Logs auf ein gemeinsames Volume; Matcat liest sie
+ein (SQLite) und streamt neue Einträge per Server-Sent Events ins Dashboard.
 
 ## Versionierung
 
