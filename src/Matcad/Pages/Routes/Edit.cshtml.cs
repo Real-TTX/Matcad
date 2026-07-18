@@ -10,7 +10,9 @@ public class EditModel : PageModel
 {
     private readonly ConfigStore _store;
     private readonly CaddyService _caddy;
-    public EditModel(ConfigStore store, CaddyService caddy) { _store = store; _caddy = caddy; }
+    private readonly RouteProvider _routes;
+    public EditModel(ConfigStore store, CaddyService caddy, RouteProvider routes)
+    { _store = store; _caddy = caddy; _routes = routes; }
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
@@ -28,6 +30,11 @@ public class EditModel : PageModel
 
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
+
+    /// <summary>Enabled wildcard parent domains (e.g. "example.com" for *.example.com),
+    /// used by the form to warn when a single host would need its own certificate.</summary>
+    public List<string> WildcardParents { get; private set; } = new();
+    public string WildcardParentsJson => System.Text.Json.JsonSerializer.Serialize(WildcardParents);
 
     public IActionResult OnGet()
     {
@@ -88,9 +95,21 @@ public class EditModel : PageModel
         route.Enabled = Enabled;
         _store.UpsertRoute(route, User.GetUserId());
 
+        // Non-blocking heads-up when a single host isn't covered by any wildcard.
+        if (!wildcard)
+        {
+            var coverage = CertificatePlanner.ForRoute(route, _routes.All());
+            if (coverage.Kind == CertificatePlanner.CertKind.Individual)
+                TempData["FlashWarn"] = $"“{route.Host}” is not covered by a wildcard — Caddy will request an " +
+                    "individual certificate for it. Consider a *." + ParentOf(route.Host) + " wildcard route instead.";
+        }
+
         await ApplyAndFlash($"Route “{route.Host}” saved.");
         return RedirectToPage("Index");
     }
+
+    private static string ParentOf(string host) =>
+        host.Contains('.') ? host[(host.IndexOf('.') + 1)..] : host;
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
@@ -106,7 +125,7 @@ public class EditModel : PageModel
     private async Task ApplyAndFlash(string success)
     {
         var (ok, error) = await _caddy.ApplyAsync();
-        if (ok) TempData["Flash"] = success + " Caddy-Konfiguration aktualisiert.";
+        if (ok) TempData["Flash"] = success + " Caddy configuration updated.";
         else TempData["FlashError"] = success + $" But the Caddy push failed: {error}";
     }
 
@@ -119,5 +138,11 @@ public class EditModel : PageModel
         ProviderOptions.Add(("", "— none —"));
         foreach (var p in _store.Providers.OrderBy(p => p.Name))
             ProviderOptions.Add((p.Id.ToString(), p.Name));
+
+        WildcardParents = _routes.All()
+            .Where(r => r.Enabled && r.Wildcard && r.Host.StartsWith("*."))
+            .Select(r => r.Host[2..])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 }
