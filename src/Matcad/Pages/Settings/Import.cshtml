@@ -1,0 +1,74 @@
+@page
+@model Matcad.Pages.Settings.ImportModel
+@{
+    ViewData["Title"] = "Import Caddyfile";
+}
+<div class="card">
+    <h2><icon name="routes" /> Import a Caddyfile</h2>
+    <p class="hint">
+        Paste an existing Caddyfile. Matcad adapts it with Caddy's own adapter and maps the
+        recognizable parts — host, <code>reverse_proxy</code>, redirects, <code>basic_auth</code>
+        and ACME DNS providers — to routes/authentications/providers. Anything it can't model is
+        kept as <strong>raw passthrough</strong>, so nothing is lost. Review the preview before applying.
+    </p>
+
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+
+    <form method="post">
+        <div class="form-group">
+            <textarea asp-for="Caddyfile" rows="12" spellcheck="false"
+                      placeholder="example.com {&#10;    reverse_proxy backend:8080&#10;}"
+                      style="font-family:ui-monospace,Consolas,monospace;font-size:.85rem"></textarea>
+        </div>
+        <div class="btn-row" style="margin-top:0">
+            <button type="submit" class="btn btn-primary" asp-page-handler="Preview"><icon name="search" /> Preview</button>
+            <a class="btn" asp-page="/Routes/Index"><icon name="back" /> Back</a>
+        </div>
+    </form>
+</div>
+
+@if (Model.Preview is { } plan)
+{
+    <div class="card">
+        <h2>Preview</h2>
+        @foreach (var note in plan.Notes)
+        {
+            <div class="alert alert-warn">@note</div>
+        }
+        @if (Model.Warnings != null)
+        {
+            <p class="hint">Adapter warnings: <code>@Model.Warnings</code></p>
+        }
+
+        @if (plan.Routes.Count > 0)
+        {
+            <div class="table-wrap">
+                <table class="route-table">
+                    <thead><tr><th>Host</th><th>Target</th><th>Auth</th><th>Provider</th></tr></thead>
+                    <tbody class="group">
+                        @foreach (var ir in plan.Routes)
+                        {
+                            <tr class="child">
+                                <td class="c-name">@ir.Route.Host @(ir.Route.Wildcard ? "(wildcard)" : "")</td>
+                                <td class="rtarget">@(ir.Route.Upstream ?? (ir.Route.FallbackUrl is not null ? "↪ " + ir.Route.FallbackUrl : "—"))</td>
+                                <td>@(ir.BasicUsers.Count > 0 ? $"Basic ({ir.BasicUsers.Count})" : "—")</td>
+                                <td>@(ir.ProviderName ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <form method="post">
+            <input type="hidden" asp-for="Caddyfile" />
+            <div class="btn-row">
+                <button type="submit" class="btn btn-primary" asp-page-handler="Apply"
+                        data-confirm="Import these entries now?"><icon name="save" /> Apply import</button>
+            </div>
+        </form>
+    </div>
+}

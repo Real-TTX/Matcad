@@ -31,6 +31,8 @@ builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ForwardAuthTokens>();
+builder.Services.AddSingleton<CaddyfileAdapter>();
+builder.Services.AddSingleton<CaddyfileImporter>();
 builder.Services.AddSingleton<DockerRouteCache>();
 builder.Services.AddSingleton<RouteProvider>();
 builder.Services.AddSingleton<CaddyConfigGenerator>();

@@ -14,6 +14,8 @@ RUN dotnet publish src/Matcad/Matcad.csproj -c Release -o /app \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
+# Static Caddy binary, used only for `caddy adapt` (Caddyfile -> JSON import).
+COPY --from=caddy:2 /usr/bin/caddy /usr/local/bin/caddy
 # Data volume holds the SQLite database + JSON configs.
 VOLUME ["/data"]
 EXPOSE 4433
