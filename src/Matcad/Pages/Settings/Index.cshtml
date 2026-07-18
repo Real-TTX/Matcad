@@ -10,7 +10,7 @@
         <button class="tab" data-tab="certs"><icon name="shield" /> Certificates</button>
         <button class="tab" data-tab="docker"><icon name="provider" /> Docker</button>
         <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy-Config</button>
-        <button class="tab" data-tab="system"><icon name="settings" /> System</button>
+        <button class="tab" data-tab="system"><icon name="save" /> Import / Export</button>
     </div>
 
     <div class="tab-panel active" data-panel="general">
@@ -34,10 +34,24 @@
                     <div class="hint">Turn off to keep the UI reachable only on <code>:4433</code>.</div>
                 </div>
                 <div class="form-group">
-                    <label asp-for="AuthPortalUrl">Login portal URL <span class="text-muted">(optional)</span></label>
-                    <input asp-for="AuthPortalUrl" placeholder="empty = derived from Matcad host" />
-                    <div class="hint">Override for the forward-auth portal. If empty, the Matcad host is used.</div>
+                    <label asp-for="PortalMode">Login behaviour</label>
+                    <select asp-for="PortalMode">
+                        <option value="inline">Inline – login shown on the protected site (hides Matcad)</option>
+                        <option value="redirect">Redirect – send users to the Matcad login host</option>
+                        <option value="unauthorized">Unauthorized – return a plain 401, no login form</option>
+                    </select>
+                    <div class="hint">How unauthenticated visitors of a Matcad-protected route see the
+                        sign-in. <strong>Inline</strong> keeps them on the requested site, so nobody
+                        learns where Matcad runs.</div>
                 </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="AuthPortalUrl">Login portal URL <span class="text-muted">(redirect mode only)</span></label>
+                    <input asp-for="AuthPortalUrl" placeholder="empty = derived from Matcad host" />
+                    <div class="hint">Only used in <strong>redirect</strong> mode. If empty, the Matcad host is used.</div>
+                </div>
+                <div class="form-group"></div>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -276,20 +290,23 @@
     </div>
 
     <div class="tab-panel" data-panel="system">
-        <h2>Backup</h2>
+        <h2>Export</h2>
         <p class="hint">
-            Download a full backup (settings, providers, routes, authentications and user
-            accounts incl. password hashes). Sessions, logs and encryption keys are not included.
-            <strong>Keep it safe</strong> — it contains secrets.
+            Download a full backup in Matcad's own format (settings, providers, routes,
+            authentications and user accounts incl. password hashes). Sessions, logs and
+            encryption keys are not included. <strong>Keep it safe</strong> — it contains secrets.
         </p>
         <div class="btn-row" style="margin-top:0">
-            <a class="btn btn-primary" asp-page-handler="Export"><icon name="save" /> Download backup</a>
+            <a class="btn btn-primary" asp-page-handler="Export"><icon name="save" /> Download backup (.json)</a>
         </div>
 
-        <h2 style="margin-top:1.5rem">Restore</h2>
+        <h2 style="margin-top:1.75rem">Import</h2>
+        <p class="hint">Two formats are supported: a Matcad backup, or an existing Caddyfile.</p>
+
+        <h3 style="margin:1rem 0 .5rem">1. Matcad backup</h3>
         <div class="alert alert-warn">
-            Restoring <strong>replaces</strong> all current configuration and user accounts with the
-            backup's contents.
+            Restoring a backup <strong>replaces</strong> all current configuration and user accounts
+            with the backup's contents.
         </div>
         <form method="post" asp-page-handler="Restore" enctype="multipart/form-data">
             <div class="form-group">
@@ -302,8 +319,8 @@
             </div>
         </form>
 
-        <h2 style="margin-top:1.5rem">Import a Caddyfile</h2>
-        <p class="hint">Convert an existing Caddyfile into Matcad routes (with preview).</p>
+        <h3 style="margin:1.5rem 0 .5rem">2. Caddyfile</h3>
+        <p class="hint">Convert an existing Caddyfile into Matcad routes (with preview before applying).</p>
         <div class="btn-row" style="margin-top:0">
             <a class="btn" asp-page="Import"><icon name="routes" /> Open Caddyfile import</a>
         </div>

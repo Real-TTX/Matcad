@@ -1,12 +1,71 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] · Matcad</title>
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @*
+        Styles are inlined (not linked to /css/site.css) so the login page is
+        fully self-contained. In "inline" portal mode the page is served through
+        the protected host itself (Caddy proxies only /auth/* to Matcad), where
+        Matcad's static files are not reachable — so it must carry its own CSS.
+    *@
+    <style>
+        :root {
+            --bg: #f4f6f9; --surface: #fff; --surface-2: #eef1f5; --border: #d7dde5;
+            --text: #1c2431; --text-muted: #66707e;
+            --primary: #2f6feb; --primary-hover: #2559c2; --danger: #d13a3a;
+            --radius: 8px; --shadow: 0 1px 3px rgba(0,0,0,.12);
+        }
+        @@media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f141b; --surface: #1a212c; --surface-2: #222b38; --border: #313c4c;
+                --text: #e7ecf3; --text-muted: #8b95a5;
+                --shadow: 0 1px 3px rgba(0,0,0,.4);
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+            display: grid; place-items: center; min-height: 100vh;
+        }
+        .login-wrap { width: 100%; max-width: 360px; padding: 1.5rem; }
+        .login-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); box-shadow: var(--shadow); padding: 2rem;
+        }
+        .login-brand {
+            display: flex; align-items: center; gap: .5rem; justify-content: center;
+            margin: 0 0 1.5rem; font-size: 1.4rem; text-transform: uppercase; letter-spacing: .08em;
+        }
+        .brand-logo { color: var(--primary); flex: 0 0 auto; vertical-align: -.2em; }
+        .icon { vertical-align: -.125em; flex: 0 0 auto; }
+        .text-muted { color: var(--text-muted); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: .3rem; font-size: .9rem; }
+        input {
+            width: 100%; padding: .55rem .7rem; font-size: .92rem;
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); color: var(--text); font-family: inherit;
+        }
+        input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: .45rem; justify-content: center;
+            padding: .55rem .9rem; font-size: .92rem; font-weight: 500; cursor: pointer;
+            border: 1px solid transparent; border-radius: var(--radius); font-family: inherit;
+        }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-block { width: 100%; }
+        .alert { padding: .7rem .9rem; border-radius: var(--radius); margin-bottom: 1rem; font-size: .9rem; }
+        .alert-error {
+            background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+        }
+    </style>
 </head>
-<body class="login-body">
+<body>
     <main class="login-wrap">
         @RenderBody()
     </main>

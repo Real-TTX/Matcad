@@ -91,9 +91,13 @@ public class MatcadSettings
     /// The Matcad forward-auth cookie is scoped to ".{BaseDomain}" so a single
     /// login works across all subdomains.</summary>
     public string BaseDomain { get; set; } = "";
-    /// <summary>Absolute URL of the Matcad login portal, e.g.
-    /// "https://auth.example.com". Used by forward-auth to redirect
-    /// unauthenticated users. If empty, a relative /auth/portal is used.</summary>
+    /// <summary>How forward-auth presents the login to unauthenticated users:
+    /// "inline"  – login served on the protected host itself (hides the Matcad host),
+    /// "redirect" – redirect to <see cref="AuthPortalUrl"/> / Matcad host,
+    /// "unauthorized" – return a plain 401 (no login form).</summary>
+    public string PortalMode { get; set; } = "inline";
+    /// <summary>Absolute URL of the Matcad login portal (redirect mode only).
+    /// If empty, a relative /auth/portal is used.</summary>
     public string AuthPortalUrl { get; set; } = "";
     /// <summary>Hostname under which Matcad exposes itself through Caddy, e.g.
     /// "matcad.example.com". When set (and <see cref="SystemRouteEnabled"/>),

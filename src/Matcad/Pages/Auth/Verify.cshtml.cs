@@ -39,9 +39,27 @@ public class VerifyModel : PageModel
         var uri = Request.Headers["X-Forwarded-Uri"].FirstOrDefault() ?? "/";
         var original = $"{proto}://{host}{uri}";
 
-        var portal = _store.Settings.EffectivePortalUrl();
-        var basePath = string.IsNullOrWhiteSpace(portal) ? "/auth/portal" : $"{portal}/auth/portal";
-        var target = $"{basePath}?auth={authId}&rd={Uri.EscapeDataString(original)}";
-        return Redirect(target);
+        var mode = (_store.Settings.PortalMode ?? "inline").ToLowerInvariant();
+        var query = $"?auth={authId}&rd={Uri.EscapeDataString(original)}";
+
+        return mode switch
+        {
+            // Plain 401 — reveals nothing, no login form.
+            "unauthorized" => new ContentResult
+            {
+                StatusCode = 401,
+                ContentType = "text/html; charset=utf-8",
+                Content = "<!doctype html><meta charset=utf-8><title>401 Unauthorized</title>" +
+                          "<body style=\"font-family:system-ui;text-align:center;padding:3rem\">" +
+                          "<h1>401</h1><p>Unauthorized.</p></body>"
+            },
+            // Redirect to the configured portal host (may reveal the Matcad host).
+            "redirect" => Redirect(
+                (string.IsNullOrWhiteSpace(_store.Settings.EffectivePortalUrl())
+                    ? "/auth/portal" : $"{_store.Settings.EffectivePortalUrl()}/auth/portal") + query),
+            // Inline (default): relative redirect -> login is served on the protected
+            // host itself (Caddy routes /auth/* there to Matcad). Matcad host stays hidden.
+            _ => Redirect("/auth/portal" + query)
+        };
     }
 }

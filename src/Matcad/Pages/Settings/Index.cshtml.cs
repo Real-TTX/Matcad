@@ -25,6 +25,7 @@ public class IndexModel : PageModel
     [BindProperty] public string BaseDomain { get; set; } = "";
     [BindProperty] public string MatcadHost { get; set; } = "";
     [BindProperty] public bool SystemRouteEnabled { get; set; } = true;
+    [BindProperty] public string PortalMode { get; set; } = "inline";
     [BindProperty] public string AuthPortalUrl { get; set; } = "";
     [BindProperty] public int LogRetentionDays { get; set; } = 30;
     [BindProperty] public long LogRetentionMaxRows { get; set; } = 1_000_000;
@@ -74,6 +75,7 @@ public class IndexModel : PageModel
         BaseDomain = s.BaseDomain;
         MatcadHost = s.MatcadHost;
         SystemRouteEnabled = s.SystemRouteEnabled;
+        PortalMode = string.IsNullOrWhiteSpace(s.PortalMode) ? "inline" : s.PortalMode;
         AuthPortalUrl = s.AuthPortalUrl;
         LogRetentionDays = s.LogRetentionDays;
         LogRetentionMaxRows = s.LogRetentionMaxRows;
@@ -92,6 +94,7 @@ public class IndexModel : PageModel
         s.BaseDomain = BaseDomain?.Trim() ?? "";
         s.MatcadHost = MatcadHost?.Trim() ?? "";
         s.SystemRouteEnabled = SystemRouteEnabled;
+        s.PortalMode = PortalMode is "inline" or "redirect" or "unauthorized" ? PortalMode : "inline";
         s.AuthPortalUrl = AuthPortalUrl?.Trim() ?? "";
         s.LogRetentionDays = LogRetentionDays < 1 ? 1 : LogRetentionDays;
         s.LogRetentionMaxRows = LogRetentionMaxRows < 0 ? 0 : LogRetentionMaxRows;

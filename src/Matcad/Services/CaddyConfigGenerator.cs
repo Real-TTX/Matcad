@@ -41,7 +41,16 @@ public class CaddyConfigGenerator
         // Specific hosts must be matched before wildcards.
         var ordered = routes.OrderBy(r => r.Wildcard ? 1 : 0).ThenBy(r => r.Host).ToList();
 
-        var httpRoutes = ordered.Select(BuildRoute).ToList();
+        var inline = (settings.PortalMode ?? "inline").ToLowerInvariant() == "inline";
+        var httpRoutes = new List<object>();
+        foreach (var r in ordered)
+        {
+            // Inline portal: serve /auth/* on the protected host itself (proxied to
+            // Matcad, unprotected) so the login never leaves the host.
+            if (inline && UsesMatcadAuth(r))
+                httpRoutes.Add(BuildAuthPathRoute(r.Host));
+            httpRoutes.Add(BuildRoute(r));
+        }
 
         var config = new Dictionary<string, object?>
         {
@@ -92,6 +101,41 @@ public class CaddyConfigGenerator
             ((Dictionary<string, object?>)config["apps"]!)["tls"] = tls;
 
         return config;
+    }
+
+    /// <summary>True when the route is protected by a Matcad forward-auth (which
+    /// needs the /auth/* endpoints served on the protected host in inline mode).</summary>
+    private bool UsesMatcadAuth(RouteConfig route) =>
+        route.AuthenticationId is > 0 &&
+        _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId)?.Type == AuthType.Matcad;
+
+    /// <summary>Inline portal: an unprotected route on the same host that proxies
+    /// /auth/* to Matcad, so the login page is served from the protected host
+    /// itself and the Matcad host is never revealed. Placed before the protected
+    /// route so the login endpoints are not caught by forward-auth.</summary>
+    private Dictionary<string, object?> BuildAuthPathRoute(string host)
+    {
+        var (dial, _) = ParseDial(MatcadUpstream);
+        return new Dictionary<string, object?>
+        {
+            ["match"] = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["host"] = new[] { host },
+                    ["path"] = new[] { "/auth/*" }
+                }
+            },
+            ["handle"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["handler"] = "reverse_proxy",
+                    ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
+                }
+            },
+            ["terminal"] = true
+        };
     }
 
     private Dictionary<string, object?> BuildRoute(RouteConfig route)
