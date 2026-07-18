@@ -241,6 +241,24 @@ table.data tr:last-child td { border-bottom: none; }
 .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 2rem; }
 .login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: .08em; }
 
+/* Authentication branding editor: fields on the left, live preview on the right */
+.brand-editor { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
+.brand-fields { flex: 1 1 320px; min-width: 280px; }
+.brand-preview { flex: 0 0 320px; max-width: 100%; position: sticky; top: 1rem; }
+.brand-preview .preview-frame {
+    margin-top: .4rem; padding: 1.75rem 1.25rem; border-radius: var(--radius);
+    background: var(--bg); border: 1px dashed var(--border);
+    display: grid; place-items: center;
+}
+.brand-preview .login-card { width: 100%; max-width: 280px; padding: 1.5rem; }
+.color-field { display: flex; align-items: center; gap: .5rem; }
+.color-field input[type=color] {
+    width: 2.6rem; height: 2.4rem; padding: 2px; flex: 0 0 auto; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+}
+.color-field input[type=text] { flex: 1; font-family: ui-monospace, Consolas, monospace; }
+@media (max-width: 820px) { .brand-preview { position: static; flex-basis: 100%; } }
+
 /* ------------------------------------------------------- Dashboard stats */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.15rem; box-shadow: var(--shadow); }
