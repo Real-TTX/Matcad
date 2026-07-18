@@ -70,6 +70,22 @@ public class AuthService
         SessionCache.Clear(); // drop any cached sessions of the removed user
     }
 
+    /// <summary>Replaces all users (backup restore). Password hashes are taken as-is.</summary>
+    public async Task ReplaceAllUsers(IEnumerable<(string Username, string PasswordHash, UserRole Role)> users, long? actorId)
+    {
+        _db.UserSessions.RemoveRange(_db.UserSessions);
+        _db.Users.RemoveRange(_db.Users);
+        await _db.SaveChangesAsync();
+        foreach (var u in users)
+            _db.Users.Add(new User
+            {
+                Username = u.Username, PasswordHash = u.PasswordHash, Role = u.Role,
+                CreateDate = DateTime.UtcNow, CreateUserId = actorId
+            });
+        await _db.SaveChangesAsync();
+        SessionCache.Clear();
+    }
+
     /// <summary>Returns the user if credentials are valid, otherwise null.</summary>
     public async Task<User?> ValidateCredentials(string username, string password)
     {

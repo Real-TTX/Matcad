@@ -165,6 +165,28 @@ public class ConfigStore
         }
     }
 
+    /// <summary>Snapshot of the ID sequences (for backup).</summary>
+    public Dictionary<string, long> SequenceSnapshot() { lock (_lock) return new Dictionary<string, long>(Sequences); }
+
+    /// <summary>Replaces all config from a backup and persists it.</summary>
+    public void ImportConfig(MatcadSettings settings, List<ProviderConfig> providers,
+        List<RouteConfig> routes, List<AuthenticationConfig> authentications, Dictionary<string, long>? sequences)
+    {
+        lock (_lock)
+        {
+            _settings = settings;
+            File.WriteAllText(Path("settings.json"), JsonSerializer.Serialize(settings, JsonOpts));
+            _providers = providers; Save("providers.json", providers);
+            _routes = routes; Save("routes.json", routes);
+            _authentications = authentications; Save("authentications.json", authentications);
+            if (sequences != null)
+            {
+                _sequences = sequences;
+                File.WriteAllText(Path("sequences.json"), JsonSerializer.Serialize(sequences, JsonOpts));
+            }
+        }
+    }
+
     public void DeleteProvider(long id) { lock (_lock) { Providers.RemoveAll(x => x.Id == id); SaveProviders(); } }
     public void DeleteAuthentication(long id) { lock (_lock) { Authentications.RemoveAll(x => x.Id == id); SaveAuthentications(); } }
 
