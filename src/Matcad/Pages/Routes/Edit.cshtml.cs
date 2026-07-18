@@ -37,6 +37,8 @@ public class EditModel : PageModel
 
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
+    /// <summary>Existing route hosts offered as redirect targets (as full URLs).</summary>
+    public List<string> RedirectTargets { get; private set; } = new();
 
     /// <summary>Enabled wildcard parent domains (e.g. "example.com" for *.example.com),
     /// used by the form to warn when a single host would need its own certificate.</summary>
@@ -180,6 +182,17 @@ public class EditModel : PageModel
             .Where(r => r.Enabled && r.Wildcard && r.Host.StartsWith("*."))
             .Select(r => r.Host[2..])
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Existing non-wildcard hosts (other than this route) as ready-made
+        // redirect targets. The editor also allows a free-text "other" target.
+        var current = (Host ?? "").Trim().ToLowerInvariant();
+        RedirectTargets = _routes.All()
+            .Where(r => !string.IsNullOrWhiteSpace(r.Host) && !r.Host.StartsWith("*.")
+                        && !r.Host.Equals(current, StringComparison.OrdinalIgnoreCase))
+            .Select(r => $"https://{r.Host}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }

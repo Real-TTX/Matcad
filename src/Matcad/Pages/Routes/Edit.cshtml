@@ -80,8 +80,15 @@
         <div id="redirect-block" style="display:none">
             <div class="form-row">
                 <div class="form-group">
-                    <label asp-for="FallbackUrl">Redirect to URL</label>
-                    <input asp-for="FallbackUrl" placeholder="https://target.example.com" />
+                    <label for="redirect-preset">Redirect to</label>
+                    <select id="redirect-preset" onchange="matcadRedirectPreset(this.value)">
+                        <option value="">— pick an existing domain —</option>
+                        @foreach (var t in Model.RedirectTargets)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                        <option value="__other__">Other (custom URL)…</option>
+                    </select>
                     <div class="hint">Every request to this host is redirected here.</div>
                 </div>
                 <div class="form-group" style="max-width:260px">
@@ -89,6 +96,10 @@
                     <label style="font-weight:400"><input type="checkbox" asp-for="RedirectPermanent" /> Permanent (301)</label>
                     <div class="hint">Leave off for a temporary redirect (302).</div>
                 </div>
+            </div>
+            <div class="form-group" id="redirect-url-group" style="display:none">
+                <label asp-for="FallbackUrl">Target URL</label>
+                <input asp-for="FallbackUrl" placeholder="https://target.example.com" />
             </div>
         </div>
 
@@ -200,9 +211,28 @@
             document.getElementById('redirect-block').style.display = t === 'redirect' ? '' : 'none';
         }
 
+        // Redirect target: a preset picker of existing domains fills the (hidden)
+        // URL field; "Other" reveals it for a free-text target.
+        function matcadRedirectPreset(v) {
+            const grp = document.getElementById('redirect-url-group');
+            const url = document.getElementById('FallbackUrl');
+            if (v === '__other__') { grp.style.display = ''; url.focus(); }
+            else { grp.style.display = 'none'; url.value = v; }
+        }
+        function matcadRedirectInit() {
+            const url = document.getElementById('FallbackUrl');
+            const sel = document.getElementById('redirect-preset');
+            const grp = document.getElementById('redirect-url-group');
+            const val = (url.value || '').trim();
+            if (!val) { sel.value = ''; grp.style.display = 'none'; return; }
+            if (Array.from(sel.options).some(o => o.value === val)) { sel.value = val; grp.style.display = 'none'; }
+            else { sel.value = '__other__'; grp.style.display = ''; }
+        }
+
         document.getElementById('host-input').addEventListener('input', matcadCheckWildcard);
         matcadRouteType(matcadCurrentType());
         matcadTarget(document.querySelector('input[name="Target"]:checked')?.value || 'proxy');
+        matcadRedirectInit();
 
         // When prefilled as ".example.com" (Add subdomain), put the cursor at the
         // very start so the user just types the subdomain label.
