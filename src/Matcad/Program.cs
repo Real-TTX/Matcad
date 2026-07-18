@@ -30,6 +30,7 @@ builder.Services.AddDbContext<MatcadDbContext>(o => o.UseSqlite($"Data Source={d
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ForwardAuthTokens>();
 builder.Services.AddSingleton<DockerRouteCache>();
 builder.Services.AddSingleton<RouteProvider>();
 builder.Services.AddSingleton<CaddyConfigGenerator>();

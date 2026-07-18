@@ -48,7 +48,17 @@ public static class ExampleData
         };
         store.UpsertAuthentication(intern, actorId);
 
-        var portal = new AuthenticationConfig { Name = "Portal", Type = AuthType.Matcad };
+        var portal = new AuthenticationConfig
+        {
+            Name = "Portal",
+            Type = AuthType.Matcad,
+            BrandTitle = "Example Portal",
+            BrandText = "Please sign in to continue",
+            Users = new()
+            {
+                new BasicAuthUser { Username = "kunde", PasswordHash = BCrypt.Net.BCrypt.HashPassword("kunde") }
+            }
+        };
         store.UpsertAuthentication(portal, actorId);
 
         // --- Routes (disabled examples showing the domain hierarchy) ---

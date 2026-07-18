@@ -7,25 +7,28 @@ namespace Matcad.Pages.Auth;
 
 /// <summary>
 /// Forward-auth verification endpoint called by Caddy for every request to a
-/// route protected by a "Matcad" authentication. Returns 2xx when the forward
-/// session cookie is valid (Caddy then lets the request through), otherwise a
-/// 302 to the login portal that Caddy relays to the browser.
+/// route protected by a "Matcad" authentication. Caddy passes the authentication
+/// id via X-Matcad-Auth. A valid per-authentication cookie (stateless, Data
+/// Protection) yields 2xx; otherwise a 302 to that authentication's login portal.
 /// </summary>
 public class VerifyModel : PageModel
 {
-    private readonly AuthService _auth;
+    private readonly ForwardAuthTokens _tokens;
     private readonly ConfigStore _store;
-    public VerifyModel(AuthService auth, ConfigStore store) { _auth = auth; _store = store; }
+    public VerifyModel(ForwardAuthTokens tokens, ConfigStore store) { _tokens = tokens; _store = store; }
 
-    public async Task<IActionResult> OnGet()
+    public IActionResult OnGet()
     {
-        if (Request.Cookies.TryGetValue(AuthService.ForwardCookieName, out var raw) &&
-            Guid.TryParse(raw, out var token))
+        long.TryParse(Request.Headers["X-Matcad-Auth"].FirstOrDefault(), out var authId);
+
+        if (authId > 0 &&
+            Request.Cookies.TryGetValue(ForwardAuthTokens.CookieName(authId), out var token) &&
+            !string.IsNullOrEmpty(token))
         {
-            var user = await _auth.GetUserBySession(token);
+            var user = _tokens.Validate(token, authId);
             if (user != null)
             {
-                Response.Headers["X-Matcad-User"] = user.Username;
+                Response.Headers["X-Matcad-User"] = user;
                 return StatusCode(200);
             }
         }
@@ -37,10 +40,8 @@ public class VerifyModel : PageModel
         var original = $"{proto}://{host}{uri}";
 
         var portal = _store.Settings.EffectivePortalUrl();
-        var target = string.IsNullOrWhiteSpace(portal)
-            ? $"/auth/portal?rd={Uri.EscapeDataString(original)}"
-            : $"{portal}/auth/portal?rd={Uri.EscapeDataString(original)}";
-
+        var basePath = string.IsNullOrWhiteSpace(portal) ? "/auth/portal" : $"{portal}/auth/portal";
+        var target = $"{basePath}?auth={authId}&rd={Uri.EscapeDataString(original)}";
         return Redirect(target);
     }
 }

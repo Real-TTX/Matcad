@@ -59,8 +59,8 @@ public class IndexModel : PageModel
             Rows = items.Select(a => new DataRow(
                 Cell.Text(a.Name),
                 a.Type == AuthType.BasicAuth ? Cell.Badge("Basic Auth", "info") : Cell.Badge("Matcad", "warn"),
-                a.Type == AuthType.BasicAuth ? Cell.Muted($"{a.Users.Count} users") : Cell.Muted("Login portal"),
-                Cell.Muted($"{_store.Routes.Count(r => r.AuthenticationId == a.Id)} Route(n)")
+                Cell.Muted(a.Type == AuthType.Matcad ? $"{a.Users.Count} users · portal" : $"{a.Users.Count} users"),
+                Cell.Muted($"{_store.Routes.Count(r => r.AuthenticationId == a.Id)} route(s)")
             ) { EditUrl = $"/Authentications/Edit?id={a.Id}" }).ToList()
         };
     }

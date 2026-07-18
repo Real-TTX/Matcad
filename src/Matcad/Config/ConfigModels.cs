@@ -40,12 +40,22 @@ public class BasicAuthUser
     public string PasswordHash { get; set; } = "";
 }
 
-/// <summary>A reusable authentication that can be attached to any route.</summary>
+/// <summary>A reusable authentication that can be attached to any route.
+/// For both Basic Auth and Matcad the login accounts live in <see cref="Users"/>;
+/// the Brand* fields personalize the Matcad login portal per authentication.</summary>
 public class AuthenticationConfig : ConfigEntity
 {
     public string Name { get; set; } = "";
     public AuthType Type { get; set; } = AuthType.BasicAuth;
     public List<BasicAuthUser> Users { get; set; } = new();
+
+    // --- Matcad login-portal branding (optional) ---
+    public string BrandTitle { get; set; } = "";
+    /// <summary>Logo as a URL or an embedded data: URI.</summary>
+    public string BrandLogo { get; set; } = "";
+    /// <summary>Accent colour, e.g. "#2f6feb".</summary>
+    public string BrandColor { get; set; } = "";
+    public string BrandText { get; set; } = "";
 }
 
 /// <summary>

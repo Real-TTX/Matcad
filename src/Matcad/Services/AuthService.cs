@@ -12,9 +12,6 @@ namespace Matcad.Services;
 public class AuthService
 {
     public const string CookieName = "matcad_session";
-    /// <summary>Cookie used by the forward-auth portal; scoped to the base domain
-    /// so one login covers all protected subdomains.</summary>
-    public const string ForwardCookieName = "matcad_fwd";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
     // Short-lived validated-session cache so high-traffic forward-auth checks

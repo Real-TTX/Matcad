@@ -205,7 +205,9 @@ public class CaddyConfigGenerator
                         {
                             ["X-Forwarded-Method"] = new[] { "{http.request.method}" },
                             ["X-Forwarded-Uri"] = new[] { "{http.request.uri}" },
-                            ["X-Forwarded-Host"] = new[] { "{http.request.host}" }
+                            ["X-Forwarded-Host"] = new[] { "{http.request.host}" },
+                            // Tells /auth/verify which authentication (and portal) applies.
+                            ["X-Matcad-Auth"] = new[] { auth.Id.ToString() }
                         }
                     }
                 },
