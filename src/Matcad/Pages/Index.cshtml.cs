@@ -20,6 +20,10 @@ public class IndexModel : PageModel
     public int ClientErrors24h { get; private set; }
     public int ServerErrors24h { get; private set; }
     public List<DomainGroup> Groups { get; private set; } = new();
+    private Dictionary<string, string> _wildcardParents = new();
+
+    public CertificatePlanner.Coverage Cert(RouteConfig r) =>
+        CertificatePlanner.ForHost(r.Host, _wildcardParents);
 
     public class DomainGroup
     {
@@ -46,6 +50,10 @@ public class IndexModel : PageModel
         ServerErrors24h = await _db.RequestLogs.CountAsync(r => r.Timestamp >= since && r.Status >= 500);
 
         var allRoutes = _routes.All();
+        _wildcardParents = allRoutes
+            .Where(r => r.Enabled && r.Wildcard && r.Host.StartsWith("*."))
+            .GroupBy(r => r.Host[2..], StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Host, StringComparer.OrdinalIgnoreCase);
 
         // Latest access time per host (one small query per configured route host).
         var lastByHost = new Dictionary<string, DateTime>();

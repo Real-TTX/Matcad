@@ -78,6 +78,21 @@
                                     {
                                         <span class="badge badge-info">Docker</span>
                                     }
+                                    @{
+                                        var cert = Model.Cert(r);
+                                    }
+                                    @switch (cert.Kind)
+                                    {
+                                        case Matcad.Config.CertificatePlanner.CertKind.Wildcard:
+                                            <span class="badge badge-success" title="Wildcard certificate">🛡 @cert.Subject</span>
+                                            break;
+                                        case Matcad.Config.CertificatePlanner.CertKind.Covered:
+                                            <span class="badge badge-muted" title="Covered by wildcard @cert.Subject">🛡 @cert.Subject</span>
+                                            break;
+                                        case Matcad.Config.CertificatePlanner.CertKind.Individual:
+                                            <span class="badge badge-danger" title="Would request its own individual certificate">⚠ Individual</span>
+                                            break;
+                                    }
                                 </td>
                                 <td class="rtarget">
                                     @if (!string.IsNullOrEmpty(r.Upstream))

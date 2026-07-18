@@ -110,14 +110,26 @@
         {
             <div class="table-wrap">
                 <table class="route-table">
-                    <thead><tr><th>Certificate (subjects)</th><th>DNS provider</th><th>Covers</th></tr></thead>
+                    <thead><tr><th>Certificate (subjects)</th><th>DNS provider</th><th>Covers these routes</th></tr></thead>
                     <tbody class="group">
                         @foreach (var w in Model.Certificates.Wildcards)
                         {
                             <tr class="child">
                                 <td class="c-name"><span class="badge badge-success">🛡</span> @w.Subjects</td>
                                 <td>@w.Provider</td>
-                                <td class="c-meta">@w.CoveredCount route(s)</td>
+                                <td class="c-meta">
+                                    @if (w.CoveredHosts.Count == 0)
+                                    {
+                                        <span class="text-muted">no subdomain routes yet</span>
+                                    }
+                                    else
+                                    {
+                                        foreach (var h in w.CoveredHosts)
+                                        {
+                                            <span class="badge badge-muted">@h</span>
+                                        }
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>

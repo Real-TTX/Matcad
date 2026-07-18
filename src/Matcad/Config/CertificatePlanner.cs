@@ -16,7 +16,7 @@ public static class CertificatePlanner
 
     public record Coverage(CertKind Kind, string Subject);
 
-    public record WildcardCert(string WildcardHost, string Subjects, string Provider, int CoveredCount);
+    public record WildcardCert(string WildcardHost, string Subjects, string Provider, List<string> CoveredHosts);
 
     public record CertPlan(List<WildcardCert> Wildcards, List<string> Individual, List<string> Internal);
 
@@ -65,12 +65,16 @@ public static class CertificatePlanner
             if (enabled.Any(x => x.Host.Equals(parent, StringComparison.OrdinalIgnoreCase)))
                 subjects += ", " + parent;
             var provider = providers.FirstOrDefault(p => p.Id == wr.ProviderId)?.Name ?? "(no provider)";
-            var covered = enabled.Count(x =>
-            {
-                var c = ForHost(x.Host, wp);
-                return c.Kind == CertKind.Covered && c.Subject.Equals(wr.Host, StringComparison.OrdinalIgnoreCase);
-            });
-            wildcards.Add(new WildcardCert(wr.Host, subjects, provider, covered));
+            var coveredHosts = enabled
+                .Where(x =>
+                {
+                    var c = ForHost(x.Host, wp);
+                    return c.Kind == CertKind.Covered && c.Subject.Equals(wr.Host, StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(x => x.Host)
+                .OrderBy(h => h, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            wildcards.Add(new WildcardCert(wr.Host, subjects, provider, coveredHosts));
         }
 
         var individual = enabled.Where(x => ForHost(x.Host, wp).Kind == CertKind.Individual)
