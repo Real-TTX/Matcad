@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Matcad.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,13 @@ public class AuthService
     /// so one login covers all protected subdomains.</summary>
     public const string ForwardCookieName = "matcad_fwd";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
+
+    // Short-lived validated-session cache so high-traffic forward-auth checks
+    // don't hit the database on every single proxied request. Entries are
+    // evicted on logout / user deletion, so the effective staleness is only the
+    // TTL for out-of-band invalidation (expiry is measured in days).
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(10);
+    private static readonly ConcurrentDictionary<Guid, (User User, DateTime At)> SessionCache = new();
 
     private readonly MatcadDbContext _db;
 
@@ -62,6 +70,7 @@ public class AuthService
         _db.UserSessions.RemoveRange(_db.UserSessions.Where(s => s.UserId == id));
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
+        SessionCache.Clear(); // drop any cached sessions of the removed user
     }
 
     /// <summary>Returns the user if credentials are valid, otherwise null.</summary>
@@ -89,30 +98,34 @@ public class AuthService
         return session;
     }
 
-    /// <summary>Resolves the user for a valid, unexpired session token.</summary>
+    /// <summary>Resolves the user for a valid, unexpired session token.
+    /// Backed by a short-lived in-memory cache to stay cheap under load.</summary>
     public async Task<User?> GetUserBySession(Guid token)
     {
+        if (SessionCache.TryGetValue(token, out var c) && DateTime.UtcNow - c.At < CacheTtl)
+            return c.User;
+
         var session = await _db.UserSessions
+            .AsNoTracking()
             .Include(s => s.User)
             .FirstOrDefaultAsync(s => s.Token == token);
-        if (session == null) return null;
+
+        if (session == null) { SessionCache.TryRemove(token, out _); return null; }
         if (session.ExpiryDate < DateTime.UtcNow)
         {
-            _db.UserSessions.Remove(session);
-            await _db.SaveChangesAsync();
+            SessionCache.TryRemove(token, out _);
+            await _db.UserSessions.Where(s => s.Token == token).ExecuteDeleteAsync();
             return null;
         }
+
+        if (session.User != null) SessionCache[token] = (session.User, DateTime.UtcNow);
         return session.User;
     }
 
     public async Task InvalidateSession(Guid token)
     {
-        var session = await _db.UserSessions.FirstOrDefaultAsync(s => s.Token == token);
-        if (session != null)
-        {
-            _db.UserSessions.Remove(session);
-            await _db.SaveChangesAsync();
-        }
+        SessionCache.TryRemove(token, out _);
+        await _db.UserSessions.Where(s => s.Token == token).ExecuteDeleteAsync();
     }
 
     /// <summary>Creates the default admin (admin/admin) on first start if no users exist.</summary>

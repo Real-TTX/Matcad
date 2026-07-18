@@ -93,8 +93,31 @@ public class ConfigStore
 
     // --- Mutations: assign Id, stamp audit fields, persist. ---
 
-    private static long NextId<T>(IEnumerable<T> items) where T : ConfigEntity
-        => items.Any() ? items.Max(x => x.Id) + 1 : 1;
+    // Monotonic ID sequences per entity type, persisted so IDs are never reused
+    // (reusing a deleted top-ID would silently re-point references to a new item).
+    private Dictionary<string, long>? _sequences;
+    private Dictionary<string, long> Sequences => _sequences ??= LoadSequences();
+
+    private Dictionary<string, long> LoadSequences()
+    {
+        var path = Path("sequences.json");
+        if (File.Exists(path))
+        {
+            try { return JsonSerializer.Deserialize<Dictionary<string, long>>(File.ReadAllText(path), JsonOpts) ?? new(); }
+            catch (Exception ex) { _log.LogError(ex, "Failed to read sequences.json"); }
+        }
+        return new();
+    }
+
+    private long NextId(string key, IEnumerable<ConfigEntity> items)
+    {
+        var current = items.Any() ? items.Max(x => x.Id) : 0;
+        var highWater = Sequences.TryGetValue(key, out var v) ? v : 0;
+        var next = Math.Max(current, highWater) + 1;
+        Sequences[key] = next;
+        File.WriteAllText(Path("sequences.json"), JsonSerializer.Serialize(Sequences, JsonOpts));
+        return next;
+    }
 
     public void SaveProviders() { lock (_lock) { Save("providers.json", Providers); } }
     public void SaveRoutes() { lock (_lock) { Save("routes.json", Routes); } }
@@ -109,18 +132,18 @@ public class ConfigStore
         }
     }
 
-    public void UpsertProvider(ProviderConfig p, long? userId) => Upsert(Providers, p, userId, SaveProviders);
-    public void UpsertRoute(RouteConfig r, long? userId) => Upsert(Routes, r, userId, SaveRoutes);
-    public void UpsertAuthentication(AuthenticationConfig a, long? userId) => Upsert(Authentications, a, userId, SaveAuthentications);
+    public void UpsertProvider(ProviderConfig p, long? userId) => Upsert("providers", Providers, p, userId, SaveProviders);
+    public void UpsertRoute(RouteConfig r, long? userId) => Upsert("routes", Routes, r, userId, SaveRoutes);
+    public void UpsertAuthentication(AuthenticationConfig a, long? userId) => Upsert("authentications", Authentications, a, userId, SaveAuthentications);
 
-    private void Upsert<T>(List<T> list, T item, long? userId, Action save) where T : ConfigEntity
+    private void Upsert<T>(string key, List<T> list, T item, long? userId, Action save) where T : ConfigEntity
     {
         lock (_lock)
         {
             var now = DateTime.UtcNow;
             if (item.Id == 0)
             {
-                item.Id = NextId(list);
+                item.Id = NextId(key, list);
                 item.CreateDate = now;
                 item.CreateUserId = userId;
                 list.Add(item);

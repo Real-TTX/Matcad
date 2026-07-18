@@ -55,14 +55,14 @@ public class IndexModel : PageModel
             .GroupBy(r => r.Host[2..], StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Host, StringComparer.OrdinalIgnoreCase);
 
-        // Latest access time per host (one small query per configured route host).
-        var lastByHost = new Dictionary<string, DateTime>();
-        foreach (var host in allRoutes.Select(r => r.Host).Distinct())
-        {
-            var last = await _db.RequestLogs.Where(r => r.Host == host)
-                .OrderByDescending(r => r.Timestamp).FirstOrDefaultAsync();
-            if (last != null) lastByHost[host] = last.Timestamp;
-        }
+        // Latest access time per host — a single grouped query (scales to many hosts).
+        var hosts = allRoutes.Select(r => r.Host)
+            .Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
+        var lastByHost = await _db.RequestLogs
+            .Where(r => hosts.Contains(r.Host))
+            .GroupBy(r => r.Host)
+            .Select(g => new { Host = g.Key, Last = g.Max(x => x.Timestamp) })
+            .ToDictionaryAsync(x => x.Host, x => x.Last);
 
         // Build the domain tree automatically from the host names.
         foreach (var group in RouteTree.Build(allRoutes))

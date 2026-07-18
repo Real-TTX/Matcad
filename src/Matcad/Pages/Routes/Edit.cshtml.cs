@@ -95,14 +95,28 @@ public class EditModel : PageModel
         route.Enabled = Enabled;
         _store.UpsertRoute(route, User.GetUserId());
 
+        var warnings = new List<string>();
+
         // Non-blocking heads-up when a single host isn't covered by any wildcard.
         if (!wildcard)
         {
             var coverage = CertificatePlanner.ForRoute(route, _routes.All());
             if (coverage.Kind == CertificatePlanner.CertKind.Individual)
-                TempData["FlashWarn"] = $"“{route.Host}” is not covered by a wildcard — Caddy will request an " +
-                    "individual certificate for it. Consider a *." + ParentOf(route.Host) + " wildcard route instead.";
+                warnings.Add($"“{route.Host}” is not covered by a wildcard — Caddy will request an " +
+                    "individual certificate for it. Consider a *." + ParentOf(route.Host) + " wildcard route instead.");
         }
+
+        // Matcad forward-auth needs a reachable login portal, otherwise the login
+        // page can't load for the protected host.
+        if (route.AuthenticationId is > 0)
+        {
+            var a = _store.Authentications.FirstOrDefault(x => x.Id == route.AuthenticationId);
+            if (a?.Type == AuthType.Matcad && string.IsNullOrWhiteSpace(_store.Settings.EffectivePortalUrl()))
+                warnings.Add("This route uses Matcad authentication but no login portal is configured — " +
+                    "set “Matcad host” (or a portal URL) under Settings, otherwise the login page won't load.");
+        }
+
+        if (warnings.Count > 0) TempData["FlashWarn"] = string.Join(" ", warnings);
 
         await ApplyAndFlash($"Route “{route.Host}” saved.");
         return RedirectToPage("Index");

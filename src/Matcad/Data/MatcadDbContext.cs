@@ -30,7 +30,8 @@ public class MatcadDbContext : DbContext
         {
             e.ToTable("RequestLogs");
             e.HasIndex(x => x.Timestamp);
-            e.HasIndex(x => x.Host);
+            // Composite index for "latest access per host" and host-filtered stats.
+            e.HasIndex(x => new { x.Host, x.Timestamp });
         });
     }
 }

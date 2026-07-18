@@ -8,7 +8,8 @@ namespace Matcad.Pages.Providers;
 public class EditModel : PageModel
 {
     private readonly ConfigStore _store;
-    public EditModel(ConfigStore store) => _store = store;
+    private readonly Matcad.Services.RouteProvider _routes;
+    public EditModel(ConfigStore store, Matcad.Services.RouteProvider routes) { _store = store; _routes = routes; }
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
@@ -65,7 +66,7 @@ public class EditModel : PageModel
         if (Id is > 0)
         {
             var name = _store.Providers.FirstOrDefault(x => x.Id == Id)?.Name;
-            if (_store.Routes.Any(r => r.ProviderId == Id))
+            if (_routes.All().Any(r => r.ProviderId == Id))
             {
                 TempData["FlashError"] = "Provider is used by at least one route and cannot be deleted.";
                 return RedirectToPage("Edit", new { id = Id });

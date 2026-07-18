@@ -74,16 +74,22 @@ using (var scope = app.Services.CreateScope())
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsureSeedAdmin(app.Logger);
 
-    // On a fresh install, seed illustrative example data (disabled routes,
-    // a provider, authentications, settings and a demo user).
+    // On the very first start only, seed illustrative example data. Gated by a
+    // one-time marker file (NOT by "config is empty") so clearing everything and
+    // restarting never resurrects the examples or overwrites settings.
     var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
-    if (Matcad.Config.ExampleData.IsEmpty(store))
+    var seedMarker = Path.Combine(dataDir, ".example-seeded");
+    if (!File.Exists(seedMarker))
     {
-        var admin = await auth.FindUser("admin");
-        Matcad.Config.ExampleData.Seed(store, admin?.Id);
-        if (await auth.FindUser("demo") == null)
-            await auth.CreateUser("demo", "demo", UserRole.User, admin?.Id);
-        app.Logger.LogInformation("Seeded example data (disabled example routes).");
+        if (Matcad.Config.ExampleData.IsEmpty(store))
+        {
+            var admin = await auth.FindUser("admin");
+            Matcad.Config.ExampleData.Seed(store, admin?.Id);
+            if (await auth.FindUser("demo") == null)
+                await auth.CreateUser("demo", "demo", UserRole.User, admin?.Id);
+            app.Logger.LogInformation("Seeded example data (disabled example routes).");
+        }
+        await File.WriteAllTextAsync(seedMarker, DateTime.UtcNow.ToString("o"));
     }
 }
 
