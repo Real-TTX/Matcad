@@ -1,5 +1,10 @@
 name: matcad
 
+# Builds the release images LOCALLY (release version, ports 80/443).
+# For normal deployment use docker-compose.yml (pulls prebuilt images from GHCR);
+# CI publishes those images on a version tag. Use this file only to build/test
+# the release images on your own machine.
+
 services:
   matcad:
     build:

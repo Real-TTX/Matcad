@@ -170,11 +170,15 @@ public class CaddyConfigGenerator
                 ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
             };
             if (isHttps)
+            {
+                var tls = new Dictionary<string, object?>();
+                if (route.InsecureSkipVerify) tls["insecure_skip_verify"] = true;
                 proxy["transport"] = new Dictionary<string, object?>
                 {
                     ["protocol"] = "http",
-                    ["tls"] = new Dictionary<string, object?>()
+                    ["tls"] = tls
                 };
+            }
             return proxy;
         }
 

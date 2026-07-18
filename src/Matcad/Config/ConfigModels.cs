@@ -70,6 +70,9 @@ public class RouteConfig : ConfigEntity
     public bool Wildcard { get; set; }
     /// <summary>Reverse-proxy target, e.g. http://backend:8080.</summary>
     public string? Upstream { get; set; }
+    /// <summary>For HTTPS upstreams: don't verify the backend's TLS certificate
+    /// (accept self-signed / invalid certs). Ignored for plain-HTTP upstreams.</summary>
+    public bool InsecureSkipVerify { get; set; }
     /// <summary>Redirect target. When set and no <see cref="Upstream"/> is given,
     /// the route responds with a redirect to this URL instead of proxying.</summary>
     public string? FallbackUrl { get; set; }

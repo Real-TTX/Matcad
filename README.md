@@ -11,6 +11,33 @@ authentications, log statistics and a local user/role system.
 - **SQLite** — logic (users, sessions, request logs) on the data volume
 - **JSON** — configs (providers, routes, authentications, settings) on the data volume
 
+## Deploy (homelab / production)
+
+Pull the prebuilt images from GHCR and start the stack — no local build:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+- `docker-compose.yml` uses `ghcr.io/real-ttx/matcad` + `ghcr.io/real-ttx/matcad-caddy`.
+- Pin a version instead of `latest`: `MATCAD_VERSION=0.2.0 docker compose up -d`.
+- UI: <http://localhost:4433> (put it behind Caddy or your VPN).
+- Default login on first start: **admin / admin** — change it immediately under
+  *Settings → Users*.
+
+The published images bake in these Caddy DNS-provider modules: netcup, cloudflare,
+digitalocean, hetzner, route53, gandi, desec, ovh. To use others, build locally
+(see below) with an extended `CADDY_DNS_MODULES`.
+
+## Compose files
+
+| File | Role |
+|------|------|
+| `docker-compose.yml` | **Deploy** — pulls release images from GHCR (homelab / production). |
+| `docker-compose.dev.yml` | **Develop** — builds locally, adds a whoami test upstream, exposes Caddy admin. |
+| `docker-compose.release.yml` | Build the release images locally (CI normally publishes them to GHCR). |
+
 ## Development / testing
 
 Live reload = rebuild the container and redeploy the stack:
@@ -22,8 +49,14 @@ Live reload = rebuild the container and redeploy the stack:
 
 - UI: <http://localhost:4433>
 - Caddy admin (dev only): <http://localhost:2019/config/>
-- Default login on first start: **admin / admin** — change it immediately under
-  *Settings → Users*.
+
+## Releases
+
+Push a version tag and GitHub Actions builds + publishes both images to GHCR:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
 
 ## Authentication types
 

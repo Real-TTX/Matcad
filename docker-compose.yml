@@ -1,0 +1,56 @@
+name: matcad
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Matcad — production / homelab stack.
+#
+# Pulls prebuilt images from the GitHub Container Registry (GHCR) — no build.
+#
+#   docker compose pull        # fetch the latest images
+#   docker compose up -d       # start (or update) the stack
+#
+# Pin a version instead of "latest":  MATCAD_VERSION=0.2.0 docker compose up -d
+#
+# The published images bake in a set of Caddy DNS-provider modules (see README).
+# To use other modules, build locally with docker-compose.dev.yml instead.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  matcad:
+    image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
+    depends_on:
+      - caddy
+    ports:
+      - "4433:4433"          # Matcad UI (put it behind Caddy or your VPN)
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Matcad__DataDir=/data
+      - Matcad__ConfigDir=/data/config
+      - Matcad__CaddyLogDir=/caddy-logs
+      - Matcad__Caddy__AdminUrl=http://caddy:2019
+    volumes:
+      - matcad-data:/data
+      - caddy-logs:/caddy-logs
+      # Optional: read-only Docker socket for the container-discovery mode.
+      # Remove this line if you don't use it.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  caddy:
+    image: ghcr.io/real-ttx/matcad-caddy:${MATCAD_VERSION:-latest}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"        # HTTP/3
+    # The admin API is NOT published to the host; only Matcad reaches it
+    # over the internal docker network.
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/caddy-logs
+    restart: unless-stopped
+
+volumes:
+  matcad-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:

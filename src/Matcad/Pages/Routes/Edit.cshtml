@@ -62,10 +62,19 @@
             </div>
         </div>
 
-        <div class="form-group" id="proxy-block">
-            <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
-            <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
-            <div class="hint">Requests are proxied to this backend.</div>
+        <div id="proxy-block">
+            <div class="form-group">
+                <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
+                <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
+                <div class="hint">Requests are proxied to this backend.</div>
+            </div>
+            <div class="form-group">
+                <label style="font-weight:400">
+                    <input type="checkbox" asp-for="InsecureSkipVerify" /> Skip TLS verification (insecure)
+                </label>
+                <div class="hint">For <code>https://</code> upstreams with a self-signed or invalid
+                    certificate. Ignored for plain <code>http://</code> backends.</div>
+            </div>
         </div>
 
         <div id="redirect-block" style="display:none">
