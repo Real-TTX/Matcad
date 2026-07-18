@@ -254,6 +254,24 @@
         </div>
         <pre class="code-view" id="cfg-live-pre"><code id="cfg-live">@Model.CaddyLiveJson</code></pre>
         <pre class="code-view" id="cfg-generated-pre" style="display:none"><code id="cfg-generated">@Model.CaddyConfigJson</code></pre>
+
+        <h2 style="margin-top:1.5rem">Raw / extra config (advanced)</h2>
+        <p class="hint">
+            Extra Caddy JSON that is <strong>deep-merged</strong> into the generated config
+            (objects merge, arrays like <code>routes</code> concatenate). Use this for anything
+            Matcad doesn't model directly — it also receives whatever the Caddyfile importer
+            can't map. Invalid JSON is rejected on save.
+        </p>
+        <form method="post" asp-page-handler="Raw">
+            <div class="form-group">
+                <textarea asp-for="RawCaddyJson" rows="10" spellcheck="false"
+                          placeholder='{ "apps": { "http": { "servers": { "matcad": { "routes": [ … ] } } } } }'
+                          style="font-family:ui-monospace,Consolas,monospace;font-size:.82rem"></textarea>
+            </div>
+            <div class="btn-row" style="margin-top:0">
+                <button type="submit" class="btn btn-primary"><icon name="save" /> Save &amp; merge</button>
+            </div>
+        </form>
     </div>
 </div>
 

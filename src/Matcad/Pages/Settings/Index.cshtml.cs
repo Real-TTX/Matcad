@@ -29,6 +29,7 @@ public class IndexModel : PageModel
     [BindProperty] public long LogRetentionMaxRows { get; set; } = 1_000_000;
     [BindProperty] public string CaddyAdminUrl { get; set; } = "";
     [BindProperty] public string AcmeEmail { get; set; } = "";
+    [BindProperty] public string RawCaddyJson { get; set; } = "";
 
     [BindProperty] public bool DockerEnabled { get; set; }
     [BindProperty] public string DockerEndpoint { get; set; } = "";
@@ -77,6 +78,7 @@ public class IndexModel : PageModel
         LogRetentionMaxRows = s.LogRetentionMaxRows;
         CaddyAdminUrl = s.CaddyAdminUrl;
         AcmeEmail = s.AcmeEmail;
+        RawCaddyJson = s.RawCaddyJson;
         DockerEnabled = s.Docker.Enabled;
         DockerEndpoint = s.Docker.Endpoint;
         DockerBaseDomain = s.Docker.BaseDomain;
@@ -122,7 +124,30 @@ public class IndexModel : PageModel
         var (ok, error) = await _caddy.ApplyAsync();
         TempData[ok ? "Flash" : "FlashError"] = ok
             ? "Caddy configuration re-pushed."
-            : $"Caddy-Push fehlgeschlagen: {error}";
+            : $"Caddy push failed: {error}";
+        return RedirectToPage("Index");
+    }
+
+    public async Task<IActionResult> OnPostRawAsync()
+    {
+        var raw = RawCaddyJson?.Trim() ?? "";
+        if (raw.Length > 0)
+        {
+            try { System.Text.Json.Nodes.JsonNode.Parse(raw); }
+            catch (Exception ex)
+            {
+                TempData["FlashError"] = "Raw Caddy JSON is not valid JSON: " + ex.Message;
+                return RedirectToPage("Index");
+            }
+        }
+        var s = _store.Settings;
+        s.RawCaddyJson = raw;
+        _store.SaveSettings(s);
+
+        var (ok, error) = await _caddy.ApplyAsync();
+        TempData[ok ? "Flash" : "FlashError"] = ok
+            ? "Raw config saved and merged into Caddy."
+            : $"Saved, but Caddy rejected the merged config: {error}";
         return RedirectToPage("Index");
     }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Matcad.Config;
 
 namespace Matcad.Services;
@@ -37,8 +38,35 @@ public class CaddyService
         }
     }
 
-    public string BuildJson() =>
-        JsonSerializer.Serialize(_generator.Build(), new JsonSerializerOptions { WriteIndented = true });
+    public string BuildJson() => BuildNode().ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+
+    /// <summary>The generated config with the optional raw-passthrough JSON deep-merged in.</summary>
+    private JsonNode BuildNode()
+    {
+        var node = JsonSerializer.SerializeToNode(_generator.Build()) ?? new JsonObject();
+        var raw = _store.Settings.RawCaddyJson;
+        if (!string.IsNullOrWhiteSpace(raw) && node is JsonObject target)
+        {
+            try
+            {
+                if (JsonNode.Parse(raw) is JsonObject source) DeepMerge(target, source);
+            }
+            catch (Exception ex) { _log.LogWarning(ex, "Invalid raw Caddy JSON; ignoring it"); }
+        }
+        return node;
+    }
+
+    // Objects merge recursively; arrays concatenate; scalars are overwritten.
+    private static void DeepMerge(JsonObject target, JsonObject source)
+    {
+        foreach (var (key, value) in source)
+        {
+            if (target[key] is JsonObject to && value is JsonObject so) DeepMerge(to, so);
+            else if (target[key] is JsonArray ta && value is JsonArray sa)
+                foreach (var item in sa) ta.Add(item?.DeepClone());
+            else target[key] = value?.DeepClone();
+        }
+    }
 
     /// <summary>Regenerates and pushes the config. Returns (success, error?).</summary>
     public async Task<(bool Ok, string? Error)> ApplyAsync(CancellationToken ct = default)

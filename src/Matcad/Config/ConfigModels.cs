@@ -109,6 +109,10 @@ public class MatcadSettings
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
     public string AcmeEmail { get; set; } = "";
+    /// <summary>Extra Caddy JSON deep-merged into the generated config (objects
+    /// merge, arrays concatenate). Escape hatch for anything Matcad doesn't model
+    /// directly; also where the Caddyfile importer stores unmappable parts.</summary>
+    public string RawCaddyJson { get; set; } = "";
     public DockerSettings Docker { get; set; } = new();
 
     /// <summary>Effective login-portal base URL: explicit AuthPortalUrl, else
