@@ -6,7 +6,7 @@ obj/
 
 # Runtime data. Note: we deliberately do NOT ignore a folder literally named
 # "data" because on case-insensitive filesystems that also matches the source
-# folder src/Matcat/Data/. Local dev writes runtime data to .localdata/ instead.
+# folder src/Matcad/Data/. Local dev writes runtime data to .localdata/ instead.
 .localdata/
 *.db
 *.db-shm

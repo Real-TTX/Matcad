@@ -1,0 +1,41 @@
+@page "/auth/portal"
+@model Matcad.Pages.Auth.PortalModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_LoginLayout";
+    var b = Model.AuthConfig;
+    var title = !string.IsNullOrWhiteSpace(b?.BrandTitle) ? b!.BrandTitle : "Matcad";
+    var text = !string.IsNullOrWhiteSpace(b?.BrandText) ? b!.BrandText : "Protected area – please sign in";
+    var color = !string.IsNullOrWhiteSpace(b?.BrandColor) ? b!.BrandColor : null;
+}
+<div class="login-card" @(color != null ? $"style=--primary:{color};--primary-hover:{color}" : "")>
+    <h1 class="login-brand">
+        @if (!string.IsNullOrWhiteSpace(b?.BrandLogo))
+        {
+            <img src="@b!.BrandLogo" alt="" style="height:2rem;max-width:100%" />
+        }
+        else
+        {
+            <partial name="_Logo" />
+        }
+        <span>@title</span>
+    </h1>
+    <p class="text-muted" style="text-align:center;margin-top:-.5rem">@text</p>
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+    <form method="post">
+        <input type="hidden" asp-for="Auth" />
+        <input type="hidden" asp-for="Rd" />
+        <div class="form-group">
+            <label asp-for="Username">Username</label>
+            <input asp-for="Username" autocomplete="username" autofocus />
+        </div>
+        <div class="form-group">
+            <label asp-for="Password">Password</label>
+            <input asp-for="Password" type="password" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block"><icon name="logout" /> Sign in</button>
+    </form>
+</div>

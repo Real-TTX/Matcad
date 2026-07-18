@@ -1,5 +1,5 @@
 # Bootstrap configuration.
-# Matcat replaces the running config at runtime via the admin API (/load),
+# Matcad replaces the running config at runtime via the admin API (/load),
 # so this only needs to (a) expose the admin API to the docker network and
 # (b) keep Caddy alive until the first push.
 {
@@ -7,5 +7,5 @@
 }
 
 :80 {
-	respond "Matcat: Caddy is running, waiting for configuration." 200
+	respond "Matcad: Caddy is running, waiting for configuration." 200
 }

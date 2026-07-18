@@ -1,0 +1,74 @@
+name: Release
+
+# Build the Matcad + Caddy images and publish them to GHCR.
+# Triggers on a version tag (v1.2.3) or manual dispatch.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # DNS-provider modules baked into the published Caddy + Matcad images.
+  # Keep in sync with .env. Add more from https://github.com/caddy-dns .
+  CADDY_DNS_MODULES: >-
+    github.com/caddy-dns/netcup
+    github.com/caddy-dns/cloudflare
+    github.com/caddy-dns/digitalocean
+    github.com/caddy-dns/hetzner
+    github.com/caddy-dns/route53
+    github.com/caddy-dns/gandi
+    github.com/caddy-dns/desec
+    github.com/caddy-dns/ovh
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive version
+        id: ver
+        # Tag "v0.2.0" -> "0.2.0"; manual runs -> "dev".
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "v=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & push matcad
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            VERSION=${{ steps.ver.outputs.v }}
+            CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
+          tags: |
+            ghcr.io/real-ttx/matcad:${{ steps.ver.outputs.v }}
+            ghcr.io/real-ttx/matcad:latest
+
+      - name: Build & push caddy
+        uses: docker/build-push-action@v6
+        with:
+          context: ./caddy
+          file: caddy/Dockerfile
+          push: true
+          build-args: |
+            CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
+          tags: |
+            ghcr.io/real-ttx/matcad-caddy:${{ steps.ver.outputs.v }}
+            ghcr.io/real-ttx/matcad-caddy:latest

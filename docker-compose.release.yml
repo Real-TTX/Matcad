@@ -1,39 +1,49 @@
-name: matcat
+name: matcad
+
+# Builds the release images LOCALLY (release version, ports 80/443).
+# For normal deployment use docker-compose.yml (pulls prebuilt images from GHCR);
+# CI publishes those images on a version tag. Use this file only to build/test
+# the release images on your own machine.
 
 services:
-  matcat:
+  matcad:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION: ${MATCAT_VERSION:-0.0.0}
-    image: matcat:${MATCAT_VERSION:-latest}
+        VERSION: ${MATCAD_VERSION:-0.0.0}
+        CADDY_DNS_MODULES: ${CADDY_DNS_MODULES:-github.com/caddy-dns/netcup}
+    image: matcad:${MATCAD_VERSION:-latest}
     depends_on:
       - caddy
     ports:
       - "4433:4433"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - Matcat__DataDir=/data
-      - Matcat__ConfigDir=/data/config
-      - Matcat__CaddyLogDir=/caddy-logs
-      - Matcat__Caddy__AdminUrl=http://caddy:2019
+      - Matcad__DataDir=/data
+      - Matcad__ConfigDir=/data/config
+      - Matcad__CaddyLogDir=/caddy-logs
+      - Matcad__Caddy__AdminUrl=http://caddy:2019
     volumes:
-      - matcat-data:/data
+      - matcad-data:/data
       - caddy-logs:/caddy-logs
+      # Read-only socket for the optional Docker discovery mode.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
   caddy:
     build:
       context: ./caddy
       dockerfile: Dockerfile
-    image: matcat-caddy:${MATCAT_VERSION:-latest}
+      args:
+        CADDY_DNS_MODULES: ${CADDY_DNS_MODULES:-github.com/caddy-dns/netcup}
+    image: matcad-caddy:${MATCAD_VERSION:-latest}
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp" # HTTP/3
     # Admin API is intentionally NOT published to the host in release;
-    # it is only reachable inside the docker network by the matcat service.
+    # it is only reachable inside the docker network by the matcad service.
     volumes:
       - caddy-data:/data
       - caddy-config:/config
@@ -41,7 +51,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  matcat-data:
+  matcad-data:
   caddy-data:
   caddy-config:
   caddy-logs:

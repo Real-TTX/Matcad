@@ -1,0 +1,210 @@
+@page
+@using Matcad.Config
+@model Matcad.Pages.Authentications.EditModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Create authentication" : "Edit authentication";
+}
+<div class="card">
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+    <form method="post" enctype="multipart/form-data">
+        <input type="hidden" asp-for="Id" />
+        <div class="form-group">
+            <label asp-for="Name">Name</label>
+            <input asp-for="Name" autofocus placeholder="e.g. Internal area" />
+        </div>
+        <div class="form-group">
+            <label asp-for="Type">Type</label>
+            <select asp-for="Type" onchange="matcadAuthType(this.value)">
+                <option value="BasicAuth">Basic Auth (browser dialog)</option>
+                <option value="Matcad">Matcad (login portal with redirect)</option>
+            </select>
+        </div>
+
+        @* Both types keep their login accounts here. *@
+        <div id="users-block">
+            <h2>Users</h2>
+            <p class="hint">Leave the password empty to keep an existing password.</p>
+            <div class="table-wrap">
+                <table class="data" id="basic-users">
+                    <thead><tr><th>Username</th><th>Password</th><th style="width:1%"></th></tr></thead>
+                    <tbody>
+                        @foreach (var u in Model.ExistingUsers)
+                        {
+                            <tr>
+                                <td><input name="Usernames" value="@u.Username" /></td>
+                                <td><input name="Passwords" type="password" placeholder="•••••••• (unchanged)" autocomplete="new-password" /></td>
+                                <td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('tr').remove()"><icon name="delete" /></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="list-actions">
+                <button type="button" class="btn" onclick="matcadAddUser()"><icon name="add" /> Add user</button>
+            </div>
+        </div>
+
+        <div id="matcad-block" style="@(Model.Type == AuthType.Matcad ? "" : "display:none")">
+            <div class="alert alert-warn">
+                Unauthenticated requests see the Matcad login page and, after a successful
+                sign-in, are sent back to the endpoint (Caddy <code>forward_auth</code>).
+                Where the login is shown (inline / redirect / 401) and the base domain are
+                configured under <a asp-page="/Settings/Index">Settings</a>.
+            </div>
+            <h2>Login page branding</h2>
+            <div class="brand-editor">
+                @* --- Left: the branding fields --- *@
+                <div class="brand-fields">
+                    <div class="form-group">
+                        <label asp-for="BrandTitle">Title</label>
+                        <input asp-for="BrandTitle" placeholder="Matcad" data-preview="title" />
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="BrandText">Welcome text</label>
+                        <input asp-for="BrandText" placeholder="Protected area – please sign in" data-preview="text" />
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="BrandColor">Accent colour</label>
+                        <div class="color-field">
+                            <input type="color" id="brand-color-picker"
+                                   value="@(string.IsNullOrWhiteSpace(Model.BrandColor) ? "#2f6feb" : Model.BrandColor)"
+                                   aria-label="Pick accent colour" />
+                            <input asp-for="BrandColor" type="text" id="brand-color-hex"
+                                   placeholder="#2f6feb (default)" spellcheck="false" data-preview="color" />
+                            <button type="button" class="btn btn-sm btn-ghost" id="brand-color-clear"
+                                    title="Reset to default colour"><icon name="x" /></button>
+                        </div>
+                        <div class="hint">Pick a colour or leave empty to use the default Matcad blue.</div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="BrandLogo">Logo URL</label>
+                        <input asp-for="BrandLogo" placeholder="https://… or leave empty" data-preview="logo" />
+                        <div class="hint">Or upload a file below (max 256 KB, stored inline).</div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="LogoFile">Logo upload</label>
+                        <input asp-for="LogoFile" type="file" accept="image/*" id="brand-logo-file" />
+                    </div>
+                </div>
+
+                @* --- Right: a live preview of the login card --- *@
+                <div class="brand-preview">
+                    <span class="hint">Preview</span>
+                    <div class="preview-frame">
+                        <div class="login-card" id="preview-card">
+                            <h1 class="login-brand">
+                                <img id="preview-logo" alt="" style="height:2rem;max-width:100%;@(string.IsNullOrWhiteSpace(Model.BrandLogo) ? "display:none" : "")"
+                                     src="@Model.BrandLogo" />
+                                <span id="preview-logo-fallback" style="@(string.IsNullOrWhiteSpace(Model.BrandLogo) ? "" : "display:none")"><partial name="_Logo" /></span>
+                                <span id="preview-title">@(string.IsNullOrWhiteSpace(Model.BrandTitle) ? "Matcad" : Model.BrandTitle)</span>
+                            </h1>
+                            <p class="text-muted" id="preview-text" style="text-align:center;margin-top:-.5rem">@(string.IsNullOrWhiteSpace(Model.BrandText) ? "Protected area – please sign in" : Model.BrandText)</p>
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" tabindex="-1" readonly />
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" tabindex="-1" readonly />
+                            </div>
+                            <button type="button" tabindex="-1" class="btn btn-primary btn-block" id="preview-btn"><icon name="logout" /> Sign in</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
+            @if (!Model.IsNew)
+            {
+                <span class="spacer"></span>
+                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
+                        formnovalidate data-confirm="Delete this authentication?">
+                    <icon name="delete" /> Delete
+                </button>
+            }
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function matcadAuthType(t) {
+            document.getElementById('matcad-block').style.display = t === 'Matcad' ? '' : 'none';
+        }
+        function matcadAddUser() {
+            const tbody = document.querySelector('#basic-users tbody');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><input name="Usernames" /></td>' +
+                '<td><input name="Passwords" type="password" autocomplete="new-password" /></td>' +
+                '<td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+            tbody.appendChild(tr);
+        }
+
+        // ---- Live login-page preview -------------------------------------
+        (function () {
+            const DEFAULT_COLOR = '#2f6feb';
+            const card = document.getElementById('preview-card');
+            if (!card) return;
+            const hex = document.getElementById('brand-color-hex');
+            const picker = document.getElementById('brand-color-picker');
+            const clear = document.getElementById('brand-color-clear');
+            const logoUrl = document.querySelector('[data-preview="logo"]');
+            const logoFile = document.getElementById('brand-logo-file');
+            const logoImg = document.getElementById('preview-logo');
+            const logoFallback = document.getElementById('preview-logo-fallback');
+            const isHex = v => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.trim());
+
+            function shade(c, pct) { // darken for the hover colour
+                let h = c.replace('#', '');
+                if (h.length === 3) h = h.split('').map(x => x + x).join('');
+                const n = parseInt(h, 16);
+                const r = Math.max(0, ((n >> 16) & 255) * (1 - pct)) | 0;
+                const g = Math.max(0, ((n >> 8) & 255) * (1 - pct)) | 0;
+                const b = Math.max(0, (n & 255) * (1 - pct)) | 0;
+                return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+            }
+            function applyColor() {
+                const v = (hex.value || '').trim();
+                const col = isHex(v) ? v : DEFAULT_COLOR;
+                card.style.setProperty('--primary', col);
+                card.style.setProperty('--primary-hover', shade(col, .18));
+                if (isHex(v)) picker.value = v.length === 4
+                    ? '#' + v.slice(1).split('').map(x => x + x).join('') : v;
+            }
+            function bindText(sel, el, fallback) {
+                const src = document.querySelector('[data-preview="' + sel + '"]');
+                const set = () => el.textContent = src.value.trim() || fallback;
+                src.addEventListener('input', set);
+            }
+            function applyLogo(src) {
+                if (src) { logoImg.src = src; logoImg.style.display = ''; logoFallback.style.display = 'none'; }
+                else { logoImg.removeAttribute('src'); logoImg.style.display = 'none'; logoFallback.style.display = ''; }
+            }
+
+            bindText('title', document.getElementById('preview-title'), 'Matcad');
+            bindText('text', document.getElementById('preview-text'), 'Protected area – please sign in');
+
+            hex.addEventListener('input', applyColor);
+            picker.addEventListener('input', () => { hex.value = picker.value; applyColor(); });
+            clear.addEventListener('click', () => { hex.value = ''; picker.value = DEFAULT_COLOR; applyColor(); });
+
+            logoUrl.addEventListener('input', () => applyLogo(logoUrl.value.trim()));
+            logoFile.addEventListener('change', () => {
+                const f = logoFile.files && logoFile.files[0];
+                if (!f) { applyLogo(logoUrl.value.trim()); return; }
+                const rd = new FileReader();
+                rd.onload = e => applyLogo(e.target.result);
+                rd.readAsDataURL(f);
+            });
+
+            applyColor();
+        })();
+    </script>
+}

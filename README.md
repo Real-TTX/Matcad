@@ -1,49 +1,89 @@
-# Matcat
+# Matcad
 
-Eine Web-UI zur Verwaltung von [Caddy](https://caddyserver.com/) inkl. DNS-Provider-Modulen
-(z. B. Netcup), hierarchischen Routen (Wildcard / Fallback), zentral verwalteten
-Authentications, Log-Statistiken und lokalem Benutzer-/Rollensystem.
+A web UI for managing [Caddy](https://caddyserver.com/) including DNS provider modules
+(e.g. Netcup), hierarchical routes (wildcard / fallback), centrally managed
+authentications, log statistics and a local user/role system.
 
 ## Stack
 
-- **matcat** — ASP.NET Core (.NET 10, Razor Pages), UI auf Port **4433**
-- **caddy** — eigenes Image (xcaddy) mit DNS-Modulen; Config wird zur Laufzeit per Admin-API gepusht
-- **SQLite** — Logik (Users, Sessions, Request-Logs) auf dem Daten-Volume
-- **JSON** — Configs (Providers, Routes, Authentications, Settings) auf dem Daten-Volume
+- **matcad** — ASP.NET Core (.NET 10, Razor Pages), UI on port **4433**
+- **caddy** — custom image (xcaddy) with DNS modules; config is pushed at runtime via the admin API
+- **SQLite** — logic (users, sessions, request logs) on the data volume
+- **JSON** — configs (providers, routes, authentications, settings) on the data volume
 
-## Entwicklung / Testen
+## Deploy (homelab / production)
 
-Live-Reload = Container neu bauen und Stack redeployen:
+Pull the prebuilt images from GHCR and start the stack — no local build:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+- `docker-compose.yml` uses `ghcr.io/real-ttx/matcad` + `ghcr.io/real-ttx/matcad-caddy`.
+- Pin a version instead of `latest`: `MATCAD_VERSION=0.2.0 docker compose up -d`.
+- UI: <http://localhost:4433> (put it behind Caddy or your VPN).
+- Default login on first start: **admin / admin** — change it immediately under
+  *Settings → Users*.
+
+The published images bake in these Caddy DNS-provider modules: netcup, cloudflare,
+digitalocean, hetzner, route53, gandi, desec, ovh. To use others, build locally
+(see below) with an extended `CADDY_DNS_MODULES`.
+
+## Compose files
+
+| File | Role |
+|------|------|
+| `docker-compose.yml` | **Deploy** — pulls release images from GHCR (homelab / production). |
+| `docker-compose.dev.yml` | **Develop** — builds locally, adds a whoami test upstream, exposes Caddy admin. |
+| `docker-compose.release.yml` | Build the release images locally (CI normally publishes them to GHCR). |
+
+## Development / testing
+
+Live reload = rebuild the container and redeploy the stack:
 
 ```powershell
-./scripts/deploy.ps1            # dev  (whoami-Test-Upstream, Caddy auf 8080/8443, Admin 2019)
+./scripts/deploy.ps1            # dev  (whoami test upstream, Caddy on 8080/8443, admin 2019)
 ./scripts/deploy.ps1 -Mode release
 ```
 
 - UI: <http://localhost:4433>
-- Caddy Admin (nur dev): <http://localhost:2019/config/>
-- Standard-Login beim ersten Start: **admin / admin** — bitte sofort unter
-  *Settings → Benutzer* ändern.
+- Caddy admin (dev only): <http://localhost:2019/config/>
 
-## Authentication-Typen
+## Releases
 
-- **Basic Auth** — verwaltete Benutzerliste (bcrypt) → Caddy `basic_auth`.
-- **Matcat** — Login-Portal mit Weiterleitung (Caddy `forward_auth`). Nicht
-  angemeldete Zugriffe werden zum Matcat-Portal umgeleitet, nach der Anmeldung
-  zurück zum Endpunkt. Voraussetzung (unter *Settings*):
-  - **Basis-Domain** (z. B. `example.com`) — der Portal-Cookie gilt
-    subdomain-übergreifend.
-  - **Login-Portal-URL** — ein *ungeschützter* Host, der auf Matcat zeigt
-    (z. B. eine Route `auth.example.com` → `http://matcat:4433`).
+Push a version tag and GitHub Actions builds + publishes both images to GHCR:
 
-## Echtzeit-Logs
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
 
-Caddy schreibt JSON-Access-Logs auf ein gemeinsames Volume; Matcat liest sie
-ein (SQLite) und streamt neue Einträge per Server-Sent Events ins Dashboard.
+## Authentication types
 
-## Versionierung
+- **Basic Auth** — managed user list (bcrypt) → Caddy `basic_auth`.
+- **Matcad** — login portal with redirect (Caddy `forward_auth`). Unauthenticated
+  requests are redirected to the Matcad portal and, after signing in, sent back
+  to the endpoint. Requirements (under *Settings*):
+  - **Base domain** (e.g. `example.com`) — the portal cookie is shared across
+    subdomains.
+  - **Login portal URL** — an *unprotected* host that points to Matcad
+    (e.g. a route `auth.example.com` → `http://matcad:4433`).
 
-`scripts/version.ps1` erzeugt die Version und zählt die Buildnummer in `version.json` hoch:
+## Docker discovery mode
+
+Optionally binds running containers as routes (Settings → Docker). Default name
+`<containername>.<base-domain>`; fine-tune via labels `matcad.enable=true`,
+`matcad.host`, `matcad.port`, `matcad.auth`. Requires the Docker socket mounted
+read-only into the Matcad container (already configured in the compose files).
+
+## Real-time logs
+
+Caddy writes JSON access logs to a shared volume; Matcad ingests them (SQLite)
+and streams new entries to the dashboard via Server-Sent Events.
+
+## Versioning
+
+`scripts/version.ps1` computes the version and increments the build counter in `version.json`:
 
 - Release: `<major>.<minor>.<build>-<yyyyMMdd>`
 - Nightly: `nightly-<build>-<yyyyMMdd>`
@@ -51,5 +91,5 @@ ein (SQLite) und streamt neue Einträge per Server-Sent Events ins Dashboard.
 
 ## Branches
 
-- `main` — Release
-- `dev` — Development
+- `main` — release
+- `dev` — development

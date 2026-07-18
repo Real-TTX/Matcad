@@ -1,0 +1,183 @@
+@page
+@model Matcad.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="stat-grid">
+    <div class="stat">
+        <div class="value">@Model.Requests24h</div>
+        <div class="label">Requests (24 h)</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.TotalRequests</div>
+        <div class="label">Requests total</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.ClientErrors24h</div>
+        <div class="label">4xx (24 h)</div>
+    </div>
+    <div class="stat">
+        <div class="value">@Model.ServerErrors24h</div>
+        <div class="label">5xx (24 h)</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2><icon name="routes" /> Routes</h2>
+    @if (Model.Groups.Count == 0)
+    {
+        <p class="empty">No routes yet. <a asp-page="/Routes/Edit">Create the first route</a>.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="route-table">
+                <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>Target</th>
+                        <th>Last access</th>
+                        <th>Status</th>
+                        <th class="c-actions"></th>
+                    </tr>
+                </thead>
+                @foreach (var group in Model.Groups)
+                {
+                    <tbody class="group">
+                        <tr class="parent">
+                            <td colspan="5">
+                                <span class="grp-name"><icon name="network" /> @group.BaseDomain</span>
+                                <span class="grp-count">· @group.Routes.Count</span>
+                            </td>
+                        </tr>
+                        @foreach (var row in group.Routes)
+                        {
+                            var r = row.Route;
+                            var apex = row.Label == "@";
+                            <tr class="child @(r.Enabled ? "" : "route-off")">
+                                <td class="c-name">
+                                    <span class="branch">↳</span>
+                                    @if (apex)
+                                    {
+                                        <span class="apex">(root)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sub">@row.Label</span><span class="sub-domain">.@group.BaseDomain</span>
+                                    }
+                                    @if (r.Wildcard)
+                                    {
+                                        <span class="badge badge-warn">Wildcard</span>
+                                    }
+                                    @if (r.Source == "system")
+                                    {
+                                        <span class="badge badge-warn" title="Matcad self-exposure">System</span>
+                                    }
+                                    else if (r.Source == "docker")
+                                    {
+                                        <span class="badge badge-info">Docker</span>
+                                    }
+                                    @{
+                                        var cert = Model.Cert(r);
+                                    }
+                                    @switch (cert.Kind)
+                                    {
+                                        case Matcad.Config.CertificatePlanner.CertKind.Wildcard:
+                                            <span class="badge badge-success" title="Wildcard certificate">🛡 @cert.Subject</span>
+                                            break;
+                                        case Matcad.Config.CertificatePlanner.CertKind.Covered:
+                                            <span class="badge badge-muted" title="Covered by wildcard @cert.Subject">🛡 @cert.Subject</span>
+                                            break;
+                                        case Matcad.Config.CertificatePlanner.CertKind.Individual:
+                                            <span class="badge badge-danger" title="Would request its own individual certificate">⚠ Individual</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="rtarget">
+                                    @if (!string.IsNullOrEmpty(r.Upstream))
+                                    {
+                                        @r.Upstream
+                                    }
+                                    else if (!string.IsNullOrEmpty(r.FallbackUrl))
+                                    {
+                                        <text>↪ @r.FallbackUrl</text>
+                                    }
+                                    else
+                                    {
+                                        <text>—</text>
+                                    }
+                                </td>
+                                <td class="c-meta">
+                                    @if (row.LastAccess is DateTime la)
+                                    {
+                                        <span title="@la.ToString("u")">@la.ToLocalTime().ToString("dd.MM. HH:mm")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">no access yet</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (r.Enabled)
+                                    {
+                                        <span><span class="dot dot-ok"></span> Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span><span class="dot dot-off"></span> Inactive</span>
+                                    }
+                                </td>
+                                <td class="c-actions">
+                                    @if (!r.Wildcard)
+                                    {
+                                        <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Open"><icon name="open" /></a>
+                                    }
+                                    @if (!r.IsDerived)
+                                    {
+                                        <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Edit"><icon name="edit" /></a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                }
+            </table>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2><icon name="clock" /> Recent requests (live)</h2>
+    <div class="log-stream" id="log-stream"></div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const stream = document.getElementById('log-stream');
+            const fmt = n => (n < 10 ? '0' : '') + n;
+            function addLine(e) {
+                const d = new Date(e.timestamp);
+                const t = fmt(d.getHours()) + ':' + fmt(d.getMinutes()) + ':' + fmt(d.getSeconds());
+                const cls = 'st-' + Math.floor(e.status / 100);
+                const row = document.createElement('div');
+                row.className = 'log-line';
+                row.innerHTML =
+                    '<span class="text-muted">' + t + '</span>' +
+                    '<span class="' + cls + '">' + e.status + '</span>' +
+                    '<span>' + e.method + '</span>' +
+                    '<span>' + escapeHtml(e.host) + escapeHtml(e.path) + '</span>' +
+                    '<span class="text-muted">' + escapeHtml(e.remoteIp) + '</span>' +
+                    '<span class="text-muted">' + Math.round(e.durationMs) + ' ms</span>';
+                stream.insertBefore(row, stream.firstChild);
+                while (stream.childElementCount > 200) stream.removeChild(stream.lastChild);
+            }
+            function escapeHtml(s) {
+                return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            }
+            const es = new EventSource('/logs/stream');
+            es.onmessage = ev => { try { addLine(JSON.parse(ev.data)); } catch (e) { } };
+        })();
+    </script>
+}

@@ -1,0 +1,214 @@
+@page
+@model Matcad.Pages.Routes.EditModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Create route" : "Edit route";
+
+    string Sel(long? current, string value) =>
+        (current?.ToString() ?? "") == value ? "selected" : "";
+}
+<div class="card">
+    @if (Model.Error != null)
+    {
+        <div class="alert alert-error">@Model.Error</div>
+    }
+    <form method="post">
+        <input type="hidden" asp-for="Id" />
+
+        <div class="form-group">
+            <label>Type</label>
+            <div class="segmented">
+                <label class="seg-option">
+                    <input type="radio" asp-for="RouteType" value="single" onchange="matcadRouteType('single')" />
+                    <span><icon name="routes" /> Single domain</span>
+                </label>
+                <label class="seg-option">
+                    <input type="radio" asp-for="RouteType" value="wildcard" onchange="matcadRouteType('wildcard')" />
+                    <span><icon name="network" /> Wildcard</span>
+                </label>
+            </div>
+            <div class="hint" id="type-hint"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label asp-for="Host">Host</label>
+                <input asp-for="Host" id="host-input" autofocus />
+                <div class="hint" id="host-hint"></div>
+            </div>
+            <div class="form-group">
+                <label asp-for="Name">Name</label>
+                <input asp-for="Name" placeholder="optional – otherwise the host is used" />
+            </div>
+        </div>
+
+        <div class="alert alert-warn" id="wildcard-nudge" style="display:none">
+            <span id="wildcard-nudge-text"></span>
+            <button type="button" class="btn btn-sm" style="margin-left:.5rem" onclick="matcadUseWildcard()">
+                <icon name="network" /> Use wildcard instead
+            </button>
+        </div>
+
+        <div class="form-group">
+            <label>Target</label>
+            <div class="segmented">
+                <label class="seg-option">
+                    <input type="radio" asp-for="Target" value="proxy" onchange="matcadTarget('proxy')" />
+                    <span><icon name="routes" /> Reverse proxy</span>
+                </label>
+                <label class="seg-option">
+                    <input type="radio" asp-for="Target" value="redirect" onchange="matcadTarget('redirect')" />
+                    <span><icon name="open" /> Redirect</span>
+                </label>
+            </div>
+        </div>
+
+        <div id="proxy-block">
+            <div class="form-group">
+                <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
+                <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
+                <div class="hint">Requests are proxied to this backend.</div>
+            </div>
+            <div class="form-group">
+                <label style="font-weight:400">
+                    <input type="checkbox" asp-for="InsecureSkipVerify" /> Skip TLS verification (insecure)
+                </label>
+                <div class="hint">For <code>https://</code> upstreams with a self-signed or invalid
+                    certificate. Ignored for plain <code>http://</code> backends.</div>
+            </div>
+        </div>
+
+        <div id="redirect-block" style="display:none">
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="FallbackUrl">Redirect to URL</label>
+                    <input asp-for="FallbackUrl" placeholder="https://target.example.com" />
+                    <div class="hint">Every request to this host is redirected here.</div>
+                </div>
+                <div class="form-group" style="max-width:260px">
+                    <label>Redirect type</label>
+                    <label style="font-weight:400"><input type="checkbox" asp-for="RedirectPermanent" /> Permanent (301)</label>
+                    <div class="hint">Leave off for a temporary redirect (302).</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label asp-for="AuthenticationId">Authentication</label>
+                <select asp-for="AuthenticationId">
+                    @foreach (var (value, text) in Model.AuthOptions)
+                    {
+                        <option value="@value" selected="@(Sel(Model.AuthenticationId, value) == "selected")">@text</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group" id="provider-block">
+                <label asp-for="ProviderId">DNS provider <span class="text-muted">(required for the wildcard certificate)</span></label>
+                <select asp-for="ProviderId">
+                    @foreach (var (value, text) in Model.ProviderOptions)
+                    {
+                        <option value="@value" selected="@(Sel(Model.ProviderId, value) == "selected")">@text</option>
+                    }
+                </select>
+                <div class="hint">A wildcard certificate (<code>*.domain</code>) covers all subdomains –
+                    subdomain routes then don't need their own provider.</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" asp-for="Enabled" /> Route active
+            </label>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
+            @if (!Model.IsNew)
+            {
+                <span class="spacer"></span>
+                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
+                        formnovalidate data-confirm="Delete this route?">
+                    <icon name="delete" /> Delete
+                </button>
+            }
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        const matcadWildcardParents = @Html.Raw(Model.WildcardParentsJson);
+
+        function matcadCurrentType() {
+            return document.querySelector('input[name="RouteType"]:checked')?.value || 'single';
+        }
+
+        function matcadParentOf(host) {
+            const i = host.indexOf('.');
+            return i > 0 ? host.slice(i + 1) : '';
+        }
+
+        // Warn when a single host is a subdomain not covered by any wildcard route.
+        function matcadCheckWildcard() {
+            const nudge = document.getElementById('wildcard-nudge');
+            const host = (document.getElementById('host-input').value || '').trim().toLowerCase();
+            const parent = matcadParentOf(host);
+            const isSubdomain = host.split('.').length >= 3 && !host.startsWith('*.');
+            const internal = host === 'localhost' || host.endsWith('.localhost');
+            const covered = matcadWildcardParents.some(p => p.toLowerCase() === parent);
+            if (matcadCurrentType() === 'single' && isSubdomain && !internal && !covered) {
+                document.getElementById('wildcard-nudge-text').textContent =
+                    'No wildcard covers this host → an individual certificate would be requested. ' +
+                    'A *.' + parent + ' wildcard route would cover it (and all its siblings) with one certificate.';
+                nudge.dataset.parent = parent;
+                nudge.style.display = '';
+            } else {
+                nudge.style.display = 'none';
+            }
+        }
+
+        function matcadUseWildcard() {
+            const parent = document.getElementById('wildcard-nudge').dataset.parent;
+            if (!parent) return;
+            document.querySelector('input[name="RouteType"][value="wildcard"]').checked = true;
+            document.getElementById('host-input').value = '*.' + parent;
+            matcadRouteType('wildcard');
+        }
+
+        function matcadRouteType(type) {
+            const host = document.getElementById('host-input');
+            const provider = document.getElementById('provider-block');
+            const hostHint = document.getElementById('host-hint');
+            const typeHint = document.getElementById('type-hint');
+            if (type === 'wildcard') {
+                provider.style.display = '';
+                host.placeholder = '*.example.com (or example.com – becomes *.)';
+                hostHint.textContent = 'Covers all subdomains. Requires a DNS provider (DNS-01).';
+                typeHint.textContent = 'One certificate for the whole domain; individual subdomains inherit it.';
+            } else {
+                provider.style.display = 'none';
+                host.placeholder = 'app.example.com';
+                hostHint.textContent = 'Exactly one host. Certificate via HTTP challenge – or covered by a wildcard route.';
+                typeHint.textContent = 'A single concrete host.';
+            }
+            matcadCheckWildcard();
+        }
+
+        function matcadTarget(t) {
+            document.getElementById('proxy-block').style.display = t === 'redirect' ? 'none' : '';
+            document.getElementById('redirect-block').style.display = t === 'redirect' ? '' : 'none';
+        }
+
+        document.getElementById('host-input').addEventListener('input', matcadCheckWildcard);
+        matcadRouteType(matcadCurrentType());
+        matcadTarget(document.querySelector('input[name="Target"]:checked')?.value || 'proxy');
+
+        // When prefilled as ".example.com" (Add subdomain), put the cursor at the
+        // very start so the user just types the subdomain label.
+        (function () {
+            const h = document.getElementById('host-input');
+            if (h && h.value.startsWith('.')) { h.focus(); h.setSelectionRange(0, 0); }
+        })();
+    </script>
+}

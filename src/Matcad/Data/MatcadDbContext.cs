@@ -1,0 +1,37 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace Matcad.Data;
+
+public class MatcadDbContext : DbContext
+{
+    public MatcadDbContext(DbContextOptions<MatcadDbContext> options) : base(options) { }
+
+    // Table names are PascalCase per project convention.
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
+
+    protected override void OnModelCreating(ModelBuilder b)
+    {
+        b.Entity<User>(e =>
+        {
+            e.ToTable("Users");
+            e.HasIndex(x => x.Username).IsUnique();
+        });
+
+        b.Entity<UserSession>(e =>
+        {
+            e.ToTable("UserSessions");
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId);
+        });
+
+        b.Entity<RequestLog>(e =>
+        {
+            e.ToTable("RequestLogs");
+            e.HasIndex(x => x.Timestamp);
+            // Composite index for "latest access per host" and host-filtered stats.
+            e.HasIndex(x => new { x.Host, x.Timestamp });
+        });
+    }
+}
