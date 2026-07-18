@@ -48,14 +48,38 @@
             </button>
         </div>
 
-        <div class="form-row">
-            <div class="form-group">
-                <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
-                <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
+        <div class="form-group">
+            <label>Target</label>
+            <div class="segmented">
+                <label class="seg-option">
+                    <input type="radio" asp-for="Target" value="proxy" onchange="matcadTarget('proxy')" />
+                    <span><icon name="routes" /> Reverse proxy</span>
+                </label>
+                <label class="seg-option">
+                    <input type="radio" asp-for="Target" value="redirect" onchange="matcadTarget('redirect')" />
+                    <span><icon name="open" /> Redirect</span>
+                </label>
             </div>
-            <div class="form-group">
-                <label asp-for="FallbackUrl">Fallback URL</label>
-                <input asp-for="FallbackUrl" placeholder="https://... (redirect when no upstream)" />
+        </div>
+
+        <div class="form-group" id="proxy-block">
+            <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
+            <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
+            <div class="hint">Requests are proxied to this backend.</div>
+        </div>
+
+        <div id="redirect-block" style="display:none">
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="FallbackUrl">Redirect to URL</label>
+                    <input asp-for="FallbackUrl" placeholder="https://target.example.com" />
+                    <div class="hint">Every request to this host is redirected here.</div>
+                </div>
+                <div class="form-group" style="max-width:260px">
+                    <label>Redirect type</label>
+                    <label style="font-weight:400"><input type="checkbox" asp-for="RedirectPermanent" /> Permanent (301)</label>
+                    <div class="hint">Leave off for a temporary redirect (302).</div>
+                </div>
             </div>
         </div>
 
@@ -162,7 +186,13 @@
             matcadCheckWildcard();
         }
 
+        function matcadTarget(t) {
+            document.getElementById('proxy-block').style.display = t === 'redirect' ? 'none' : '';
+            document.getElementById('redirect-block').style.display = t === 'redirect' ? '' : 'none';
+        }
+
         document.getElementById('host-input').addEventListener('input', matcadCheckWildcard);
         matcadRouteType(matcadCurrentType());
+        matcadTarget(document.querySelector('input[name="Target"]:checked')?.value || 'proxy');
     </script>
 }

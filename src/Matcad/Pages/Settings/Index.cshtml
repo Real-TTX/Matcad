@@ -5,78 +5,90 @@
 }
 <div class="card" data-tab-group>
     <div class="tabbar">
-        <button class="tab active" data-tab="general"><icon name="settings" /> Settings</button>
+        <button class="tab active" data-tab="general"><icon name="settings" /> General</button>
         <button class="tab" data-tab="users"><icon name="auth" /> Users</button>
         <button class="tab" data-tab="certs"><icon name="shield" /> Certificates</button>
         <button class="tab" data-tab="docker"><icon name="provider" /> Docker</button>
-        <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy-Config</button>
+        <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy</button>
         <button class="tab" data-tab="system"><icon name="save" /> Import / Export</button>
     </div>
 
     <div class="tab-panel active" data-panel="general">
         <form method="post">
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="BaseDomain">Base domain</label>
-                    <input asp-for="BaseDomain" placeholder="example.com" />
-                    <div class="hint">For subdomain-wide Matcad sign-in (forward_auth cookie).</div>
+            <section class="settings-section">
+                <h2>Domains &amp; access</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label asp-for="BaseDomain">Base domain</label>
+                        <input asp-for="BaseDomain" placeholder="example.com" />
+                        <div class="hint">Parent domain shared by protected routes. Enables one
+                            Matcad sign-in across all its subdomains (forward_auth cookie).</div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="MatcadHost">Matcad host</label>
+                        <input asp-for="MatcadHost" placeholder="matcad.example.com" />
+                        <div class="hint">Exposes the Matcad UI through Caddy under this domain
+                            (read-only <strong>system route</strong> → <code>matcad:4433</code>).</div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label asp-for="MatcadHost">Matcad host</label>
-                    <input asp-for="MatcadHost" placeholder="matcad.example.com" />
-                    <div class="hint">Exposes the Matcad UI (and login portal) through Caddy under this
-                        domain. Creates a read-only <strong>system route</strong> → <code>matcad:4433</code>.</div>
-                </div>
-            </div>
-            <div class="form-row">
                 <div class="form-group">
                     <label><input type="checkbox" asp-for="SystemRouteEnabled" /> System route active</label>
                     <div class="hint">Turn off to keep the UI reachable only on <code>:4433</code>.</div>
                 </div>
-                <div class="form-group">
-                    <label asp-for="PortalMode">Login behaviour</label>
-                    <select asp-for="PortalMode">
-                        <option value="inline">Inline – login shown on the protected site (hides Matcad)</option>
-                        <option value="redirect">Redirect – send users to the Matcad login host</option>
-                        <option value="unauthorized">Unauthorized – return a plain 401, no login form</option>
-                    </select>
-                    <div class="hint">How unauthenticated visitors of a Matcad-protected route see the
-                        sign-in. <strong>Inline</strong> keeps them on the requested site, so nobody
-                        learns where Matcad runs.</div>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="AuthPortalUrl">Login portal URL <span class="text-muted">(redirect mode only)</span></label>
-                    <input asp-for="AuthPortalUrl" placeholder="empty = derived from Matcad host" />
-                    <div class="hint">Only used in <strong>redirect</strong> mode. If empty, the Matcad host is used.</div>
-                </div>
-                <div class="form-group"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="CaddyAdminUrl">Caddy admin URL</label>
-                    <input asp-for="CaddyAdminUrl" placeholder="http://caddy:2019" />
-                </div>
-                <div class="form-group">
-                    <label asp-for="AcmeEmail">ACME email</label>
-                    <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
-                    <div class="hint">For Let's Encrypt registration.</div>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" style="max-width:220px">
-                    <label asp-for="LogRetentionDays">Log retention (days)</label>
-                    <input asp-for="LogRetentionDays" type="number" min="1" />
-                </div>
-                <div class="form-group" style="max-width:260px">
-                    <label asp-for="LogRetentionMaxRows">Log retention (max rows)</label>
-                    <input asp-for="LogRetentionMaxRows" type="number" min="0" />
-                    <div class="hint">Hard cap on stored request-log rows (0 = unlimited). Bounds growth under high traffic.</div>
-                </div>
-            </div>
+            </section>
 
-            <p class="hint">Caddy Admin-API: <strong>@Model.CaddyStatus</strong></p>
+            <section class="settings-section">
+                <h2>Login &amp; forward-auth</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label asp-for="PortalMode">Login behaviour</label>
+                        <select asp-for="PortalMode">
+                            <option value="inline">Inline – login shown on the protected site (hides Matcad)</option>
+                            <option value="redirect">Redirect – send users to the Matcad login host</option>
+                            <option value="unauthorized">Unauthorized – return a plain 401, no login form</option>
+                        </select>
+                        <div class="hint">How unauthenticated visitors of a Matcad-protected route see the
+                            sign-in. <strong>Inline</strong> keeps them on the requested site, so nobody
+                            learns where Matcad runs.</div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="AuthPortalUrl">Login portal URL <span class="text-muted">(redirect mode only)</span></label>
+                        <input asp-for="AuthPortalUrl" placeholder="empty = derived from Matcad host" />
+                        <div class="hint">Only used in <strong>redirect</strong> mode. If empty, the Matcad host is used.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Caddy &amp; TLS</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label asp-for="CaddyAdminUrl">Caddy admin URL</label>
+                        <input asp-for="CaddyAdminUrl" placeholder="http://caddy:2019" />
+                        <div class="hint">Admin API: <strong>@Model.CaddyStatus</strong></div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="AcmeEmail">ACME email</label>
+                        <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
+                        <div class="hint">For Let's Encrypt registration.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Logs</h2>
+                <div class="form-row">
+                    <div class="form-group" style="max-width:220px">
+                        <label asp-for="LogRetentionDays">Retention (days)</label>
+                        <input asp-for="LogRetentionDays" type="number" min="1" />
+                    </div>
+                    <div class="form-group" style="max-width:260px">
+                        <label asp-for="LogRetentionMaxRows">Retention (max rows)</label>
+                        <input asp-for="LogRetentionMaxRows" type="number" min="0" />
+                        <div class="hint">Hard cap on stored request-log rows (0 = unlimited).</div>
+                    </div>
+                </div>
+            </section>
 
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
@@ -132,7 +144,7 @@
         {
             <div class="table-wrap">
                 <table class="route-table">
-                    <thead><tr><th>Certificate (subjects)</th><th>DNS provider</th><th>Covers these routes</th></tr></thead>
+                    <thead><tr><th style="width:32%">Certificate (subjects)</th><th style="width:20%">DNS provider</th><th>Covers these routes</th></tr></thead>
                     <tbody class="group">
                         @foreach (var w in Model.Certificates.Wildcards)
                         {
@@ -146,10 +158,12 @@
                                     }
                                     else
                                     {
-                                        foreach (var h in w.CoveredHosts)
-                                        {
-                                            <span class="badge badge-muted">@h</span>
-                                        }
+                                        <ul class="cert-hosts">
+                                            @foreach (var h in w.CoveredHosts)
+                                            {
+                                                <li>@h</li>
+                                            }
+                                        </ul>
                                     }
                                 </td>
                             </tr>
@@ -172,13 +186,13 @@
             </div>
             <div class="table-wrap">
                 <table class="route-table">
-                    <thead><tr><th>Host</th><th>Certificate</th></tr></thead>
+                    <thead><tr><th>Host</th><th style="width:1%">Certificate</th></tr></thead>
                     <tbody class="group">
                         @foreach (var h in Model.Certificates.Individual)
                         {
                             <tr class="child">
                                 <td class="c-name">@h</td>
-                                <td><span class="badge badge-danger">⚠ Individual</span></td>
+                                <td><span class="badge badge-warn">⚠ Individual</span></td>
                             </tr>
                         }
                     </tbody>
@@ -186,66 +200,109 @@
             </div>
         }
 
-        @if (Model.Certificates.Internal.Count > 0)
+        <h2 style="margin-top:1.5rem">Internal (no public certificate)</h2>
+        @if (Model.Certificates.Internal.Count == 0)
         {
-            <h2 style="margin-top:1.5rem">Internal (no public certificate)</h2>
-            <p class="text-muted">@string.Join(", ", Model.Certificates.Internal)</p>
+            <p class="text-muted">None — no localhost/IP hosts.</p>
+        }
+        else
+        {
+            <p class="hint">Served by Caddy's internal CA (localhost / IP hosts) — no public certificate is issued.</p>
+            <div class="table-wrap">
+                <table class="route-table">
+                    <thead><tr><th>Host</th><th style="width:1%">Certificate</th></tr></thead>
+                    <tbody class="group">
+                        @foreach (var h in Model.Certificates.Internal)
+                        {
+                            <tr class="child">
+                                <td class="c-name">@h</td>
+                                <td><span class="badge badge-muted">internal</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 
     <div class="tab-panel" data-panel="docker">
-        <p class="hint">
-            Automatically binds running containers as routes. Default name:
-            <code>&lt;containername&gt;.&lt;base-domain&gt;</code>. Fine-tune via labels –
-            <code>matcad.enable=true</code>, <code>matcad.host</code>, <code>matcad.port</code>,
-            <code>matcad.auth</code>. Docker routes appear in the Routes list with a
-            “Docker” badge and are read-only there.
-        </p>
         <form method="post" asp-page-handler="Docker">
-            <div class="form-group">
-                <label><input type="checkbox" asp-for="DockerEnabled" /> Docker discovery active</label>
-            </div>
-            <div class="form-row">
+            <section class="settings-section">
+                <h2>Discovery</h2>
+                <p class="hint">
+                    Automatically binds running containers as routes
+                    (<code>&lt;container&gt;.&lt;base-domain&gt;</code> → the container). Bound routes appear in
+                    the Routes list with a “Docker” badge and are read-only there.
+                </p>
                 <div class="form-group">
-                    <label asp-for="DockerEndpoint">Docker endpoint</label>
-                    <input asp-for="DockerEndpoint" placeholder="unix:///var/run/docker.sock" />
-                    <div class="hint">The socket must be mounted into the Matcad compose (read-only).</div>
+                    <label><input type="checkbox" asp-for="DockerEnabled" /> Docker discovery active</label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label asp-for="DockerEndpoint">Docker endpoint</label>
+                        <input asp-for="DockerEndpoint" placeholder="unix:///var/run/docker.sock" />
+                        <div class="hint">The socket must be mounted into the Matcad compose (read-only).</div>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="DockerBaseDomain">Base domain (auto-naming)</label>
+                        <input asp-for="DockerBaseDomain" placeholder="empty = global base domain" />
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label asp-for="DockerBaseDomain">Base domain (auto-naming)</label>
-                    <input asp-for="DockerBaseDomain" placeholder="empty = global base domain" />
+                    <label><input type="checkbox" asp-for="DockerRequireLabel" /> Only containers with <code>matcad.enable=true</code> (recommended)</label>
                 </div>
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" asp-for="DockerRequireLabel" /> Only containers with <code>matcad.enable=true</code> (recommended)</label>
-            </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Container labels</h2>
+                <p class="hint">Fine-tune per container:
+                    <code>matcad.enable=true</code> · <code>matcad.host</code> ·
+                    <code>matcad.port</code> · <code>matcad.auth</code> (authentication name).</p>
+            </section>
+
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
             </div>
         </form>
 
-        <h2 style="margin-top:1.5rem">Discovered containers</h2>
+        <h2 style="margin-top:1.5rem">Containers</h2>
         @if (Model.DockerError != null)
         {
             <div class="alert alert-error">Docker not reachable: @Model.DockerError</div>
         }
-        @if (Model.DockerDiscovered.Count == 0)
+        else if (!Model.DockerEnabled)
         {
-            <p class="empty">No containers detected.</p>
+            <p class="hint">Enable Docker discovery above to list the containers on this host.</p>
+        }
+        @if (Model.DockerContainers.Count == 0)
+        {
+            <p class="empty">No running containers detected.</p>
         }
         else
         {
+            <p class="hint">All running containers — bound ones become routes, the rest show why they were skipped.</p>
             <div class="table-wrap">
                 <table class="route-table">
-                    <thead><tr><th>Container</th><th>Host</th><th>Target</th><th>Auth</th></tr></thead>
+                    <thead><tr><th>Container</th><th>Image</th><th>Ports</th><th>Host</th><th>Auth</th><th style="width:1%">Status</th></tr></thead>
                     <tbody class="group">
-                        @foreach (var r in Model.DockerDiscovered)
+                        @foreach (var c in Model.DockerContainers)
                         {
-                            <tr class="child">
-                                <td class="c-name">@r.SourceDetail</td>
-                                <td>@r.Host</td>
-                                <td class="rtarget">@r.Upstream</td>
-                                <td>@(r.AuthenticationId is > 0 ? "✓" : "—")</td>
+                            <tr class="child @(c.Bound ? "" : "route-off")">
+                                <td class="c-name">@c.Name</td>
+                                <td class="c-meta">@c.Image</td>
+                                <td class="c-meta">@c.Ports</td>
+                                <td class="rtarget">@(c.Host ?? "—")</td>
+                                <td>@(string.IsNullOrEmpty(c.AuthName) ? "—" : c.AuthName)</td>
+                                <td>
+                                    @if (c.Bound)
+                                    {
+                                        <span class="badge badge-success">Bound</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-muted" title="@c.Status">Ignored</span>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -261,7 +318,7 @@
             Routes, Providers and Authentications. Matcad deliberately uses the
             JSON API, not a classic Caddyfile.
         </p>
-        <div class="btn-row" style="margin-top:0; gap:.4rem">
+        <div class="btn-row" style="margin: 0 0 .9rem; gap:.4rem">
             <button type="button" class="btn btn-sm btn-primary" id="cfg-btn-live" onclick="matcadShowConfig('live')">Live (Caddy)</button>
             <button type="button" class="btn btn-sm" id="cfg-btn-generated" onclick="matcadShowConfig('generated')">Generated (Matcad)</button>
             <span class="spacer"></span>

@@ -44,6 +44,7 @@ public class IndexModel : PageModel
     /// <summary>The config actually running in Caddy (fetched via admin API).</summary>
     public string CaddyLiveJson { get; private set; } = "";
     public IReadOnlyList<RouteConfig> DockerDiscovered => _dockerRoutes.Routes;
+    public IReadOnlyList<DockerContainerInfo> DockerContainers => _docker.Containers;
     public string? DockerError => _docker.LastError;
     public CertificatePlanner.CertPlan Certificates { get; private set; } = new(new(), new(), new());
 

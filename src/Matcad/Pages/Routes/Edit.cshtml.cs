@@ -19,8 +19,11 @@ public class EditModel : PageModel
     [BindProperty] public string Host { get; set; } = "";
     /// <summary>"single" or "wildcard" — chosen explicitly when creating a route.</summary>
     [BindProperty] public string RouteType { get; set; } = "single";
+    /// <summary>"proxy" (reverse-proxy to an upstream) or "redirect" (302/301 to a URL).</summary>
+    [BindProperty] public string Target { get; set; } = "proxy";
     [BindProperty] public string? Upstream { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
+    [BindProperty] public bool RedirectPermanent { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
     [BindProperty] public bool Enabled { get; set; } = true;
@@ -44,7 +47,10 @@ public class EditModel : PageModel
             if (r == null) return RedirectToPage("Index");
             Name = r.Name; Host = r.Host;
             RouteType = r.Wildcard ? "wildcard" : "single";
-            Upstream = r.Upstream; FallbackUrl = r.FallbackUrl;
+            Upstream = r.Upstream; FallbackUrl = r.FallbackUrl; RedirectPermanent = r.RedirectPermanent;
+            // A route with a redirect target and no upstream is a redirect.
+            Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
+                ? "redirect" : "proxy";
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
         }
         BuildOptions();
@@ -83,13 +89,19 @@ public class EditModel : PageModel
             ProviderId = null; // not applicable for single domains
         }
 
+        var redirect = Target == "redirect";
+        if (redirect && string.IsNullOrWhiteSpace(FallbackUrl))
+            return Fail("A redirect route needs a target URL.");
+
         var route = _store.Routes.FirstOrDefault(x => x.Id == Id) ?? new RouteConfig();
         route.Id = Id ?? 0;
         route.Name = string.IsNullOrWhiteSpace(Name) ? host : Name.Trim();
         route.Host = host;
         route.Wildcard = wildcard;
-        route.Upstream = string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
-        route.FallbackUrl = string.IsNullOrWhiteSpace(FallbackUrl) ? null : FallbackUrl!.Trim();
+        // Proxy and redirect are mutually exclusive.
+        route.Upstream = redirect || string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
+        route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(FallbackUrl) ? FallbackUrl!.Trim() : null;
+        route.RedirectPermanent = redirect && RedirectPermanent;
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
         route.ProviderId = ProviderId is > 0 ? ProviderId : null;
         route.Enabled = Enabled;

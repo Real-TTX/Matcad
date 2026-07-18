@@ -70,8 +70,12 @@ public class RouteConfig : ConfigEntity
     public bool Wildcard { get; set; }
     /// <summary>Reverse-proxy target, e.g. http://backend:8080.</summary>
     public string? Upstream { get; set; }
-    /// <summary>Used when no upstream matches / as a catch-all redirect.</summary>
+    /// <summary>Redirect target. When set and no <see cref="Upstream"/> is given,
+    /// the route responds with a redirect to this URL instead of proxying.</summary>
     public string? FallbackUrl { get; set; }
+    /// <summary>Use a permanent (301) redirect for <see cref="FallbackUrl"/> instead
+    /// of a temporary (302) one.</summary>
+    public bool RedirectPermanent { get; set; }
     public long? AuthenticationId { get; set; }
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }

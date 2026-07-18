@@ -183,7 +183,7 @@ public class CaddyConfigGenerator
             return new Dictionary<string, object?>
             {
                 ["handler"] = "static_response",
-                ["status_code"] = 302,
+                ["status_code"] = route.RedirectPermanent ? 301 : 302,
                 ["headers"] = new Dictionary<string, object?>
                 {
                     ["Location"] = new[] { route.FallbackUrl }

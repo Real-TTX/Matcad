@@ -5,6 +5,12 @@ using Matcad.Config;
 
 namespace Matcad.Services;
 
+/// <summary>A running container as seen by the discovery, whether or not it is
+/// bound to a route — so the UI can show the full inventory and explain why a
+/// container is (not) exposed.</summary>
+public record DockerContainerInfo(
+    string Name, string Image, string Ports, bool Bound, string? Host, string? AuthName, string Status);
+
 /// <summary>
 /// Discovers routes from a Docker host: every eligible running container becomes
 /// a route <c>&lt;containername&gt;.&lt;BaseDomain&gt;</c> (or an explicit
@@ -34,6 +40,9 @@ public class DockerService : BackgroundService
 
     public string? LastError { get; private set; }
 
+    /// <summary>All running containers seen on the last scan (bound and unbound).</summary>
+    public IReadOnlyList<DockerContainerInfo> Containers { get; private set; } = new List<DockerContainerInfo>();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -50,13 +59,15 @@ public class DockerService : BackgroundService
         if (!settings.Enabled)
         {
             if (_cache.Routes.Count > 0) { _cache.Set(new()); await _caddy.ApplyAsync(ct); }
+            Containers = new List<DockerContainerInfo>();
             LastError = null;
             return;
         }
 
         try
         {
-            var routes = await Discover(settings, ct);
+            var (routes, inventory) = await Discover(settings, ct);
+            Containers = inventory;
             LastError = null;
             if (!SameHosts(routes, _cache.Routes))
             {
@@ -72,7 +83,8 @@ public class DockerService : BackgroundService
         }
     }
 
-    private async Task<List<RouteConfig>> Discover(DockerSettings settings, CancellationToken ct)
+    private async Task<(List<RouteConfig> Routes, List<DockerContainerInfo> Inventory)> Discover(
+        DockerSettings settings, CancellationToken ct)
     {
         var baseDomain = string.IsNullOrWhiteSpace(settings.BaseDomain)
             ? _store.Settings.BaseDomain : settings.BaseDomain;
@@ -82,43 +94,66 @@ public class DockerService : BackgroundService
             new ContainersListParameters { All = false }, ct);
 
         var routes = new List<RouteConfig>();
+        var inventory = new List<DockerContainerInfo>();
+
         foreach (var c in containers)
         {
             var labels = c.Labels ?? new Dictionary<string, string>();
-            if (settings.RequireEnableLabel &&
-                !(labels.TryGetValue(DockerLabels.Enable, out var en) && en == "true"))
-                continue;
-
             var name = (c.Names?.FirstOrDefault() ?? "").TrimStart('/');
             if (string.IsNullOrEmpty(name)) continue;
+            var image = c.Image ?? "";
+            var portsText = FormatPorts(c);
 
-            var host = labels.TryGetValue(DockerLabels.Host, out var h) && !string.IsNullOrWhiteSpace(h)
-                ? h.Trim()
-                : $"{Sanitize(name)}.{baseDomain}";
-            if (string.IsNullOrWhiteSpace(baseDomain) && !labels.ContainsKey(DockerLabels.Host))
-                continue; // no base domain and no explicit host -> cannot name it
-
-            var port = ResolvePort(labels, c);
-            if (port == 0) continue; // nothing to proxy to
-
+            // Work out whether this container is bound to a route, and if not, why.
+            string? host = null, authName = null, status;
             long? authId = null;
-            if (labels.TryGetValue(DockerLabels.Auth, out var authName) && !string.IsNullOrWhiteSpace(authName))
-                authId = _store.Authentications
-                    .FirstOrDefault(a => a.Name.Equals(authName.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
+            var port = ResolvePort(labels, c);
+            var hasEnable = labels.TryGetValue(DockerLabels.Enable, out var en) && en == "true";
+            var hasHostLabel = labels.TryGetValue(DockerLabels.Host, out var h) && !string.IsNullOrWhiteSpace(h);
 
-            routes.Add(new RouteConfig
+            if (settings.RequireEnableLabel && !hasEnable)
+                status = "Ignored · no matcad.enable=true";
+            else if (string.IsNullOrWhiteSpace(baseDomain) && !hasHostLabel)
+                status = "Ignored · no host label and no base domain";
+            else if (port == 0)
+                status = "Ignored · no port to proxy";
+            else
             {
-                Host = host,
-                Name = name,
-                Wildcard = host.StartsWith("*."),
-                Upstream = $"http://{name}:{port}",
-                AuthenticationId = authId,
-                Enabled = true,
-                Source = "docker",
-                SourceDetail = name
-            });
+                host = hasHostLabel ? h!.Trim() : $"{Sanitize(name)}.{baseDomain}";
+                if (labels.TryGetValue(DockerLabels.Auth, out var an) && !string.IsNullOrWhiteSpace(an))
+                {
+                    authName = an.Trim();
+                    authId = _store.Authentications
+                        .FirstOrDefault(a => a.Name.Equals(authName, StringComparison.OrdinalIgnoreCase))?.Id;
+                }
+                status = "Bound";
+                routes.Add(new RouteConfig
+                {
+                    Host = host,
+                    Name = name,
+                    Wildcard = host.StartsWith("*."),
+                    Upstream = $"http://{name}:{port}",
+                    AuthenticationId = authId,
+                    Enabled = true,
+                    Source = "docker",
+                    SourceDetail = name
+                });
+            }
+
+            inventory.Add(new DockerContainerInfo(name, image, portsText,
+                status == "Bound", host, authName, status));
         }
-        return routes;
+
+        inventory = inventory.OrderByDescending(i => i.Bound).ThenBy(i => i.Name).ToList();
+        return (routes, inventory);
+    }
+
+    private static string FormatPorts(ContainerListResponse c)
+    {
+        var ports = (c.Ports ?? new List<Port>())
+            .Where(x => string.Equals(x.Type, "tcp", StringComparison.OrdinalIgnoreCase) && x.PrivatePort > 0)
+            .Select(x => (int)x.PrivatePort).Distinct().OrderBy(x => x).ToList();
+        return ports.Count == 0 ? "—" : string.Join(", ", ports);
     }
 
     private static int ResolvePort(IDictionary<string, string> labels, ContainerListResponse c)

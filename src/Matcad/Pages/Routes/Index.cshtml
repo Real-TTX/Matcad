@@ -79,6 +79,7 @@
                                 else if (!string.IsNullOrEmpty(r.FallbackUrl))
                                 {
                                     <text>↪ @r.FallbackUrl</text>
+                                    <span class="badge badge-muted" title="Redirect">@(r.RedirectPermanent ? "301" : "302")</span>
                                 }
                                 else
                                 {
@@ -101,7 +102,7 @@
                                         <span class="badge badge-muted" title="Caddy internal CA (localhost/IP)">internal</span>
                                         break;
                                     default:
-                                        <span class="badge badge-danger" title="Would request its own individual certificate">⚠ Individual</span>
+                                        <span class="badge badge-warn" title="Would request its own individual certificate">⚠ Individual</span>
                                         break;
                                 }
                             </td>
