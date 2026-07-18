@@ -23,6 +23,7 @@
                 <tr>
                     <th>Host</th>
                     <th>Target</th>
+                    <th>Certificate</th>
                     <th>Auth</th>
                     <th>Status</th>
                     <th class="c-actions"></th>
@@ -30,13 +31,13 @@
             </thead>
             @if (Model.Groups.Count == 0)
             {
-                <tbody><tr><td colspan="5" class="empty">Keine Routen gefunden.</td></tr></tbody>
+                <tbody><tr><td colspan="6" class="empty">No routes found.</td></tr></tbody>
             }
             @foreach (var group in Model.Groups)
             {
                 <tbody class="group">
                     <tr class="parent">
-                        <td colspan="5">
+                        <td colspan="6">
                             <span class="grp-name"><icon name="network" /> @group.BaseDomain</span>
                             <span class="grp-count">· @group.Routes.Count</span>
                         </td>
@@ -82,6 +83,26 @@
                                 else
                                 {
                                     <text>—</text>
+                                }
+                            </td>
+                            <td>
+                                @{
+                                    var cert = Model.Cert(r);
+                                }
+                                @switch (cert.Kind)
+                                {
+                                    case Matcad.Config.CertificatePlanner.CertKind.Wildcard:
+                                        <span class="badge badge-success" title="Wildcard certificate">🛡 @cert.Subject</span>
+                                        break;
+                                    case Matcad.Config.CertificatePlanner.CertKind.Covered:
+                                        <span class="badge badge-muted" title="Covered by wildcard certificate">🛡 @cert.Subject</span>
+                                        break;
+                                    case Matcad.Config.CertificatePlanner.CertKind.Internal:
+                                        <span class="badge badge-muted" title="Caddy internal CA (localhost/IP)">internal</span>
+                                        break;
+                                    default:
+                                        <span class="badge badge-danger" title="Would request its own individual certificate">⚠ Individual</span>
+                                        break;
                                 }
                             </td>
                             <td>

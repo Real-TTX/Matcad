@@ -13,11 +13,12 @@ public class IndexModel : PageModel
     private readonly AuthService _auth;
     private readonly DockerService _docker;
     private readonly DockerRouteCache _dockerRoutes;
+    private readonly RouteProvider _routes;
 
     public IndexModel(ConfigStore store, CaddyService caddy, AuthService auth,
-        DockerService docker, DockerRouteCache dockerRoutes)
+        DockerService docker, DockerRouteCache dockerRoutes, RouteProvider routes)
     {
-        _store = store; _caddy = caddy; _auth = auth; _docker = docker; _dockerRoutes = dockerRoutes;
+        _store = store; _caddy = caddy; _auth = auth; _docker = docker; _dockerRoutes = dockerRoutes; _routes = routes;
     }
 
     [BindProperty] public string BaseDomain { get; set; } = "";
@@ -40,11 +41,13 @@ public class IndexModel : PageModel
     public string CaddyLiveJson { get; private set; } = "";
     public IReadOnlyList<RouteConfig> DockerDiscovered => _dockerRoutes.Routes;
     public string? DockerError => _docker.LastError;
+    public CertificatePlanner.CertPlan Certificates { get; private set; } = new(new(), new(), new());
 
     public async Task OnGetAsync()
     {
         Load();
         Users = await _auth.ListUsers();
+        Certificates = CertificatePlanner.Plan(_routes.All(), _store.Providers);
         CaddyConfigJson = _caddy.BuildJson();
         var running = await _caddy.GetRunningConfigAsync();
         CaddyStatus = running != null ? "reachable" : "unreachable";

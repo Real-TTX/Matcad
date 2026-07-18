@@ -7,6 +7,7 @@
     <div class="tabbar">
         <button class="tab active" data-tab="general"><icon name="settings" /> Settings</button>
         <button class="tab" data-tab="users"><icon name="auth" /> Users</button>
+        <button class="tab" data-tab="certs"><icon name="shield" /> Certificates</button>
         <button class="tab" data-tab="docker"><icon name="provider" /> Docker</button>
         <button class="tab" data-tab="caddy"><icon name="routes" /> Caddy-Config</button>
     </div>
@@ -91,6 +92,71 @@
         <div class="list-actions">
             <a class="btn btn-primary" asp-page="User"><icon name="add" /> New user</a>
         </div>
+    </div>
+
+    <div class="tab-panel" data-panel="certs">
+        <p class="hint">
+            The certificates Caddy manages for your <strong>enabled</strong> routes. A wildcard
+            route <code>*.domain</code> (with a DNS provider) yields <strong>one</strong> certificate that
+            also covers its subdomains — so most routes need no certificate of their own.
+        </p>
+
+        <h2>Wildcard certificates</h2>
+        @if (Model.Certificates.Wildcards.Count == 0)
+        {
+            <p class="empty">No wildcard certificates.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="route-table">
+                    <thead><tr><th>Certificate (subjects)</th><th>DNS provider</th><th>Covers</th></tr></thead>
+                    <tbody class="group">
+                        @foreach (var w in Model.Certificates.Wildcards)
+                        {
+                            <tr class="child">
+                                <td class="c-name"><span class="badge badge-success">🛡</span> @w.Subjects</td>
+                                <td>@w.Provider</td>
+                                <td class="c-meta">@w.CoveredCount route(s)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h2 style="margin-top:1.5rem">Individual certificates</h2>
+        @if (Model.Certificates.Individual.Count == 0)
+        {
+            <p class="text-muted">None — every route is covered by a wildcard (or internal). 👍</p>
+        }
+        else
+        {
+            <div class="alert alert-warn">
+                These hosts are <strong>not</strong> covered by a wildcard and would each request their
+                <strong>own</strong> certificate. Add a matching <code>*.domain</code> wildcard route to avoid that.
+            </div>
+            <div class="table-wrap">
+                <table class="route-table">
+                    <thead><tr><th>Host</th><th>Certificate</th></tr></thead>
+                    <tbody class="group">
+                        @foreach (var h in Model.Certificates.Individual)
+                        {
+                            <tr class="child">
+                                <td class="c-name">@h</td>
+                                <td><span class="badge badge-danger">⚠ Individual</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (Model.Certificates.Internal.Count > 0)
+        {
+            <h2 style="margin-top:1.5rem">Internal (no public certificate)</h2>
+            <p class="text-muted">@string.Join(", ", Model.Certificates.Internal)</p>
+        }
     </div>
 
     <div class="tab-panel" data-panel="docker">
