@@ -20,18 +20,30 @@
                     <div class="hint">For subdomain-wide Matcad sign-in (forward_auth cookie).</div>
                 </div>
                 <div class="form-group">
-                    <label asp-for="AuthPortalUrl">Login portal URL</label>
-                    <input asp-for="AuthPortalUrl" placeholder="https://auth.example.com" />
-                    <div class="hint">An unprotected host that points to Matcad.</div>
+                    <label asp-for="MatcadHost">Matcad host</label>
+                    <input asp-for="MatcadHost" placeholder="matcad.example.com" />
+                    <div class="hint">Exposes the Matcad UI (and login portal) through Caddy under this
+                        domain. Creates a read-only <strong>system route</strong> → <code>matcad:4433</code>.</div>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label asp-for="CaddyAdminUrl">Caddy Admin-URL</label>
+                    <label><input type="checkbox" asp-for="SystemRouteEnabled" /> System route active</label>
+                    <div class="hint">Turn off to keep the UI reachable only on <code>:4433</code>.</div>
+                </div>
+                <div class="form-group">
+                    <label asp-for="AuthPortalUrl">Login portal URL <span class="text-muted">(optional)</span></label>
+                    <input asp-for="AuthPortalUrl" placeholder="empty = derived from Matcad host" />
+                    <div class="hint">Override for the forward-auth portal. If empty, the Matcad host is used.</div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label asp-for="CaddyAdminUrl">Caddy admin URL</label>
                     <input asp-for="CaddyAdminUrl" placeholder="http://caddy:2019" />
                 </div>
                 <div class="form-group">
-                    <label asp-for="AcmeEmail">ACME-E-Mail</label>
+                    <label asp-for="AcmeEmail">ACME email</label>
                     <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
                     <div class="hint">For Let's Encrypt registration.</div>
                 </div>

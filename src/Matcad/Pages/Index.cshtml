@@ -70,6 +70,14 @@
                                     {
                                         <span class="badge badge-warn">Wildcard</span>
                                     }
+                                    @if (r.Source == "system")
+                                    {
+                                        <span class="badge badge-warn" title="Matcad self-exposure">System</span>
+                                    }
+                                    else if (r.Source == "docker")
+                                    {
+                                        <span class="badge badge-info">Docker</span>
+                                    }
                                 </td>
                                 <td class="rtarget">
                                     @if (!string.IsNullOrEmpty(r.Upstream))
@@ -110,7 +118,10 @@
                                     {
                                         <a class="btn btn-sm btn-ghost" href="https://@r.Host" target="_blank" rel="noopener" title="Open"><icon name="open" /></a>
                                     }
-                                    <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Bearbeiten"><icon name="edit" /></a>
+                                    @if (!r.IsDerived)
+                                    {
+                                        <a class="btn btn-sm btn-ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Edit"><icon name="edit" /></a>
+                                    }
                                 </td>
                             </tr>
                         }

@@ -36,10 +36,10 @@ public class VerifyModel : PageModel
         var uri = Request.Headers["X-Forwarded-Uri"].FirstOrDefault() ?? "/";
         var original = $"{proto}://{host}{uri}";
 
-        var portal = _store.Settings.AuthPortalUrl;
+        var portal = _store.Settings.EffectivePortalUrl();
         var target = string.IsNullOrWhiteSpace(portal)
             ? $"/auth/portal?rd={Uri.EscapeDataString(original)}"
-            : $"{portal.TrimEnd('/')}/auth/portal?rd={Uri.EscapeDataString(original)}";
+            : $"{portal}/auth/portal?rd={Uri.EscapeDataString(original)}";
 
         return Redirect(target);
     }

@@ -85,11 +85,27 @@ public class MatcadSettings
     /// "https://auth.example.com". Used by forward-auth to redirect
     /// unauthenticated users. If empty, a relative /auth/portal is used.</summary>
     public string AuthPortalUrl { get; set; } = "";
+    /// <summary>Hostname under which Matcad exposes itself through Caddy, e.g.
+    /// "matcad.example.com". When set (and <see cref="SystemRouteEnabled"/>),
+    /// a read-only "system" route to matcad:4433 is generated, the UI becomes
+    /// reachable via this domain, and the login portal is served from it.</summary>
+    public string MatcadHost { get; set; } = "";
+    /// <summary>Whether the self-exposing system route is generated.</summary>
+    public bool SystemRouteEnabled { get; set; } = true;
     public int LogRetentionDays { get; set; } = 30;
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
     public string AcmeEmail { get; set; } = "";
     public DockerSettings Docker { get; set; } = new();
+
+    /// <summary>Effective login-portal base URL: explicit AuthPortalUrl, else
+    /// derived from the system route host, else empty (relative /auth/portal).</summary>
+    public string EffectivePortalUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(AuthPortalUrl)) return AuthPortalUrl.TrimEnd('/');
+        if (SystemRouteEnabled && !string.IsNullOrWhiteSpace(MatcadHost)) return $"https://{MatcadHost.Trim()}";
+        return "";
+    }
 }
 
 /// <summary>

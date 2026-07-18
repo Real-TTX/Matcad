@@ -61,9 +61,13 @@
                                 {
                                     <span class="badge badge-warn">Wildcard</span>
                                 }
-                                @if (r.IsDerived)
+                                @if (r.Source == "system")
                                 {
-                                    <span class="badge badge-info" title="Aus Docker-Container @r.SourceDetail">Docker</span>
+                                    <span class="badge badge-warn" title="Matcad self-exposure">System</span>
+                                }
+                                else if (r.Source == "docker")
+                                {
+                                    <span class="badge badge-info" title="From Docker container @r.SourceDetail">Docker</span>
                                 }
                             </td>
                             <td class="rtarget">

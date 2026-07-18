@@ -21,6 +21,8 @@ public class IndexModel : PageModel
     }
 
     [BindProperty] public string BaseDomain { get; set; } = "";
+    [BindProperty] public string MatcadHost { get; set; } = "";
+    [BindProperty] public bool SystemRouteEnabled { get; set; } = true;
     [BindProperty] public string AuthPortalUrl { get; set; } = "";
     [BindProperty] public int LogRetentionDays { get; set; } = 30;
     [BindProperty] public string CaddyAdminUrl { get; set; } = "";
@@ -45,8 +47,8 @@ public class IndexModel : PageModel
         Users = await _auth.ListUsers();
         CaddyConfigJson = _caddy.BuildJson();
         var running = await _caddy.GetRunningConfigAsync();
-        CaddyStatus = running != null ? "erreichbar" : "nicht erreichbar";
-        CaddyLiveJson = running != null ? Prettify(running) : "// Caddy nicht erreichbar";
+        CaddyStatus = running != null ? "reachable" : "unreachable";
+        CaddyLiveJson = running != null ? Prettify(running) : "// Caddy unreachable";
     }
 
     private static string Prettify(string json)
@@ -64,6 +66,8 @@ public class IndexModel : PageModel
     {
         var s = _store.Settings;
         BaseDomain = s.BaseDomain;
+        MatcadHost = s.MatcadHost;
+        SystemRouteEnabled = s.SystemRouteEnabled;
         AuthPortalUrl = s.AuthPortalUrl;
         LogRetentionDays = s.LogRetentionDays;
         CaddyAdminUrl = s.CaddyAdminUrl;
@@ -78,6 +82,8 @@ public class IndexModel : PageModel
     {
         var s = _store.Settings;
         s.BaseDomain = BaseDomain?.Trim() ?? "";
+        s.MatcadHost = MatcadHost?.Trim() ?? "";
+        s.SystemRouteEnabled = SystemRouteEnabled;
         s.AuthPortalUrl = AuthPortalUrl?.Trim() ?? "";
         s.LogRetentionDays = LogRetentionDays < 1 ? 1 : LogRetentionDays;
         s.CaddyAdminUrl = string.IsNullOrWhiteSpace(CaddyAdminUrl) ? "http://caddy:2019" : CaddyAdminUrl.Trim();
