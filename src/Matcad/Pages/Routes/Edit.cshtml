@@ -203,5 +203,12 @@
         document.getElementById('host-input').addEventListener('input', matcadCheckWildcard);
         matcadRouteType(matcadCurrentType());
         matcadTarget(document.querySelector('input[name="Target"]:checked')?.value || 'proxy');
+
+        // When prefilled as ".example.com" (Add subdomain), put the cursor at the
+        // very start so the user just types the subdomain label.
+        (function () {
+            const h = document.getElementById('host-input');
+            if (h && h.value.startsWith('.')) { h.focus(); h.setSelectionRange(0, 0); }
+        })();
     </script>
 }

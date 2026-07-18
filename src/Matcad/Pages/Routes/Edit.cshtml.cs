@@ -15,6 +15,9 @@ public class EditModel : PageModel
     { _store = store; _caddy = caddy; _routes = routes; }
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
+    /// <summary>Base domain to prefill when adding a subdomain from the Routes list
+    /// ("+ Add subdomain"). Only used when creating a new route.</summary>
+    [BindProperty(SupportsGet = true)] public string? Sub { get; set; }
     [BindProperty] public string Name { get; set; } = "";
     [BindProperty] public string Host { get; set; } = "";
     /// <summary>"single" or "wildcard" — chosen explicitly when creating a route.</summary>
@@ -54,6 +57,11 @@ public class EditModel : PageModel
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
+        }
+        else if (!string.IsNullOrWhiteSpace(Sub))
+        {
+            // Prefill ".<base>" so the user just types the subdomain label in front.
+            Host = "." + Sub.Trim().TrimStart('.');
         }
         BuildOptions();
         return Page();

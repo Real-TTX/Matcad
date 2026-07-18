@@ -349,6 +349,11 @@ table.data tr:last-child td { border-bottom: none; }
 .route-table .c-actions { text-align: right; width: 1%; }
 .route-table tr.route-off td { opacity: .5; }
 
+/* "+ Add subdomain" action at the foot of each domain group */
+.route-table tr.add-sub td { padding: .2rem .9rem .5rem 1.4rem; }
+.route-table tr.add-sub .btn { color: var(--text-muted); }
+.route-table tr.add-sub .btn:hover { color: var(--primary); }
+
 /* Status dot (green = aktiv, grau = inaktiv) */
 .dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .45rem; vertical-align: middle; }
 .dot-ok { background: var(--success); }
