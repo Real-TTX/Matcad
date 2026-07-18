@@ -18,6 +18,7 @@ public class LogIngestService : BackgroundService
     private readonly ConfigStore _store;
     private readonly ILogger<LogIngestService> _log;
     private readonly string _logPath;
+    private readonly string _statePath;
 
     private long _offset;
     private string _leftover = "";
@@ -32,6 +33,17 @@ public class LogIngestService : BackgroundService
         _log = log;
         var dir = (cfg["Matcad:CaddyLogDir"] ?? "/caddy-logs").TrimEnd('/');
         _logPath = $"{dir}/access.log";
+        // Persist the tail position on the data volume so a restart resumes where
+        // it left off instead of re-ingesting the whole file (duplicate rows).
+        _statePath = System.IO.Path.Combine((cfg["Matcad:DataDir"] ?? "/data").TrimEnd('/'), "logingest.offset");
+        if (File.Exists(_statePath) && long.TryParse(File.ReadAllText(_statePath).Trim(), out var saved))
+            _offset = saved;
+    }
+
+    private void SaveOffset()
+    {
+        try { File.WriteAllText(_statePath, _offset.ToString()); }
+        catch (Exception ex) { _log.LogWarning(ex, "Could not persist log ingest offset"); }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -62,6 +74,7 @@ public class LogIngestService : BackgroundService
             // File was rotated/truncated -> start over.
             _offset = 0;
             _leftover = "";
+            SaveOffset();
         }
         if (info.Length == _offset) return;
 
@@ -82,12 +95,15 @@ public class LogIngestService : BackgroundService
             var parsed = Parse(lines[i]);
             if (parsed != null) entries.Add(parsed.Value);
         }
-        if (entries.Count == 0) return;
+        if (entries.Count == 0) { SaveOffset(); return; }
 
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
         db.RequestLogs.AddRange(entries.Select(e => e.Row));
         await db.SaveChangesAsync(ct);
+        // Persist the position only after the rows are committed, so a crash
+        // between read and insert re-reads the batch instead of losing it.
+        SaveOffset();
 
         foreach (var e in entries) _broadcaster.Publish(e.Dto);
     }
@@ -134,11 +150,32 @@ public class LogIngestService : BackgroundService
         if (DateTime.UtcNow - _lastRetention < TimeSpan.FromHours(1)) return;
         _lastRetention = DateTime.UtcNow;
 
-        var days = Math.Max(1, _store.Settings.LogRetentionDays);
-        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var settings = _store.Settings;
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
-        var deleted = await db.RequestLogs.Where(r => r.Timestamp < cutoff).ExecuteDeleteAsync(ct);
-        if (deleted > 0) _log.LogInformation("Log retention removed {Count} rows older than {Days}d", deleted, days);
+
+        // 1) Age-based: drop entries older than the retention window.
+        var days = Math.Max(1, settings.LogRetentionDays);
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var byAge = await db.RequestLogs.Where(r => r.Timestamp < cutoff).ExecuteDeleteAsync(ct);
+        if (byAge > 0) _log.LogInformation("Log retention removed {Count} rows older than {Days}d", byAge, days);
+
+        // 2) Hard row cap: keep only the newest N rows (Id is monotonic).
+        var max = settings.LogRetentionMaxRows;
+        if (max > 0)
+        {
+            var total = await db.RequestLogs.LongCountAsync(ct);
+            if (total > max)
+            {
+                var thresholdId = await db.RequestLogs
+                    .OrderByDescending(r => r.Id).Skip((int)Math.Min(max, int.MaxValue))
+                    .Select(r => (long?)r.Id).FirstOrDefaultAsync(ct);
+                if (thresholdId is > 0)
+                {
+                    var byCap = await db.RequestLogs.Where(r => r.Id <= thresholdId).ExecuteDeleteAsync(ct);
+                    if (byCap > 0) _log.LogInformation("Log retention removed {Count} rows over the {Max}-row cap", byCap, max);
+                }
+            }
+        }
     }
 }

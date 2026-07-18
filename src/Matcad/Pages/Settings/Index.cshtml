@@ -49,9 +49,16 @@
                     <div class="hint">For Let's Encrypt registration.</div>
                 </div>
             </div>
-            <div class="form-group" style="max-width:220px">
-                <label asp-for="LogRetentionDays">Log retention (days)</label>
-                <input asp-for="LogRetentionDays" type="number" min="1" />
+            <div class="form-row">
+                <div class="form-group" style="max-width:220px">
+                    <label asp-for="LogRetentionDays">Log retention (days)</label>
+                    <input asp-for="LogRetentionDays" type="number" min="1" />
+                </div>
+                <div class="form-group" style="max-width:260px">
+                    <label asp-for="LogRetentionMaxRows">Log retention (max rows)</label>
+                    <input asp-for="LogRetentionMaxRows" type="number" min="0" />
+                    <div class="hint">Hard cap on stored request-log rows (0 = unlimited). Bounds growth under high traffic.</div>
+                </div>
             </div>
 
             <p class="hint">Caddy Admin-API: <strong>@Model.CaddyStatus</strong></p>

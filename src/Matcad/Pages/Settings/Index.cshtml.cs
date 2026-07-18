@@ -26,6 +26,7 @@ public class IndexModel : PageModel
     [BindProperty] public bool SystemRouteEnabled { get; set; } = true;
     [BindProperty] public string AuthPortalUrl { get; set; } = "";
     [BindProperty] public int LogRetentionDays { get; set; } = 30;
+    [BindProperty] public long LogRetentionMaxRows { get; set; } = 1_000_000;
     [BindProperty] public string CaddyAdminUrl { get; set; } = "";
     [BindProperty] public string AcmeEmail { get; set; } = "";
 
@@ -73,6 +74,7 @@ public class IndexModel : PageModel
         SystemRouteEnabled = s.SystemRouteEnabled;
         AuthPortalUrl = s.AuthPortalUrl;
         LogRetentionDays = s.LogRetentionDays;
+        LogRetentionMaxRows = s.LogRetentionMaxRows;
         CaddyAdminUrl = s.CaddyAdminUrl;
         AcmeEmail = s.AcmeEmail;
         DockerEnabled = s.Docker.Enabled;
@@ -89,6 +91,7 @@ public class IndexModel : PageModel
         s.SystemRouteEnabled = SystemRouteEnabled;
         s.AuthPortalUrl = AuthPortalUrl?.Trim() ?? "";
         s.LogRetentionDays = LogRetentionDays < 1 ? 1 : LogRetentionDays;
+        s.LogRetentionMaxRows = LogRetentionMaxRows < 0 ? 0 : LogRetentionMaxRows;
         s.CaddyAdminUrl = string.IsNullOrWhiteSpace(CaddyAdminUrl) ? "http://caddy:2019" : CaddyAdminUrl.Trim();
         s.AcmeEmail = AcmeEmail?.Trim() ?? "";
         _store.SaveSettings(s); // Docker sub-settings preserved (edited on their own tab).

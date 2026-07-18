@@ -93,6 +93,9 @@ public class MatcadSettings
     /// <summary>Whether the self-exposing system route is generated.</summary>
     public bool SystemRouteEnabled { get; set; } = true;
     public int LogRetentionDays { get; set; } = 30;
+    /// <summary>Hard upper bound on stored request-log rows (0 = unlimited).
+    /// Bounds growth under high traffic even within the retention window.</summary>
+    public long LogRetentionMaxRows { get; set; } = 1_000_000;
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
     public string AcmeEmail { get; set; } = "";

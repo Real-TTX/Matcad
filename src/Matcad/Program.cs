@@ -71,6 +71,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
     db.Database.EnsureCreated();
+    // WAL improves concurrent read/write throughput for the high-volume request log.
+    db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsureSeedAdmin(app.Logger);
 
