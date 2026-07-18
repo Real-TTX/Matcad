@@ -5,9 +5,11 @@ namespace Matcad.Services;
 
 /// <summary>
 /// Maps Caddy JSON (produced by <see cref="CaddyfileAdapter"/>) into Matcad's
-/// model. Recognizes the common building blocks — host matcher, reverse_proxy,
-/// redirect, http_basic and ACME DNS providers. Anything it can't represent is
-/// collected into a raw-passthrough remainder so nothing is silently lost.
+/// model. Understands the common building blocks — a site block's host list,
+/// named host matchers with per-host <c>handle</c> blocks (each becomes its own
+/// route; specific hosts win over the catch-all), <c>reverse_proxy</c>, redirects,
+/// <c>http_basic</c> and ACME DNS providers. Anything it can't represent is kept
+/// as a raw-passthrough remainder so nothing is silently lost.
 /// </summary>
 public class CaddyfileImporter
 {
@@ -37,7 +39,7 @@ public class CaddyfileImporter
         if (root == null) return new Plan(routes, providers, "", notes);
 
         // --- Providers from TLS automation (ACME DNS) ---
-        var wildcardProvider = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // subject -> provider name
+        var wildcardProvider = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // subject -> provider type
         var policies = root["apps"]?["tls"]?["automation"]?["policies"] as JsonArray;
         if (policies != null)
         {
@@ -69,37 +71,8 @@ public class CaddyfileImporter
                 if (srvRoutes == null) continue;
                 foreach (var route in srvRoutes.OfType<JsonObject>())
                 {
-                    var hosts = route["match"]?.AsArray()
-                        .OfType<JsonObject>()
-                        .SelectMany(m => m["host"]?.AsArray().Select(h => h?.GetValue<string>()) ?? Enumerable.Empty<string?>())
-                        .Where(h => !string.IsNullOrEmpty(h)).Select(h => h!).Distinct().ToList()
-                        ?? new List<string>();
-
-                    var collected = new Collected();
-                    var ok = TryCollect(route["handle"] as JsonArray, collected);
-
-                    // Mappable only if: has host(s), a terminal we understand, and nothing unknown.
-                    if (!ok || hosts.Count == 0 || (collected.Upstream == null && collected.Redirect == null))
-                    {
+                    if (!TryMapTopRoute(route, wildcardProvider, routes))
                         rawRoutes.Add(route.DeepClone());
-                        continue;
-                    }
-
-                    foreach (var host in hosts)
-                    {
-                        var r = new RouteConfig
-                        {
-                            Host = host,
-                            Name = host,
-                            Wildcard = host.StartsWith("*."),
-                            Upstream = collected.Upstream,
-                            FallbackUrl = collected.Upstream == null ? collected.Redirect : null,
-                            Enabled = true
-                        };
-                        var ir = new ImportRoute { Route = r, BasicUsers = collected.BasicUsers };
-                        if (r.Wildcard && wildcardProvider.TryGetValue(host, out var pn)) ir.ProviderName = pn;
-                        routes.Add(ir);
-                    }
                 }
             }
         }
@@ -113,20 +86,82 @@ public class CaddyfileImporter
                 {
                     ["http"] = new JsonObject
                     {
-                        ["servers"] = new JsonObject
-                        {
-                            ["matcad"] = new JsonObject { ["routes"] = rawRoutes }
-                        }
+                        ["servers"] = new JsonObject { ["matcad"] = new JsonObject { ["routes"] = rawRoutes } }
                     }
                 }
             };
             rawRemainder = remainder.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            notes.Add($"{rawRoutes.Count} route(s) could not be mapped and are kept as raw passthrough.");
+            notes.Add($"{rawRoutes.Count} route block(s) could not be fully mapped and are kept as raw passthrough.");
         }
 
         notes.Insert(0, $"Recognized {routes.Count} route(s), " +
             $"{routes.Count(r => r.BasicUsers.Count > 0)} with basic-auth, {providers.Count} DNS provider(s).");
         return new Plan(routes, providers, rawRemainder, notes);
+    }
+
+    /// <summary>Maps one top-level route (a site block) into Matcad routes.
+    /// Returns false if the block can't be fully represented (caller keeps it raw).</summary>
+    private static bool TryMapTopRoute(JsonObject route, Dictionary<string, string> wildcardProvider, List<ImportRoute> outRoutes)
+    {
+        if (!TryHostMatch(route["match"] as JsonArray, out var scope) || scope is not { Count: > 0 })
+            return false; // no clean host scope -> raw
+
+        // Expand the block into segments: (specificHosts?, collected-handlers).
+        var segments = new List<(List<string>? Hosts, Collected C)>();
+        var handle = route["handle"] as JsonArray;
+        if (handle == null) return false;
+
+        var sub = handle.OfType<JsonObject>().FirstOrDefault(h => h["handler"]?.GetValue<string>() == "subroute");
+        if (sub != null)
+        {
+            // Any non-subroute sibling handler we don't understand -> keep raw.
+            foreach (var h in handle.OfType<JsonObject>())
+                if (h["handler"]?.GetValue<string>() is not "subroute") return false;
+
+            foreach (var inner in (sub["routes"] as JsonArray)?.OfType<JsonObject>() ?? Enumerable.Empty<JsonObject>())
+            {
+                if (!TryHostMatch(inner["match"] as JsonArray, out var innerHosts)) return false;
+                var c = new Collected();
+                if (!TryCollect(inner["handle"] as JsonArray, c)) return false;
+                if (c.Upstream == null && c.Redirect == null && c.BasicUsers.Count == 0) continue;
+                segments.Add((innerHosts, c));
+            }
+        }
+        else
+        {
+            var c = new Collected();
+            if (!TryCollect(handle, c)) return false;
+            segments.Add((null, c));
+        }
+
+        if (segments.Count == 0) return false;
+
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Specific host matchers win; then the catch-all covers the rest of the scope.
+        foreach (var seg in segments.Where(s => s.Hosts != null))
+            foreach (var host in seg.Hosts!)
+                if (claimed.Add(host)) Emit(host, seg.C, wildcardProvider, outRoutes);
+        foreach (var seg in segments.Where(s => s.Hosts == null))
+            foreach (var host in scope)
+                if (claimed.Add(host)) Emit(host, seg.C, wildcardProvider, outRoutes);
+        return true;
+    }
+
+    private static void Emit(string host, Collected c, Dictionary<string, string> wildcardProvider, List<ImportRoute> outRoutes)
+    {
+        if (c.Upstream == null && c.Redirect == null) return; // nothing to proxy to
+        var r = new RouteConfig
+        {
+            Host = host,
+            Name = host,
+            Wildcard = host.StartsWith("*."),
+            Upstream = c.Upstream,
+            FallbackUrl = c.Upstream == null ? c.Redirect : null,
+            Enabled = true
+        };
+        var ir = new ImportRoute { Route = r, BasicUsers = new List<BasicAuthUser>(c.BasicUsers) };
+        if (r.Wildcard && wildcardProvider.TryGetValue(host, out var pn)) ir.ProviderName = pn;
+        outRoutes.Add(ir);
     }
 
     private sealed class Collected
@@ -136,8 +171,27 @@ public class CaddyfileImporter
         public List<BasicAuthUser> BasicUsers = new();
     }
 
-    /// <summary>Walks a handler array (descending into subroutes). Returns false
-    /// if it hits a handler type Matcad can't represent.</summary>
+    /// <summary>Parses a match array. Returns false if it contains anything other
+    /// than a single host matcher (path/header/etc. can't be modelled). hosts is
+    /// null for "no matcher" (catch-all).</summary>
+    private static bool TryHostMatch(JsonArray? match, out List<string>? hosts)
+    {
+        hosts = null;
+        if (match == null || match.Count == 0) return true; // catch-all
+        var result = new List<string>();
+        foreach (var m in match.OfType<JsonObject>())
+        {
+            foreach (var (key, _) in m)
+                if (key != "host") return false; // non-host matcher -> unmappable
+            foreach (var h in m["host"]?.AsArray().Select(x => x?.GetValue<string>()) ?? Enumerable.Empty<string?>())
+                if (!string.IsNullOrEmpty(h)) result.Add(h!);
+        }
+        hosts = result.Count > 0 ? result : null;
+        return true;
+    }
+
+    /// <summary>Collects reverse_proxy / redirect / http_basic from a handler array
+    /// (descending into subroutes). Returns false on an unknown handler type.</summary>
     private static bool TryCollect(JsonArray? handlers, Collected c)
     {
         if (handlers == null) return true;
@@ -146,18 +200,15 @@ public class CaddyfileImporter
             switch (h["handler"]?.GetValue<string>())
             {
                 case "subroute":
-                    var inner = h["routes"] as JsonArray;
-                    if (inner != null)
-                        foreach (var ir in inner.OfType<JsonObject>())
-                            if (!TryCollect(ir["handle"] as JsonArray, c)) return false;
+                    foreach (var ir in (h["routes"] as JsonArray)?.OfType<JsonObject>() ?? Enumerable.Empty<JsonObject>())
+                        if (!TryCollect(ir["handle"] as JsonArray, c)) return false;
                     break;
                 case "reverse_proxy":
                     var dial = (h["upstreams"] as JsonArray)?.OfType<JsonObject>()
                         .Select(u => u["dial"]?.GetValue<string>()).FirstOrDefault(d => !string.IsNullOrEmpty(d));
                     if (dial != null)
                     {
-                        var https = h["transport"]?["protocol"]?.GetValue<string>() == "http"
-                                    && h["transport"]?["tls"] != null;
+                        var https = h["transport"]?["tls"] != null;
                         c.Upstream = (https ? "https://" : "http://") + dial;
                     }
                     break;
@@ -181,7 +232,7 @@ public class CaddyfileImporter
                 case "":
                     break;
                 default:
-                    return false; // unknown handler -> keep whole route as raw
+                    return false; // unknown handler -> keep the whole block as raw
             }
         }
         return true;
