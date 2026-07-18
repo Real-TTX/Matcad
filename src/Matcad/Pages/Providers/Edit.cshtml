@@ -13,7 +13,7 @@
         <input type="hidden" asp-for="Id" />
         <div class="form-group">
             <label for="Name">Name</label>
-            <input id="Name" asp-for="Name" autofocus placeholder="z. B. Netcup Produktiv" />
+            <input id="Name" asp-for="Name" autofocus placeholder="e.g. Netcup production" />
         </div>
         <div class="form-group">
             <label for="Type">Type</label>
@@ -22,6 +22,7 @@
                 {
                     <option value="@t.Id">@t.DisplayName</option>
                 }
+                <option value="@ProviderTypes.CustomId">Custom (any compiled module)…</option>
             </select>
         </div>
 
@@ -42,6 +43,35 @@
                 }
             </div>
         }
+
+        <div class="cred-block" data-cred-type="@ProviderTypes.CustomId"
+             style="@(Model.Type == ProviderTypes.CustomId ? "" : "display:none")">
+            <h2>Custom provider</h2>
+            <div class="form-group">
+                <label asp-for="CustomModule">Caddy DNS module name</label>
+                <input asp-for="CustomModule" placeholder="e.g. cloudflare, route53, hetzner" autocomplete="off" />
+                <div class="hint">The module must be compiled in (see <code>CADDY_DNS_MODULES</code> in .env).</div>
+            </div>
+            <label>Credentials</label>
+            <div class="table-wrap">
+                <table class="data" id="custom-creds">
+                    <thead><tr><th>Key</th><th>Value</th><th style="width:1%"></th></tr></thead>
+                    <tbody>
+                        @foreach (var kv in Model.CustomCredentials)
+                        {
+                            <tr>
+                                <td><input name="CustomKeys" value="@kv.Key" autocomplete="off" /></td>
+                                <td><input name="CustomValues" value="@kv.Value" autocomplete="off" /></td>
+                                <td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('tr').remove()"><icon name="delete" /></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="list-actions">
+                <button type="button" class="btn" onclick="matcadAddCred()"><icon name="add" /> Add credential</button>
+            </div>
+        </div>
 
         <div class="btn-row">
             <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
@@ -64,6 +94,15 @@
             document.querySelectorAll('.cred-block').forEach(b => {
                 b.style.display = b.getAttribute('data-cred-type') === type ? '' : 'none';
             });
+        }
+        function matcadAddCred() {
+            const tbody = document.querySelector('#custom-creds tbody');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><input name="CustomKeys" autocomplete="off" /></td>' +
+                '<td><input name="CustomValues" autocomplete="off" /></td>' +
+                '<td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+            tbody.appendChild(tr);
         }
     </script>
 }

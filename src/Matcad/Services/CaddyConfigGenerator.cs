@@ -249,10 +249,11 @@ public class CaddyConfigGenerator
         foreach (var route in routes.Where(r => r.Wildcard && r.ProviderId is > 0))
         {
             var provider = _store.Providers.FirstOrDefault(p => p.Id == route.ProviderId);
-            var type = provider != null ? ProviderTypes.Find(provider.Type) : null;
-            if (provider == null || type == null) continue;
+            if (provider == null || string.IsNullOrWhiteSpace(provider.Type)) continue;
 
-            var dnsProvider = new Dictionary<string, object?> { ["name"] = type.CaddyModule };
+            // The Type IS the Caddy DNS module name, so any compiled-in module
+            // (including custom ones not in the registry) works.
+            var dnsProvider = new Dictionary<string, object?> { ["name"] = provider.Type };
             foreach (var kv in provider.Credentials)
                 dnsProvider[kv.Key] = kv.Value;
 

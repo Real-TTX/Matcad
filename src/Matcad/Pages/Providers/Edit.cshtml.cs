@@ -13,12 +13,17 @@ public class EditModel : PageModel
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
+    /// <summary>Dropdown value: a known type id or "custom".</summary>
     [BindProperty] public string Type { get; set; } = "netcup";
+    /// <summary>Caddy DNS module name when Type == "custom".</summary>
+    [BindProperty] public string CustomModule { get; set; } = "";
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
-    /// <summary>Existing credential values, keyed by "type:key", to prefill the form.</summary>
+    /// <summary>Existing credential values, keyed by "type:key", to prefill known-type fields.</summary>
     public Dictionary<string, string> CredentialValues { get; } = new();
+    /// <summary>Existing credentials for the custom key/value editor.</summary>
+    public Dictionary<string, string> CustomCredentials { get; } = new();
 
     public IActionResult OnGet()
     {
@@ -27,33 +32,58 @@ public class EditModel : PageModel
             var p = _store.Providers.FirstOrDefault(x => x.Id == Id);
             if (p == null) return RedirectToPage("Index");
             Name = p.Name;
-            Type = p.Type;
-            foreach (var kv in p.Credentials)
-                CredentialValues[$"{p.Type}:{kv.Key}"] = kv.Value;
+            if (ProviderTypes.Find(p.Type) != null)
+            {
+                Type = p.Type;
+                foreach (var kv in p.Credentials) CredentialValues[$"{p.Type}:{kv.Key}"] = kv.Value;
+            }
+            else
+            {
+                Type = ProviderTypes.CustomId;
+                CustomModule = p.Type;
+                foreach (var kv in p.Credentials) CustomCredentials[kv.Key] = kv.Value;
+            }
         }
         return Page();
     }
 
     public IActionResult OnPost()
     {
-        var type = ProviderTypes.Find(Type);
-        if (string.IsNullOrWhiteSpace(Name) || type == null)
-        {
-            Error = "Please provide a name and a valid type.";
-            return Page();
-        }
+        if (string.IsNullOrWhiteSpace(Name)) { Error = "Please provide a name."; return Page(); }
 
+        string moduleName;
         var credentials = new Dictionary<string, string>();
-        foreach (var field in type.Fields)
+
+        if (Type == ProviderTypes.CustomId)
         {
-            var value = Request.Form[$"cred_{type.Id}_{field.Key}"].ToString();
-            credentials[field.Key] = value;
+            moduleName = CustomModule?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(moduleName))
+            {
+                Error = "Please enter the Caddy DNS module name (e.g. cloudflare).";
+                return Page();
+            }
+            var keys = Request.Form["CustomKeys"];
+            var values = Request.Form["CustomValues"];
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var k = keys[i]?.Trim();
+                if (string.IsNullOrEmpty(k)) continue;
+                credentials[k] = i < values.Count ? values[i] ?? "" : "";
+            }
+        }
+        else
+        {
+            var type = ProviderTypes.Find(Type);
+            if (type == null) { Error = "Please select a valid type."; return Page(); }
+            moduleName = type.Id;
+            foreach (var field in type.Fields)
+                credentials[field.Key] = Request.Form[$"cred_{type.Id}_{field.Key}"].ToString();
         }
 
         var provider = _store.Providers.FirstOrDefault(x => x.Id == Id) ?? new ProviderConfig();
         provider.Id = Id ?? 0;
         provider.Name = Name;
-        provider.Type = type.Id;
+        provider.Type = moduleName; // Type is the Caddy DNS module name
         provider.Credentials = credentials;
         _store.UpsertProvider(provider, User.GetUserId());
 

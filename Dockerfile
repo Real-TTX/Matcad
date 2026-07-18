@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # ---- Caddy binary (for `caddy adapt` during Caddyfile import) ----
-# Must carry the SAME DNS modules as caddy/Dockerfile, otherwise adapting a
-# config that uses e.g. `dns netcup` fails. Keep the --with list in sync.
+# Same DNS modules as the running Caddy (single source: .env CADDY_DNS_MODULES),
+# otherwise adapting a config that uses e.g. `dns netcup` fails.
 FROM caddy:2-builder AS caddybuild
-RUN xcaddy build \
-    --with github.com/caddy-dns/netcup
+ARG CADDY_DNS_MODULES="github.com/caddy-dns/netcup"
+RUN set -eu; args=""; for m in $CADDY_DNS_MODULES; do args="$args --with $m"; done; \
+    eval "xcaddy build $args"
 
 # ---- Build stage ----
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build

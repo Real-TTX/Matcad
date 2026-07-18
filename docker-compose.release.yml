@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         VERSION: ${MATCAD_VERSION:-0.0.0}
+        CADDY_DNS_MODULES: ${CADDY_DNS_MODULES:-github.com/caddy-dns/netcup}
     image: matcad:${MATCAD_VERSION:-latest}
     depends_on:
       - caddy
@@ -29,6 +30,8 @@ services:
     build:
       context: ./caddy
       dockerfile: Dockerfile
+      args:
+        CADDY_DNS_MODULES: ${CADDY_DNS_MODULES:-github.com/caddy-dns/netcup}
     image: matcad-caddy:${MATCAD_VERSION:-latest}
     ports:
       - "80:80"
