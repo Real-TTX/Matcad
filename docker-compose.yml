@@ -7,6 +7,7 @@ name: matcad
 services:
   caddy:
     image: ghcr.io/real-ttx/matcad-caddy:${MATCAD_VERSION:-latest}
+    pull_policy: always      # always fetch the newest image on `up`
     restart: unless-stopped
     ports:
       - "80:80"
@@ -18,6 +19,7 @@ services:
 
   matcad:
     image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
+    pull_policy: always      # always fetch the newest image on `up`
     restart: unless-stopped
     depends_on:
       - caddy
