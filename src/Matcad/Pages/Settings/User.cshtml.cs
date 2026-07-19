@@ -69,7 +69,7 @@ public class UserModel : PageModel
             await _auth.UpdateUser(u, Password, User.GetUserId());
         }
 
-        TempData["Flash"] = $"User “{Username}” saved.";
+        TempData["Flash"] = $"User '{Username}' saved.";
         return RedirectToPage("Index");
     }
 
@@ -86,7 +86,7 @@ public class UserModel : PageModel
                     return RedirectToPage("User", new { id = Id });
                 }
                 await _auth.DeleteUser(Id.Value);
-                TempData["Flash"] = $"User “{u.Username}” deleted.";
+                TempData["Flash"] = $"User '{u.Username}' deleted.";
             }
         }
         return RedirectToPage("Index");

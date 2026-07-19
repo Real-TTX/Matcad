@@ -7,8 +7,8 @@
     <h2><icon name="routes" /> Import a Caddyfile</h2>
     <p class="hint">
         Paste an existing Caddyfile. Matcad adapts it with Caddy's own adapter and maps the
-        recognizable parts — host, <code>reverse_proxy</code>, redirects, <code>basic_auth</code>
-        and ACME DNS providers — to routes/authentications/providers. Anything it can't model is
+        recognizable parts - host, <code>reverse_proxy</code>, redirects, <code>basic_auth</code>
+        and ACME DNS providers - to routes/authentications/providers. Anything it can't model is
         kept as <strong>raw passthrough</strong>, so nothing is lost. Review the preview before applying.
     </p>
 
@@ -53,9 +53,9 @@
                         {
                             <tr class="child">
                                 <td class="c-name">@ir.Route.Host @(ir.Route.Wildcard ? "(wildcard)" : "")</td>
-                                <td class="rtarget">@(ir.Route.Upstream ?? (ir.Route.FallbackUrl is not null ? "↪ " + ir.Route.FallbackUrl : "—"))</td>
-                                <td>@(ir.BasicUsers.Count > 0 ? $"Basic ({ir.BasicUsers.Count})" : "—")</td>
-                                <td>@(ir.ProviderName ?? "—")</td>
+                                <td class="rtarget">@(ir.Route.Upstream ?? (ir.Route.FallbackUrl is not null ? "↪ " + ir.Route.FallbackUrl : "-"))</td>
+                                <td>@(ir.BasicUsers.Count > 0 ? $"Basic ({ir.BasicUsers.Count})" : "-")</td>
+                                <td>@(ir.ProviderName ?? "-")</td>
                             </tr>
                         }
                     </tbody>

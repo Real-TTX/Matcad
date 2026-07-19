@@ -334,7 +334,7 @@ public class CaddyConfigGenerator
                 issuer["email"] = acmeEmail;
 
             // One wildcard cert per domain. Caddy subsumes concrete subdomains
-            // (app.example.com, …) under the *.example.com subject, so they are
+            // (app.example.com, ...) under the *.example.com subject, so they are
             // served from this single cert instead of getting their own.
             // The apex (example.com) is only added when a route actually needs it.
             var apexHost = route.Host.StartsWith("*.") ? route.Host[2..] : route.Host;

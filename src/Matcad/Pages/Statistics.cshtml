@@ -40,7 +40,7 @@
         </select>
         <div class="search">
             <icon name="search" />
-            <input type="search" name="Q" value="@Model.Q" placeholder="Path contains…" />
+            <input type="search" name="Q" value="@Model.Q" placeholder="Path contains..." />
         </div>
         <button type="submit" class="btn"><icon name="search" /> Apply</button>
     </form>
@@ -64,7 +64,7 @@
             @foreach (var b in Model.Series)
             {
                 var h = (int)Math.Round(b.Count * 100.0 / maxBar);
-                <div class="bar" title="@b.Label — @b.Count">
+                <div class="bar" title="@b.Label - @b.Count">
                     <div class="fill" style="height:@(b.Count == 0 ? 0 : Math.Max(2, h))%"></div>
                 </div>
             }

@@ -38,7 +38,7 @@ public class IndexModel : PageModel
         {
             Id = "auths",
             SearchValue = Q,
-            SearchPlaceholder = "Search authentications…",
+            SearchPlaceholder = "Search authentications...",
             Sort = sort,
             Dir = Dir ?? "asc",
             Filters =

@@ -73,15 +73,15 @@
                 <div class="form-group">
                     <label asp-for="PortalMode">Login behaviour</label>
                     <select asp-for="PortalMode">
-                        <option value="inline">Inline – login on the protected site (hides Matcad)</option>
-                        <option value="redirect">Redirect – send users to the Matcad host</option>
-                        <option value="unauthorized">Unauthorized – plain 401, no login form</option>
+                        <option value="inline">Inline - login on the protected site (hides Matcad)</option>
+                        <option value="redirect">Redirect - send users to the Matcad host</option>
+                        <option value="unauthorized">Unauthorized - plain 401, no login form</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional)</span></label>
                     <input asp-for="AcmeEmail" type="email" placeholder="empty = anonymous (like plain Caddy)" />
-                    <div class="hint">Only for Let's Encrypt expiry notices. Leave empty — certificates still work.</div>
+                    <div class="hint">Only for Let's Encrypt expiry notices. Leave empty - certificates still work.</div>
                 </div>
             </div>
             <div class="form-group">
@@ -98,7 +98,7 @@
         <h2>DNS provider <span class="text-muted">(optional)</span></h2>
         <div class="alert alert-warn">
             Only needed for <strong>wildcard certificates</strong> (<code>*.domain</code>) via the DNS-01 challenge.
-            For single hostnames Caddy uses HTTP validation — no provider required. You can skip this and add one later.
+            For single hostnames Caddy uses HTTP validation - no provider required. You can skip this and add one later.
         </div>
         <form method="post">
             <div class="form-row">
@@ -113,7 +113,7 @@
                         {
                             <option value="@t.Id">@t.DisplayName</option>
                         }
-                        <option value="@ProviderTypes.CustomId">Custom (any compiled module)…</option>
+                        <option value="@ProviderTypes.CustomId">Custom (any compiled module)...</option>
                     </select>
                 </div>
             </div>
@@ -172,7 +172,7 @@
     else // done
     {
         <h2>You're set up 🎉</h2>
-        <p class="hint">Next, add the sites Caddy should serve — create routes by hand, or import an existing Caddyfile.</p>
+        <p class="hint">Next, add the sites Caddy should serve - create routes by hand, or import an existing Caddyfile.</p>
         <div class="list-actions" style="margin-bottom:1rem">
             <a class="btn" asp-page="/Routes/Edit"><icon name="add" /> Add a route</a>
             <a class="btn" asp-page="/Settings/Import"><icon name="routes" /> Import a Caddyfile</a>

@@ -6,7 +6,7 @@ using Matcad.Config;
 namespace Matcad.Services;
 
 /// <summary>A running container as seen by the discovery, whether or not it is
-/// bound to a route — so the UI can show the full inventory and explain why a
+/// bound to a route - so the UI can show the full inventory and explain why a
 /// container is (not) exposed.</summary>
 public record DockerContainerInfo(
     string Name, string Image, string Ports, bool Bound, string? Host, string? AuthName, string Status);
@@ -153,7 +153,7 @@ public class DockerService : BackgroundService
         var ports = (c.Ports ?? new List<Port>())
             .Where(x => string.Equals(x.Type, "tcp", StringComparison.OrdinalIgnoreCase) && x.PrivatePort > 0)
             .Select(x => (int)x.PrivatePort).Distinct().OrderBy(x => x).ToList();
-        return ports.Count == 0 ? "—" : string.Join(", ", ports);
+        return ports.Count == 0 ? "-" : string.Join(", ", ports);
     }
 
     private static int ResolvePort(IDictionary<string, string> labels, ContainerListResponse c)

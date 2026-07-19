@@ -44,7 +44,7 @@ public class VerifyModel : PageModel
 
         return mode switch
         {
-            // Plain 401 — reveals nothing, no login form.
+            // Plain 401 - reveals nothing, no login form.
             "unauthorized" => new ContentResult
             {
                 StatusCode = 401,

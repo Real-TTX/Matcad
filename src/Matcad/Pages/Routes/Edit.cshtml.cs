@@ -20,7 +20,7 @@ public class EditModel : PageModel
     [BindProperty(SupportsGet = true)] public string? Sub { get; set; }
     [BindProperty] public string Name { get; set; } = "";
     [BindProperty] public string Host { get; set; } = "";
-    /// <summary>"single" or "wildcard" — chosen explicitly when creating a route.</summary>
+    /// <summary>"single" or "wildcard" - chosen explicitly when creating a route.</summary>
     [BindProperty] public string RouteType { get; set; } = "single";
     /// <summary>"proxy" (reverse-proxy to an upstream) or "redirect" (302/301 to a URL).</summary>
     [BindProperty] public string Target { get; set; } = "proxy";
@@ -99,7 +99,7 @@ public class EditModel : PageModel
         else
         {
             if (host.StartsWith("*."))
-                return Fail("A single domain must not start with “*.”. Choose the “Wildcard” type instead.");
+                return Fail("A single domain must not start with '*.'. Choose the 'Wildcard' type instead.");
             ProviderId = null; // not applicable for single domains
         }
 
@@ -131,7 +131,7 @@ public class EditModel : PageModel
         {
             var coverage = CertificatePlanner.ForRoute(route, _routes.All());
             if (coverage.Kind == CertificatePlanner.CertKind.Individual)
-                warnings.Add($"“{route.Host}” is not covered by a wildcard — Caddy will request an " +
+                warnings.Add($"'{route.Host}' is not covered by a wildcard - Caddy will request an " +
                     "individual certificate for it. Consider a *." + ParentOf(route.Host) + " wildcard route instead.");
         }
 
@@ -141,13 +141,13 @@ public class EditModel : PageModel
         {
             var a = _store.Authentications.FirstOrDefault(x => x.Id == route.AuthenticationId);
             if (a?.Type == AuthType.Matcad && string.IsNullOrWhiteSpace(_store.Settings.EffectivePortalUrl()))
-                warnings.Add("This route uses Matcad authentication but no login portal is configured — " +
-                    "set “Matcad host” (or a portal URL) under Settings, otherwise the login page won't load.");
+                warnings.Add("This route uses Matcad authentication but no login portal is configured - " +
+                    "set 'Matcad host' (or a portal URL) under Settings, otherwise the login page won't load.");
         }
 
         if (warnings.Count > 0) TempData["FlashWarn"] = string.Join(" ", warnings);
 
-        await ApplyAndFlash($"Route “{route.Host}” saved.");
+        await ApplyAndFlash($"Route '{route.Host}' saved.");
         return RedirectToPage("Index");
     }
 
@@ -160,7 +160,7 @@ public class EditModel : PageModel
         {
             var host = _store.Routes.FirstOrDefault(x => x.Id == Id)?.Host;
             _store.DeleteRoute(Id.Value);
-            await ApplyAndFlash($"Route “{host}” deleted.");
+            await ApplyAndFlash($"Route '{host}' deleted.");
         }
         return RedirectToPage("Index");
     }
@@ -174,11 +174,11 @@ public class EditModel : PageModel
 
     private void BuildOptions()
     {
-        AuthOptions.Add(("", "— none —"));
+        AuthOptions.Add(("", "- none -"));
         foreach (var a in _store.Authentications.OrderBy(a => a.Name))
             AuthOptions.Add((a.Id.ToString(), $"{a.Name} ({a.Type})"));
 
-        ProviderOptions.Add(("", "— none —"));
+        ProviderOptions.Add(("", "- none -"));
         foreach (var p in _store.Providers.OrderBy(p => p.Name))
             ProviderOptions.Add((p.Id.ToString(), p.Name));
 

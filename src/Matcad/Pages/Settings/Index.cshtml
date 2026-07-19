@@ -28,7 +28,7 @@
                         <label asp-for="MatcadHost">Matcad host</label>
                         <input asp-for="MatcadHost" placeholder="matcad.example.com" />
                         <div class="hint">Exposes the Matcad UI through Caddy under this domain
-                            (read-only <strong>system route</strong> → <code>matcad:4433</code>).</div>
+                            (read-only <strong>system route</strong> -> <code>matcad:4433</code>).</div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -43,9 +43,9 @@
                     <div class="form-group">
                         <label asp-for="PortalMode">Login behaviour</label>
                         <select asp-for="PortalMode">
-                            <option value="inline">Inline – login shown on the protected site (hides Matcad)</option>
-                            <option value="redirect">Redirect – send users to the Matcad login host</option>
-                            <option value="unauthorized">Unauthorized – return a plain 401, no login form</option>
+                            <option value="inline">Inline - login shown on the protected site (hides Matcad)</option>
+                            <option value="redirect">Redirect - send users to the Matcad login host</option>
+                            <option value="unauthorized">Unauthorized - return a plain 401, no login form</option>
                         </select>
                         <div class="hint">How unauthenticated visitors of a Matcad-protected route see the
                             sign-in. <strong>Inline</strong> keeps them on the requested site, so nobody
@@ -71,7 +71,7 @@
                         <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional)</span></label>
                         <input asp-for="AcmeEmail" type="email" placeholder="empty = anonymous (like a plain Caddyfile)" />
                         <div class="hint">Optional Let's Encrypt contact for expiry notices. Leave empty to
-                            register anonymously — certificates still work. Can be overridden per domain.</div>
+                            register anonymously - certificates still work. Can be overridden per domain.</div>
                     </div>
                 </div>
                 <div class="form-row">
@@ -85,7 +85,7 @@
                         <label asp-for="AcmePropagationTimeoutSeconds">DNS propagation timeout (s)</label>
                         <input asp-for="AcmePropagationTimeoutSeconds" type="number" min="-1" />
                         <div class="hint">Max wait for the record to appear on the nameservers. 0 = default;
-                            <strong>-1 = skip the check</strong> (fixes netcup “timed out … propagate”).</div>
+                            <strong>-1 = skip the check</strong> (fixes netcup "timed out ... propagate").</div>
                     </div>
                 </div>
             </section>
@@ -149,7 +149,7 @@
         <p class="hint">
             The certificates Caddy manages for your <strong>enabled</strong> routes. A wildcard
             route <code>*.domain</code> (with a DNS provider) yields <strong>one</strong> certificate that
-            also covers its subdomains — so most routes need no certificate of their own.
+            also covers its subdomains - so most routes need no certificate of their own.
         </p>
 
         <h2>Wildcard certificates</h2>
@@ -193,7 +193,7 @@
         <h2 style="margin-top:1.5rem">Individual certificates</h2>
         @if (Model.Certificates.Individual.Count == 0)
         {
-            <p class="text-muted">None — every route is covered by a wildcard (or internal). 👍</p>
+            <p class="text-muted">None - every route is covered by a wildcard (or internal). 👍</p>
         }
         else
         {
@@ -220,11 +220,11 @@
         <h2 style="margin-top:1.5rem">Internal (no public certificate)</h2>
         @if (Model.Certificates.Internal.Count == 0)
         {
-            <p class="text-muted">None — no localhost/IP hosts.</p>
+            <p class="text-muted">None - no localhost/IP hosts.</p>
         }
         else
         {
-            <p class="hint">Served by Caddy's internal CA (localhost / IP hosts) — no public certificate is issued.</p>
+            <p class="hint">Served by Caddy's internal CA (localhost / IP hosts) - no public certificate is issued.</p>
             <div class="table-wrap">
                 <table class="route-table">
                     <thead><tr><th>Host</th><th style="width:1%">Certificate</th></tr></thead>
@@ -248,8 +248,8 @@
                 <h2>Discovery</h2>
                 <p class="hint">
                     Automatically binds running containers as routes
-                    (<code>&lt;container&gt;.&lt;base-domain&gt;</code> → the container). Bound routes appear in
-                    the Routes list with a “Docker” badge and are read-only there.
+                    (<code>&lt;container&gt;.&lt;base-domain&gt;</code> -> the container). Bound routes appear in
+                    the Routes list with a "Docker" badge and are read-only there.
                 </p>
                 <div class="form-group">
                     <label><input type="checkbox" asp-for="DockerEnabled" /> Docker discovery active</label>
@@ -297,7 +297,7 @@
         }
         else
         {
-            <p class="hint">All running containers — bound ones become routes, the rest show why they were skipped.</p>
+            <p class="hint">All running containers - bound ones become routes, the rest show why they were skipped.</p>
             <div class="table-wrap">
                 <table class="route-table">
                     <thead><tr><th>Container</th><th>Image</th><th>Ports</th><th>Host</th><th>Auth</th><th style="width:1%">Status</th></tr></thead>
@@ -308,8 +308,8 @@
                                 <td class="c-name">@c.Name</td>
                                 <td class="c-meta">@c.Image</td>
                                 <td class="c-meta">@c.Ports</td>
-                                <td class="rtarget">@(c.Host ?? "—")</td>
-                                <td>@(string.IsNullOrEmpty(c.AuthName) ? "—" : c.AuthName)</td>
+                                <td class="rtarget">@(c.Host ?? "-")</td>
+                                <td>@(string.IsNullOrEmpty(c.AuthName) ? "-" : c.AuthName)</td>
                                 <td>
                                     @if (c.Bound)
                                     {
@@ -331,7 +331,7 @@
     <div class="tab-panel" data-panel="caddy">
         <p class="hint">
             Automatically generated Caddy configuration (JSON) that Matcad pushes to Caddy
-            via the admin API. <strong>Read-only</strong> – changes are made through
+            via the admin API. <strong>Read-only</strong> - changes are made through
             Routes, Providers and Authentications. Matcad deliberately uses the
             JSON API, not a classic Caddyfile.
         </p>
@@ -348,13 +348,13 @@
         <p class="hint">
             Extra Caddy JSON that is <strong>deep-merged</strong> into the generated config
             (objects merge, arrays like <code>routes</code> concatenate). Use this for anything
-            Matcad doesn't model directly — it also receives whatever the Caddyfile importer
+            Matcad doesn't model directly - it also receives whatever the Caddyfile importer
             can't map. Invalid JSON is rejected on save.
         </p>
         <form method="post" asp-page-handler="Raw">
             <div class="form-group">
                 <textarea asp-for="RawCaddyJson" rows="10" spellcheck="false"
-                          placeholder='{ "apps": { "http": { "servers": { "matcad": { "routes": [ … ] } } } } }'
+                          placeholder='{ "apps": { "http": { "servers": { "matcad": { "routes": [ ... ] } } } } }'
                           style="font-family:ui-monospace,Consolas,monospace;font-size:.82rem"></textarea>
             </div>
             <div class="btn-row" style="margin-top:0">
@@ -368,7 +368,7 @@
         <p class="hint">
             Download a full backup in Matcad's own format (settings, providers, routes,
             authentications and user accounts incl. password hashes). Sessions, logs and
-            encryption keys are not included. <strong>Keep it safe</strong> — it contains secrets.
+            encryption keys are not included. <strong>Keep it safe</strong> - it contains secrets.
         </p>
         <div class="btn-row" style="margin-top:0">
             <a class="btn btn-primary" asp-page-handler="Export"><icon name="save" /> Download backup (.json)</a>

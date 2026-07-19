@@ -7,7 +7,7 @@
     <form method="get" class="toolbar">
         <div class="search">
             <icon name="search" />
-            <input type="search" name="Q" value="@Model.Q" placeholder="Search routes…" />
+            <input type="search" name="Q" value="@Model.Q" placeholder="Search routes..." />
         </div>
         <select name="Status" onchange="this.form.submit()">
             <option value="" selected="@(string.IsNullOrEmpty(Model.Status))">All</option>
@@ -83,7 +83,7 @@
                                 }
                                 else
                                 {
-                                    <text>—</text>
+                                    <text>-</text>
                                 }
                             </td>
                             <td>
@@ -113,7 +113,7 @@
                                 }
                                 else
                                 {
-                                    <span class="text-muted">—</span>
+                                    <span class="text-muted">-</span>
                                 }
                             </td>
                             <td>

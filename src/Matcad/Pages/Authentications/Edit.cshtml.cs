@@ -109,7 +109,7 @@ public class EditModel : PageModel
         }
 
         _store.UpsertAuthentication(auth, User.GetUserId());
-        await ApplyAndFlash($"Authentication “{Name}” saved.");
+        await ApplyAndFlash($"Authentication '{Name}' saved.");
         return RedirectToPage("Index");
     }
 
@@ -124,7 +124,7 @@ public class EditModel : PageModel
             }
             var name = _store.Authentications.FirstOrDefault(x => x.Id == Id)?.Name;
             _store.DeleteAuthentication(Id.Value);
-            await ApplyAndFlash($"Authentication “{name}” deleted.");
+            await ApplyAndFlash($"Authentication '{name}' deleted.");
         }
         return RedirectToPage("Index");
     }

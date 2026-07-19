@@ -18,7 +18,7 @@ public class DataTable
     // Toolbar state (bound to the query string so it round-trips on GET).
     public string SearchParam { get; set; } = "q";
     public string? SearchValue { get; set; }
-    public string SearchPlaceholder { get; set; } = "Suchen…";
+    public string SearchPlaceholder { get; set; } = "Suchen...";
     public List<TableFilter> Filters { get; set; } = new();
 
     // Sorting.

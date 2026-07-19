@@ -2,7 +2,7 @@ namespace Matcad.Config;
 
 /// <summary>
 /// Registry of known DNS provider types for the UI. Each Id equals the Caddy DNS
-/// module name (the module must be compiled into the caddy binary — see
+/// module name (the module must be compiled into the caddy binary - see
 /// CADDY_DNS_MODULES in .env). The generator uses the provider's Type directly as
 /// the module name, so the "Custom" type below allows ANY compiled-in module even
 /// if it isn't listed here.

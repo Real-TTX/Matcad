@@ -47,8 +47,8 @@ public class ImportModel : PageModel
         // Providers: reuse an existing provider only when its type AND credentials
         // match; otherwise import the one from the Caddyfile (it carries the real
         // credentials). This prevents silently attaching imported wildcard routes
-        // to the seeded example provider — or any same-type provider whose secrets
-        // differ — which would break the DNS-01 challenge and thus HTTPS.
+        // to the seeded example provider - or any same-type provider whose secrets
+        // differ - which would break the DNS-01 challenge and thus HTTPS.
         var providerIdByType = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in plan.Providers)
         {
@@ -96,7 +96,7 @@ public class ImportModel : PageModel
             }
             else
             {
-                rawNote = " Note: unmapped parts were NOT applied because the raw config field is already in use — merge them manually.";
+                rawNote = " Note: unmapped parts were NOT applied because the raw config field is already in use - merge them manually.";
             }
         }
 
