@@ -23,8 +23,9 @@ builder.Services.AddRazorPages(o =>
     // Forward-auth endpoints must be reachable without an admin session.
     o.Conventions.AllowAnonymousToPage("/Auth/Verify");
     o.Conventions.AllowAnonymousToPage("/Auth/Portal");
-    // Settings and user management are admin-only.
+    // Settings, user management and the setup wizard are admin-only.
     o.Conventions.AuthorizeFolder("/Settings", "Admin");
+    o.Conventions.AuthorizePage("/Setup", "Admin");
 });
 builder.Services.AddDbContext<MatcadDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton<ConfigStore>();
@@ -80,22 +81,19 @@ using (var scope = app.Services.CreateScope())
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
     await auth.EnsureSeedAdmin(app.Logger);
 
-    // On the very first start only, seed illustrative example data. Gated by a
-    // one-time marker file (NOT by "config is empty") so clearing everything and
-    // restarting never resurrects the examples or overwrites settings.
+    // Fresh installs start EMPTY and run the first-run setup wizard. Example data
+    // is only loaded on demand (Settings → Import / Export). Upgraded installs
+    // that already carry configuration are marked "set up" so the wizard never
+    // interrupts them.
     var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
-    var seedMarker = Path.Combine(dataDir, ".example-seeded");
-    if (!File.Exists(seedMarker))
+    var s0 = store.Settings;
+    if (!s0.SetupCompleted &&
+        (store.Providers.Any() || store.Routes.Any() || store.Authentications.Any()
+         || !string.IsNullOrWhiteSpace(s0.BaseDomain)))
     {
-        if (Matcad.Config.ExampleData.IsEmpty(store))
-        {
-            var admin = await auth.FindUser("admin");
-            Matcad.Config.ExampleData.Seed(store, admin?.Id);
-            if (await auth.FindUser("demo") == null)
-                await auth.CreateUser("demo", "demo", UserRole.User, admin?.Id);
-            app.Logger.LogInformation("Seeded example data (disabled example routes).");
-        }
-        await File.WriteAllTextAsync(seedMarker, DateTime.UtcNow.ToString("o"));
+        s0.SetupCompleted = true;
+        store.SaveSettings(s0);
+        app.Logger.LogInformation("Existing configuration detected — setup wizard skipped.");
     }
 }
 
@@ -116,6 +114,22 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// First-run: funnel the logged-in admin into the setup wizard until it's done.
+app.Use(async (ctx, next) =>
+{
+    var path = ctx.Request.Path.Value ?? "";
+    bool Exempt(string p) => path.StartsWith(p, StringComparison.OrdinalIgnoreCase);
+    var exempt = Exempt("/Setup") || Exempt("/Login") || Exempt("/Logout") || Exempt("/Auth/")
+        || Exempt("/css") || Exempt("/js") || Exempt("/lib") || Exempt("/logs") || Exempt("/favicon");
+    if (!exempt && ctx.User.Identity?.IsAuthenticated == true && ctx.User.IsInRole(nameof(UserRole.Admin)))
+    {
+        var store = ctx.RequestServices.GetRequiredService<ConfigStore>();
+        if (!store.Settings.SetupCompleted) { ctx.Response.Redirect("/Setup"); return; }
+    }
+    await next();
+});
+
 app.MapRazorPages();
 
 // Real-time log stream (Server-Sent Events). Dependency-free live updates.

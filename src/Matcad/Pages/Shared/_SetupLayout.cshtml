@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · Matcad setup</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <main class="setup-wrap">
+        <h1 class="login-brand" style="justify-content:flex-start;margin-bottom:1.25rem">
+            <partial name="_Logo" /> <span>Matcad</span>
+        </h1>
+        @RenderBody()
+    </main>
+    <script src="~/js/matcad.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -60,6 +60,17 @@ public class AuthService
         await _db.SaveChangesAsync();
     }
 
+    /// <summary>Updates username and/or password of an existing (tracked) user.</summary>
+    public async Task UpdateAccount(User user, string? newUsername, string? newPassword, long? actorId)
+    {
+        if (!string.IsNullOrWhiteSpace(newUsername)) user.Username = newUsername.Trim();
+        if (!string.IsNullOrEmpty(newPassword)) user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdateDate = DateTime.UtcNow;
+        user.UpdateUserId = actorId;
+        await _db.SaveChangesAsync();
+        SessionCache.Clear();
+    }
+
     public async Task DeleteUser(long id)
     {
         var user = await _db.Users.FindAsync(id);

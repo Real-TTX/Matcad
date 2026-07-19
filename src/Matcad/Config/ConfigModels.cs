@@ -118,6 +118,10 @@ public class MatcadSettings
     public string MatcadHost { get; set; } = "";
     /// <summary>Whether the self-exposing system route is generated.</summary>
     public bool SystemRouteEnabled { get; set; } = true;
+    /// <summary>False on a fresh install → the first-run setup wizard is shown.
+    /// Set true once the wizard is finished (or for upgraded installs that already
+    /// have configuration).</summary>
+    public bool SetupCompleted { get; set; }
     public int LogRetentionDays { get; set; } = 30;
     /// <summary>Hard upper bound on stored request-log rows (0 = unlimited).
     /// Bounds growth under high traffic even within the retention window.</summary>

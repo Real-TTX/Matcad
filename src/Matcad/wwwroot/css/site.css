@@ -285,6 +285,19 @@ table.data tr:last-child td { border-bottom: none; }
 /* Logo stacked above the title instead of beside it. */
 .login-brand.brand-top { flex-direction: column; gap: .6rem; }
 
+/* ---------------------------------------------------------- Setup wizard */
+.setup-wrap { max-width: 660px; margin: 2rem auto; padding: 0 1rem; width: 100%; }
+.setup-steps { display: flex; gap: .9rem; list-style: none; padding: 0; margin: 0 0 1.25rem; flex-wrap: wrap; }
+.setup-steps li { display: inline-flex; align-items: center; gap: .45rem; color: var(--text-muted); font-size: .9rem; }
+.setup-steps li .n {
+    display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem;
+    border-radius: 50%; border: 1px solid var(--border); font-size: .8rem; flex: 0 0 auto;
+}
+.setup-steps li.active { color: var(--text); font-weight: 600; }
+.setup-steps li.active .n { background: var(--primary); border-color: var(--primary); color: #fff; }
+.setup-steps li.done .n { background: var(--success); border-color: var(--success); color: #fff; }
+@media (max-width: 560px) { .setup-steps li .t { display: none; } }
+
 /* Authentication branding editor: fields on the left, live preview on the right */
 .brand-editor { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }
 .brand-fields { flex: 1 1 320px; min-width: 280px; }

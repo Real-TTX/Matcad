@@ -130,6 +130,24 @@ public class IndexModel : PageModel
         return RedirectToPage("Index");
     }
 
+    public async Task<IActionResult> OnPostLoadExampleAsync()
+    {
+        Matcad.Config.ExampleData.Seed(_store, User.GetUserId());
+        var (ok, error) = await _caddy.ApplyAsync();
+        TempData[ok ? "Flash" : "FlashError"] = ok
+            ? "Example data loaded (routes are disabled)."
+            : $"Example data loaded. Caddy push failed: {error}";
+        return RedirectToPage("Index");
+    }
+
+    public IActionResult OnPostRerunSetup()
+    {
+        var s = _store.Settings;
+        s.SetupCompleted = false;
+        _store.SaveSettings(s);
+        return Redirect("/Setup");
+    }
+
     public async Task<IActionResult> OnPostRepushAsync()
     {
         var (ok, error) = await _caddy.ApplyAsync();
