@@ -37,6 +37,7 @@ builder.Services.AddSingleton<DockerRouteCache>();
 builder.Services.AddSingleton<RouteProvider>();
 builder.Services.AddSingleton<CaddyConfigGenerator>();
 builder.Services.AddSingleton<CaddyService>();
+builder.Services.AddSingleton<DnsCredentialTester>();
 builder.Services.AddSingleton<LogBroadcaster>();
 builder.Services.AddHostedService<LogIngestService>();
 builder.Services.AddSingleton<DockerService>();

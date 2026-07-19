@@ -9,6 +9,11 @@
     {
         <div class="alert alert-error">@Model.Error</div>
     }
+    @if (Model.TestResult is { } tr)
+    {
+        var cls = tr.Ok == true ? "alert-success" : (tr.Ok == false ? "alert-error" : "alert-warn");
+        <div class="alert @cls">@tr.Message</div>
+    }
     <form method="post">
         <input type="hidden" asp-for="Id" />
         <div class="form-group">
@@ -75,6 +80,7 @@
 
         <div class="btn-row">
             <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
+            <button type="submit" class="btn" asp-page-handler="Test" formnovalidate><icon name="check" /> Test credentials</button>
             <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
             @if (!Model.IsNew)
             {
