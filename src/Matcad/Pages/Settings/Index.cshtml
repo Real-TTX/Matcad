@@ -74,6 +74,20 @@
                             register anonymously — certificates still work. Can be overridden per domain.</div>
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group" style="max-width:260px">
+                        <label asp-for="AcmePropagationDelaySeconds">DNS propagation delay (s)</label>
+                        <input asp-for="AcmePropagationDelaySeconds" type="number" min="0" />
+                        <div class="hint">Wait this long after writing the DNS-01 record before validating.
+                            0 = default. For slow providers (netcup) try <strong>120</strong>.</div>
+                    </div>
+                    <div class="form-group" style="max-width:260px">
+                        <label asp-for="AcmePropagationTimeoutSeconds">DNS propagation timeout (s)</label>
+                        <input asp-for="AcmePropagationTimeoutSeconds" type="number" min="-1" />
+                        <div class="hint">Max wait for the record to appear on the nameservers. 0 = default;
+                            <strong>-1 = skip the check</strong> (fixes netcup “timed out … propagate”).</div>
+                    </div>
+                </div>
             </section>
 
             <section class="settings-section">

@@ -305,13 +305,20 @@ public class CaddyConfigGenerator
             foreach (var kv in provider.Credentials)
                 dnsProvider[kv.Key] = kv.Value;
 
+            var dns = new Dictionary<string, object?> { ["provider"] = dnsProvider };
+            // Tuning for slow DNS providers (e.g. netcup): wait before validating,
+            // and relax or disable Caddy's own propagation self-check.
+            if (settings.AcmePropagationDelaySeconds > 0)
+                dns["propagation_delay"] = $"{settings.AcmePropagationDelaySeconds}s";
+            if (settings.AcmePropagationTimeoutSeconds < 0)
+                dns["propagation_timeout"] = -1;                 // skip the propagation check
+            else if (settings.AcmePropagationTimeoutSeconds > 0)
+                dns["propagation_timeout"] = $"{settings.AcmePropagationTimeoutSeconds}s";
+
             var issuer = new Dictionary<string, object?>
             {
                 ["module"] = "acme",
-                ["challenges"] = new Dictionary<string, object?>
-                {
-                    ["dns"] = new Dictionary<string, object?> { ["provider"] = dnsProvider }
-                }
+                ["challenges"] = new Dictionary<string, object?> { ["dns"] = dns }
             };
             // Per-domain email overrides the global one; fall back to the global
             // setting when the route doesn't specify its own.

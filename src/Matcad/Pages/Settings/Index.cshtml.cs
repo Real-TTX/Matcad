@@ -31,6 +31,8 @@ public class IndexModel : PageModel
     [BindProperty] public long LogRetentionMaxRows { get; set; } = 1_000_000;
     [BindProperty] public string CaddyAdminUrl { get; set; } = "";
     [BindProperty] public string AcmeEmail { get; set; } = "";
+    [BindProperty] public int AcmePropagationDelaySeconds { get; set; }
+    [BindProperty] public int AcmePropagationTimeoutSeconds { get; set; }
     [BindProperty] public string RawCaddyJson { get; set; } = "";
 
     [BindProperty] public bool DockerEnabled { get; set; }
@@ -82,6 +84,8 @@ public class IndexModel : PageModel
         LogRetentionMaxRows = s.LogRetentionMaxRows;
         CaddyAdminUrl = s.CaddyAdminUrl;
         AcmeEmail = s.AcmeEmail;
+        AcmePropagationDelaySeconds = s.AcmePropagationDelaySeconds;
+        AcmePropagationTimeoutSeconds = s.AcmePropagationTimeoutSeconds;
         RawCaddyJson = s.RawCaddyJson;
         DockerEnabled = s.Docker.Enabled;
         DockerEndpoint = s.Docker.Endpoint;
@@ -101,6 +105,8 @@ public class IndexModel : PageModel
         s.LogRetentionMaxRows = LogRetentionMaxRows < 0 ? 0 : LogRetentionMaxRows;
         s.CaddyAdminUrl = string.IsNullOrWhiteSpace(CaddyAdminUrl) ? "http://caddy:2019" : CaddyAdminUrl.Trim();
         s.AcmeEmail = AcmeEmail?.Trim() ?? "";
+        s.AcmePropagationDelaySeconds = AcmePropagationDelaySeconds < 0 ? 0 : AcmePropagationDelaySeconds;
+        s.AcmePropagationTimeoutSeconds = AcmePropagationTimeoutSeconds < 0 ? -1 : AcmePropagationTimeoutSeconds;
         _store.SaveSettings(s); // Docker sub-settings preserved (edited on their own tab).
 
         var (ok, error) = await _caddy.ApplyAsync();

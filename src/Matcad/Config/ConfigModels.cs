@@ -125,6 +125,14 @@ public class MatcadSettings
     public string CaddyAdminUrl { get; set; } = "http://caddy:2019";
     /// <summary>Email used for ACME/Let's Encrypt registration.</summary>
     public string AcmeEmail { get; set; } = "";
+    /// <summary>Seconds to wait after writing the DNS-01 TXT record before asking the
+    /// CA to validate (gives slow DNS providers like netcup time to propagate).
+    /// 0 = Caddy default.</summary>
+    public int AcmePropagationDelaySeconds { get; set; }
+    /// <summary>Max seconds Caddy waits for the DNS-01 record to appear on the
+    /// authoritative nameservers. 0 = Caddy default; -1 = skip the propagation
+    /// check entirely (useful when a provider is slow but the CA can still see it).</summary>
+    public int AcmePropagationTimeoutSeconds { get; set; }
     /// <summary>Extra Caddy JSON deep-merged into the generated config (objects
     /// merge, arrays concatenate). Escape hatch for anything Matcad doesn't model
     /// directly; also where the Caddyfile importer stores unmappable parts.</summary>
