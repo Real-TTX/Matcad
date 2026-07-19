@@ -22,10 +22,10 @@
             <div class="sidebar-brand"><partial name="_Logo" /> <span>Matcad</span></div>
             <nav class="nav">
                 <a class="nav-item @CurrentPage("/Index")" asp-page="/Index"><icon name="dashboard" /> <span>Dashboard</span></a>
-                <a class="nav-item @CurrentPage("/Statistics")" asp-page="/Statistics"><icon name="chart" /> <span>Statistics</span></a>
                 <a class="nav-item @CurrentPage("/Routes")" asp-page="/Routes/Index"><icon name="routes" /> <span>Routes</span></a>
                 <a class="nav-item @CurrentPage("/Authentications")" asp-page="/Authentications/Index"><icon name="auth" /> <span>Authentications</span></a>
                 <a class="nav-item @CurrentPage("/Providers")" asp-page="/Providers/Index"><icon name="provider" /> <span>Providers</span></a>
+                <a class="nav-item @CurrentPage("/Statistics")" asp-page="/Statistics"><icon name="chart" /> <span>Statistics</span></a>
                 @if (User.IsInRole("Admin"))
                 {
                     <a class="nav-item @CurrentPage("/Settings")" asp-page="/Settings/Index"><icon name="settings" /> <span>Settings</span></a>
