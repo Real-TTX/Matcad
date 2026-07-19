@@ -88,6 +88,19 @@
                         <label asp-for="LogoFile">Logo upload</label>
                         <input asp-for="LogoFile" type="file" accept="image/*" id="brand-logo-file" />
                     </div>
+                    <div class="form-group">
+                        <label>Logo position</label>
+                        <div class="segmented">
+                            <label class="seg-option">
+                                <input type="radio" asp-for="BrandLogoLayout" value="left" onchange="matcadLogoLayout('left')" />
+                                <span>Beside title</span>
+                            </label>
+                            <label class="seg-option">
+                                <input type="radio" asp-for="BrandLogoLayout" value="top" onchange="matcadLogoLayout('top')" />
+                                <span>Above title</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 @* --- Right: a live preview of the login card --- *@
@@ -95,7 +108,7 @@
                     <span class="hint">Preview</span>
                     <div class="preview-frame">
                         <div class="login-card" id="preview-card">
-                            <h1 class="login-brand">
+                            <h1 class="login-brand @(Model.BrandLogoLayout == "top" ? "brand-top" : "")" id="preview-brand">
                                 <img id="preview-logo" alt="" style="height:2rem;max-width:100%;@(string.IsNullOrWhiteSpace(Model.BrandLogo) ? "display:none" : "")"
                                      src="@Model.BrandLogo" />
                                 <span id="preview-logo-fallback" style="@(string.IsNullOrWhiteSpace(Model.BrandLogo) ? "" : "display:none")"><partial name="_Logo" /></span>
@@ -136,6 +149,9 @@
     <script>
         function matcadAuthType(t) {
             document.getElementById('matcad-block').style.display = t === 'Matcad' ? '' : 'none';
+        }
+        function matcadLogoLayout(pos) {
+            document.getElementById('preview-brand').classList.toggle('brand-top', pos === 'top');
         }
         function matcadAddUser() {
             const tbody = document.querySelector('#basic-users tbody');

@@ -30,6 +30,7 @@ public class EditModel : PageModel
     [BindProperty] public bool RedirectPermanent { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
+    [BindProperty] public string? AcmeEmail { get; set; }
     [BindProperty] public bool Enabled { get; set; } = true;
 
     public bool IsNew => Id is null or 0;
@@ -37,6 +38,8 @@ public class EditModel : PageModel
 
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
+    /// <summary>Existing route hosts offered as redirect targets (as full URLs).</summary>
+    public List<string> RedirectTargets { get; private set; } = new();
 
     /// <summary>Enabled wildcard parent domains (e.g. "example.com" for *.example.com),
     /// used by the form to warn when a single host would need its own certificate.</summary>
@@ -57,6 +60,7 @@ public class EditModel : PageModel
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
+            AcmeEmail = r.AcmeEmail;
         }
         else if (!string.IsNullOrWhiteSpace(Sub))
         {
@@ -115,6 +119,8 @@ public class EditModel : PageModel
         route.RedirectPermanent = redirect && RedirectPermanent;
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
         route.ProviderId = ProviderId is > 0 ? ProviderId : null;
+        // Per-domain ACME email only applies to wildcard (DNS-01) certificates.
+        route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(AcmeEmail) ? AcmeEmail.Trim() : null;
         route.Enabled = Enabled;
         _store.UpsertRoute(route, User.GetUserId());
 
@@ -180,6 +186,17 @@ public class EditModel : PageModel
             .Where(r => r.Enabled && r.Wildcard && r.Host.StartsWith("*."))
             .Select(r => r.Host[2..])
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Existing non-wildcard hosts (other than this route) as ready-made
+        // redirect targets. The editor also allows a free-text "other" target.
+        var current = (Host ?? "").Trim().ToLowerInvariant();
+        RedirectTargets = _routes.All()
+            .Where(r => !string.IsNullOrWhiteSpace(r.Host) && !r.Host.StartsWith("*.")
+                        && !r.Host.Equals(current, StringComparison.OrdinalIgnoreCase))
+            .Select(r => $"https://{r.Host}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }

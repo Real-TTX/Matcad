@@ -68,9 +68,10 @@
                         <div class="hint">Admin API: <strong>@Model.CaddyStatus</strong></div>
                     </div>
                     <div class="form-group">
-                        <label asp-for="AcmeEmail">ACME email</label>
-                        <input asp-for="AcmeEmail" type="email" placeholder="admin@example.com" />
-                        <div class="hint">For Let's Encrypt registration.</div>
+                        <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional)</span></label>
+                        <input asp-for="AcmeEmail" type="email" placeholder="empty = anonymous (like a plain Caddyfile)" />
+                        <div class="hint">Optional Let's Encrypt contact for expiry notices. Leave empty to
+                            register anonymously — certificates still work. Can be overridden per domain.</div>
                     </div>
                 </div>
             </section>
