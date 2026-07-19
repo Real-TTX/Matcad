@@ -7,9 +7,10 @@
     var title = !string.IsNullOrWhiteSpace(b?.BrandTitle) ? b!.BrandTitle : "Matcad";
     var text = !string.IsNullOrWhiteSpace(b?.BrandText) ? b!.BrandText : "Protected area – please sign in";
     var color = !string.IsNullOrWhiteSpace(b?.BrandColor) ? b!.BrandColor : null;
+    var brandClass = b?.BrandLogoLayout == "top" ? "login-brand brand-top" : "login-brand";
 }
 <div class="login-card" @(color != null ? $"style=--primary:{color};--primary-hover:{color}" : "")>
-    <h1 class="login-brand">
+    <h1 class="@brandClass">
         @if (!string.IsNullOrWhiteSpace(b?.BrandLogo))
         {
             <img src="@b!.BrandLogo" alt="" style="height:2rem;max-width:100%" />

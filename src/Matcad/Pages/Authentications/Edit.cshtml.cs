@@ -25,6 +25,7 @@ public class EditModel : PageModel
     [BindProperty] public string BrandColor { get; set; } = "";
     [BindProperty] public string BrandText { get; set; } = "";
     [BindProperty] public string BrandLogo { get; set; } = "";
+    [BindProperty] public string BrandLogoLayout { get; set; } = "left";
     [BindProperty] public IFormFile? LogoFile { get; set; }
 
     public bool IsNew => Id is null or 0;
@@ -39,6 +40,7 @@ public class EditModel : PageModel
             if (a == null) return RedirectToPage("Index");
             Name = a.Name; Type = a.Type; ExistingUsers = a.Users;
             BrandTitle = a.BrandTitle; BrandColor = a.BrandColor; BrandText = a.BrandText; BrandLogo = a.BrandLogo;
+            BrandLogoLayout = string.IsNullOrWhiteSpace(a.BrandLogoLayout) ? "left" : a.BrandLogoLayout;
         }
         return Page();
     }
@@ -81,6 +83,7 @@ public class EditModel : PageModel
             auth.BrandTitle = BrandTitle?.Trim() ?? "";
             auth.BrandColor = BrandColor?.Trim() ?? "";
             auth.BrandText = BrandText?.Trim() ?? "";
+            auth.BrandLogoLayout = BrandLogoLayout == "top" ? "top" : "left";
             if (LogoFile is { Length: > 0 })
             {
                 if (LogoFile.Length > 256 * 1024)
@@ -102,6 +105,7 @@ public class EditModel : PageModel
         else
         {
             auth.BrandTitle = auth.BrandColor = auth.BrandText = auth.BrandLogo = "";
+            auth.BrandLogoLayout = "left";
         }
 
         _store.UpsertAuthentication(auth, User.GetUserId());

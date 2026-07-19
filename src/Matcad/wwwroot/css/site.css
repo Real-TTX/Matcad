@@ -282,6 +282,8 @@ table.data tr:last-child td { border-bottom: none; }
 .login-wrap { width: 100%; max-width: 360px; padding: 1.5rem; }
 .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 2rem; }
 .login-brand { display: flex; align-items: center; gap: .5rem; justify-content: center; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: .08em; }
+/* Logo stacked above the title instead of beside it. */
+.login-brand.brand-top { flex-direction: column; gap: .6rem; }
 
 /* Authentication branding editor: fields on the left, live preview on the right */
 .brand-editor { display: flex; gap: 2rem; flex-wrap: wrap; align-items: flex-start; }

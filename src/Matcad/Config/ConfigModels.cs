@@ -53,6 +53,8 @@ public class AuthenticationConfig : ConfigEntity
     public string BrandTitle { get; set; } = "";
     /// <summary>Logo as a URL or an embedded data: URI.</summary>
     public string BrandLogo { get; set; } = "";
+    /// <summary>Logo placement relative to the title: "left" (beside) or "top" (above).</summary>
+    public string BrandLogoLayout { get; set; } = "left";
     /// <summary>Accent colour, e.g. "#2f6feb".</summary>
     public string BrandColor { get; set; } = "";
     public string BrandText { get; set; } = "";
