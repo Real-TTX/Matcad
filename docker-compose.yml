@@ -19,7 +19,8 @@ services:
   matcad:
     image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
     restart: unless-stopped
-    depends_on: [caddy]
+    depends_on:
+      - caddy
     ports:
       - "4433:4433"             # UI — put it behind Caddy or your VPN
     volumes:
