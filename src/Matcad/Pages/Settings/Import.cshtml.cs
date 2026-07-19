@@ -44,12 +44,18 @@ public class ImportModel : PageModel
         var plan = _importer.Analyze(res.Json);
         var actor = User.GetUserId();
 
-        // Providers (dedupe by type; reuse an existing one of the same type).
+        // Providers: reuse an existing provider only when its type AND credentials
+        // match; otherwise import the one from the Caddyfile (it carries the real
+        // credentials). This prevents silently attaching imported wildcard routes
+        // to the seeded example provider — or any same-type provider whose secrets
+        // differ — which would break the DNS-01 challenge and thus HTTPS.
         var providerIdByType = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var existing in _store.Providers) providerIdByType.TryAdd(existing.Type, existing.Id);
         foreach (var p in plan.Providers)
         {
-            if (providerIdByType.ContainsKey(p.Type)) continue;
+            var match = _store.Providers.FirstOrDefault(e =>
+                e.Type.Equals(p.Type, StringComparison.OrdinalIgnoreCase)
+                && SameCredentials(e.Credentials, p.Credentials));
+            if (match != null) { providerIdByType[p.Type] = match.Id; continue; }
             _store.UpsertProvider(p, actor);
             providerIdByType[p.Type] = p.Id;
         }
@@ -99,5 +105,13 @@ public class ImportModel : PageModel
             $"Imported {imported} route(s), skipped {skipped} (host already exists)." + rawNote +
             (ok ? "" : $" Caddy push failed: {error}");
         return RedirectToPage("/Routes/Index");
+    }
+
+    private static bool SameCredentials(Dictionary<string, string> a, Dictionary<string, string> b)
+    {
+        if (a.Count != b.Count) return false;
+        foreach (var (k, v) in a)
+            if (!b.TryGetValue(k, out var bv) || bv != v) return false;
+        return true;
     }
 }
