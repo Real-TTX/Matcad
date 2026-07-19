@@ -22,7 +22,9 @@ public static class ExampleData
             // Caddy registers the ACME account fine without a contact email.
             AcmeEmail = "",
             LogRetentionDays = 30,
-            CaddyAdminUrl = "http://caddy:2019"
+            CaddyAdminUrl = "http://caddy:2019",
+            // Loading demo data implies setup is done; don't drop back into the wizard.
+            SetupCompleted = true
         });
 
         // --- Provider (DNS) ---
