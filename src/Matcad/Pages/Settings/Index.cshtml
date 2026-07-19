@@ -108,6 +108,8 @@
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
                 <button type="submit" class="btn" asp-page-handler="Repush"><icon name="refresh" /> Re-push config</button>
+                <span class="spacer"></span>
+                <button type="submit" class="btn btn-ghost" asp-page-handler="RerunSetup" formnovalidate><icon name="settings" /> Re-run setup wizard</button>
             </div>
         </form>
     </div>
@@ -396,6 +398,17 @@
         <div class="btn-row" style="margin-top:0">
             <a class="btn" asp-page="Import"><icon name="routes" /> Open Caddyfile import</a>
         </div>
+
+        <h2 style="margin-top:1.75rem">Example data</h2>
+        <p class="hint">Load illustrative demo providers/routes/authentications (routes disabled) to explore Matcad.
+            <strong>Overwrites</strong> the current settings with example values.</p>
+        <form method="post" asp-page-handler="LoadExample">
+            <div class="btn-row" style="margin-top:0">
+                <button type="submit" class="btn" data-confirm="Load example data and overwrite current settings?">
+                    <icon name="add" /> Load example data
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 

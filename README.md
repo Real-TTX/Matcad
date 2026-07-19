@@ -23,8 +23,10 @@ docker compose up -d
 - `docker-compose.yml` uses `ghcr.io/real-ttx/matcad` + `ghcr.io/real-ttx/matcad-caddy`.
 - Pin a version instead of `latest`: `MATCAD_VERSION=0.2.0 docker compose up -d`.
 - UI: <http://localhost:4433> (put it behind Caddy or your VPN).
-- Default login on first start: **admin / admin** — change it immediately under
-  *Settings → Users*.
+- Default login on first start: **admin / admin**. A fresh install starts empty
+  and runs a **setup wizard** (account password → domains/login → optional DNS
+  provider → finish). Re-run it any time under *Settings → General*. Demo data
+  can be loaded on demand under *Settings → Import / Export*.
 
 The published images bake in these Caddy DNS-provider modules: netcup, cloudflare,
 digitalocean, hetzner, route53, gandi, desec, ovh. To use others, build locally
