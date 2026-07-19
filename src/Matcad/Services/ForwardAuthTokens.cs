@@ -5,7 +5,7 @@ namespace Matcad.Services;
 /// <summary>
 /// Issues and validates the stateless forward-auth cookie for the Matcad login
 /// portal. The cookie payload (authId | username | expiry) is protected with
-/// Data Protection, so verification needs no database hit — this scales to very
+/// Data Protection, so verification needs no database hit - this scales to very
 /// high request volume on protected routes. One cookie per authentication, so
 /// multiple protected domains don't clobber each other.
 /// </summary>

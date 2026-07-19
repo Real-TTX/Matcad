@@ -64,7 +64,7 @@
                     </div>
                     <div class="form-group">
                         <label asp-for="BrandText">Welcome text</label>
-                        <input asp-for="BrandText" placeholder="Protected area – please sign in" data-preview="text" />
+                        <input asp-for="BrandText" placeholder="Protected area - please sign in" data-preview="text" />
                     </div>
                     <div class="form-group">
                         <label asp-for="BrandColor">Accent colour</label>
@@ -81,7 +81,7 @@
                     </div>
                     <div class="form-group">
                         <label asp-for="BrandLogo">Logo URL</label>
-                        <input asp-for="BrandLogo" placeholder="https://… or leave empty" data-preview="logo" />
+                        <input asp-for="BrandLogo" placeholder="https://... or leave empty" data-preview="logo" />
                         <div class="hint">Or upload a file below (max 256 KB, stored inline).</div>
                     </div>
                     <div class="form-group">
@@ -114,7 +114,7 @@
                                 <span id="preview-logo-fallback" style="@(string.IsNullOrWhiteSpace(Model.BrandLogo) ? "" : "display:none")"><partial name="_Logo" /></span>
                                 <span id="preview-title">@(string.IsNullOrWhiteSpace(Model.BrandTitle) ? "Matcad" : Model.BrandTitle)</span>
                             </h1>
-                            <p class="text-muted" id="preview-text" style="text-align:center;margin-top:-.5rem">@(string.IsNullOrWhiteSpace(Model.BrandText) ? "Protected area – please sign in" : Model.BrandText)</p>
+                            <p class="text-muted" id="preview-text" style="text-align:center;margin-top:-.5rem">@(string.IsNullOrWhiteSpace(Model.BrandText) ? "Protected area - please sign in" : Model.BrandText)</p>
                             <div class="form-group">
                                 <label>Username</label>
                                 <input type="text" tabindex="-1" readonly />
@@ -205,7 +205,7 @@
             }
 
             bindText('title', document.getElementById('preview-title'), 'Matcad');
-            bindText('text', document.getElementById('preview-text'), 'Protected area – please sign in');
+            bindText('text', document.getElementById('preview-text'), 'Protected area - please sign in');
 
             hex.addEventListener('input', applyColor);
             picker.addEventListener('input', () => { hex.value = picker.value; applyColor(); });

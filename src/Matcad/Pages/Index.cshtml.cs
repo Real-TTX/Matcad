@@ -55,7 +55,7 @@ public class IndexModel : PageModel
             .GroupBy(r => r.Host[2..], StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Host, StringComparer.OrdinalIgnoreCase);
 
-        // Latest access time per host — a single grouped query (scales to many hosts).
+        // Latest access time per host - a single grouped query (scales to many hosts).
         var hosts = allRoutes.Select(r => r.Host)
             .Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
         var lastByHost = await _db.RequestLogs

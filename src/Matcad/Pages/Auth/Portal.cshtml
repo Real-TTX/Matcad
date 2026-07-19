@@ -5,7 +5,7 @@
     Layout = "_LoginLayout";
     var b = Model.AuthConfig;
     var title = !string.IsNullOrWhiteSpace(b?.BrandTitle) ? b!.BrandTitle : "Matcad";
-    var text = !string.IsNullOrWhiteSpace(b?.BrandText) ? b!.BrandText : "Protected area – please sign in";
+    var text = !string.IsNullOrWhiteSpace(b?.BrandText) ? b!.BrandText : "Protected area - please sign in";
     var color = !string.IsNullOrWhiteSpace(b?.BrandColor) ? b!.BrandColor : null;
     var brandClass = b?.BrandLogoLayout == "top" ? "login-brand brand-top" : "login-brand";
 }

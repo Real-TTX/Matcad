@@ -37,7 +37,7 @@ public class IndexModel : PageModel
         {
             Id = "providers",
             SearchValue = Q,
-            SearchPlaceholder = "Search providers…",
+            SearchPlaceholder = "Search providers...",
             Sort = sort,
             Dir = Dir ?? "asc",
             Columns =

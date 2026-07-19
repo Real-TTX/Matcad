@@ -7,7 +7,7 @@ namespace Matcad.Config;
 /// obvious whether a route is covered by a wildcard cert or would trigger an
 /// individual (per-host) certificate. Mirrors how Caddy actually issues certs:
 /// a wildcard cert <c>*.domain</c> (DNS-01) covers its single-label subdomains
-/// and — when an apex route exists — the apex too; anything else concrete gets
+/// and - when an apex route exists - the apex too; anything else concrete gets
 /// its own cert; localhost/IP hosts use Caddy's internal CA.
 /// </summary>
 public static class CertificatePlanner

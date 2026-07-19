@@ -82,7 +82,7 @@ using (var scope = app.Services.CreateScope())
     await auth.EnsureSeedAdmin(app.Logger);
 
     // Fresh installs start EMPTY and run the first-run setup wizard. Example data
-    // is only loaded on demand (Settings → Import / Export). Upgraded installs
+    // is only loaded on demand (Settings -> Import / Export). Upgraded installs
     // that already carry configuration are marked "set up" so the wizard never
     // interrupts them.
     var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
@@ -93,7 +93,7 @@ using (var scope = app.Services.CreateScope())
     {
         s0.SetupCompleted = true;
         store.SaveSettings(s0);
-        app.Logger.LogInformation("Existing configuration detected — setup wizard skipped.");
+        app.Logger.LogInformation("Existing configuration detected - setup wizard skipped.");
     }
 }
 

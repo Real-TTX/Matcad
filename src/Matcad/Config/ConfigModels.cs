@@ -104,9 +104,9 @@ public class MatcadSettings
     /// login works across all subdomains.</summary>
     public string BaseDomain { get; set; } = "";
     /// <summary>How forward-auth presents the login to unauthenticated users:
-    /// "inline"  – login served on the protected host itself (hides the Matcad host),
-    /// "redirect" – redirect to <see cref="AuthPortalUrl"/> / Matcad host,
-    /// "unauthorized" – return a plain 401 (no login form).</summary>
+    /// "inline"  - login served on the protected host itself (hides the Matcad host),
+    /// "redirect" - redirect to <see cref="AuthPortalUrl"/> / Matcad host,
+    /// "unauthorized" - return a plain 401 (no login form).</summary>
     public string PortalMode { get; set; } = "inline";
     /// <summary>Absolute URL of the Matcad login portal (redirect mode only).
     /// If empty, a relative /auth/portal is used.</summary>
@@ -118,7 +118,7 @@ public class MatcadSettings
     public string MatcadHost { get; set; } = "";
     /// <summary>Whether the self-exposing system route is generated.</summary>
     public bool SystemRouteEnabled { get; set; } = true;
-    /// <summary>False on a fresh install → the first-run setup wizard is shown.
+    /// <summary>False on a fresh install -> the first-run setup wizard is shown.
     /// Set true once the wizard is finished (or for upgraded installs that already
     /// have configuration).</summary>
     public bool SetupCompleted { get; set; }

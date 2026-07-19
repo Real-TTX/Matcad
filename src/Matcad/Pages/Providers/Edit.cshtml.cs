@@ -100,7 +100,7 @@ public class EditModel : PageModel
         provider.Credentials = credentials;
         _store.UpsertProvider(provider, User.GetUserId());
 
-        TempData["Flash"] = $"Provider “{Name}” saved.";
+        TempData["Flash"] = $"Provider '{Name}' saved.";
         return RedirectToPage("Index");
     }
 
@@ -125,7 +125,7 @@ public class EditModel : PageModel
                 return RedirectToPage("Edit", new { id = Id });
             }
             _store.DeleteProvider(Id.Value);
-            TempData["Flash"] = $"Provider “{name}” deleted.";
+            TempData["Flash"] = $"Provider '{name}' deleted.";
         }
         return RedirectToPage("Index");
     }

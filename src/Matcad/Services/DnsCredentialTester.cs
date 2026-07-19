@@ -6,7 +6,7 @@ namespace Matcad.Services;
 /// <summary>
 /// Optional credential check for DNS providers. Where a provider's API offers a
 /// cheap auth call (touching no DNS records), this verifies the stored
-/// credentials directly — so the user learns they're wrong immediately instead
+/// credentials directly - so the user learns they're wrong immediately instead
 /// of waiting for an ACME DNS-01 challenge to time out. Providers without a
 /// tester return Ok = null ("no test available").
 /// </summary>
@@ -23,7 +23,7 @@ public class DnsCredentialTester
         {
             "netcup" => TestNetcupAsync(creds, ct),
             _ => Task.FromResult<(bool?, string)>(
-                (null, $"No credential test available for “{type}” yet — it can only be verified by issuing a certificate."))
+                (null, $"No credential test available for '{type}' yet - it can only be verified by issuing a certificate."))
         };
 
     private const string NetcupEndpoint = "https://ccp.netcup.net/run/webservice/servers/endpoint.php?JSON";
@@ -67,7 +67,7 @@ public class DnsCredentialTester
                     var logoutReq = new { action = "logout", param = new { customernumber = cn, apikey = key, apisessionid = sid } };
                     try { (await client.PostAsJsonAsync(NetcupEndpoint, logoutReq, ct)).Dispose(); } catch { /* best effort */ }
                 }
-                return (true, "netcup API login succeeded — the credentials are valid.");
+                return (true, "netcup API login succeeded - the credentials are valid.");
             }
             return (false, $"netcup rejected the credentials: {msg}");
         }

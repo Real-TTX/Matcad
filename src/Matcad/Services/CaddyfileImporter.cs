@@ -5,7 +5,7 @@ namespace Matcad.Services;
 
 /// <summary>
 /// Maps Caddy JSON (produced by <see cref="CaddyfileAdapter"/>) into Matcad's
-/// model. Understands the common building blocks — a site block's host list,
+/// model. Understands the common building blocks - a site block's host list,
 /// named host matchers with per-host <c>handle</c> blocks (each becomes its own
 /// route; specific hosts win over the catch-all), <c>reverse_proxy</c>, redirects,
 /// <c>http_basic</c> and ACME DNS providers. Anything it can't represent is kept

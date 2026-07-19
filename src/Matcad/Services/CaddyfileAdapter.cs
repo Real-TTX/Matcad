@@ -5,7 +5,7 @@ namespace Matcad.Services;
 /// <summary>
 /// Converts a Caddyfile to Caddy JSON using Caddy's own adapter
 /// (<c>caddy adapt</c>, run as a subprocess against the bundled static binary).
-/// This is only an adaptation — it never loads/replaces the running config.
+/// This is only an adaptation - it never loads/replaces the running config.
 /// </summary>
 public class CaddyfileAdapter
 {
