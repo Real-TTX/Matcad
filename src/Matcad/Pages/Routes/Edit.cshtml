@@ -126,6 +126,16 @@
             </div>
         </div>
 
+        <div class="form-row" id="acme-email-block">
+            <div class="form-group">
+                <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional, per domain)</span></label>
+                <input asp-for="AcmeEmail" type="email" placeholder="empty = global email from Settings" />
+                <div class="hint">Contact email for this domain's certificate. Overrides the global
+                    ACME email (<a asp-page="/Settings/Index">Settings → Caddy &amp; TLS</a>).</div>
+            </div>
+            <div class="form-group"></div>
+        </div>
+
         <div class="form-group">
             <label>
                 <input type="checkbox" asp-for="Enabled" /> Route active
@@ -190,15 +200,18 @@
         function matcadRouteType(type) {
             const host = document.getElementById('host-input');
             const provider = document.getElementById('provider-block');
+            const acme = document.getElementById('acme-email-block');
             const hostHint = document.getElementById('host-hint');
             const typeHint = document.getElementById('type-hint');
             if (type === 'wildcard') {
                 provider.style.display = '';
+                acme.style.display = '';
                 host.placeholder = '*.example.com (or example.com – becomes *.)';
                 hostHint.textContent = 'Covers all subdomains. Requires a DNS provider (DNS-01).';
                 typeHint.textContent = 'One certificate for the whole domain; individual subdomains inherit it.';
             } else {
                 provider.style.display = 'none';
+                acme.style.display = 'none';
                 host.placeholder = 'app.example.com';
                 hostHint.textContent = 'Exactly one host. Certificate via HTTP challenge – or covered by a wildcard route.';
                 typeHint.textContent = 'A single concrete host.';

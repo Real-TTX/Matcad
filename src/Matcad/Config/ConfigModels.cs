@@ -84,6 +84,9 @@ public class RouteConfig : ConfigEntity
     public long? AuthenticationId { get; set; }
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
+    /// <summary>Optional per-domain ACME contact email for this route's certificate.
+    /// Overrides the global <see cref="MatcadSettings.AcmeEmail"/> when set.</summary>
+    public string? AcmeEmail { get; set; }
     public bool Enabled { get; set; } = true;
 
     // --- Derived routes (e.g. from Docker); not persisted to routes.json. ---

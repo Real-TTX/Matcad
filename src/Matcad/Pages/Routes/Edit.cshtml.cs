@@ -30,6 +30,7 @@ public class EditModel : PageModel
     [BindProperty] public bool RedirectPermanent { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
+    [BindProperty] public string? AcmeEmail { get; set; }
     [BindProperty] public bool Enabled { get; set; } = true;
 
     public bool IsNew => Id is null or 0;
@@ -59,6 +60,7 @@ public class EditModel : PageModel
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
+            AcmeEmail = r.AcmeEmail;
         }
         else if (!string.IsNullOrWhiteSpace(Sub))
         {
@@ -117,6 +119,8 @@ public class EditModel : PageModel
         route.RedirectPermanent = redirect && RedirectPermanent;
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
         route.ProviderId = ProviderId is > 0 ? ProviderId : null;
+        // Per-domain ACME email only applies to wildcard (DNS-01) certificates.
+        route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(AcmeEmail) ? AcmeEmail.Trim() : null;
         route.Enabled = Enabled;
         _store.UpsertRoute(route, User.GetUserId());
 

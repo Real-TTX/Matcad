@@ -313,8 +313,18 @@ public class CaddyConfigGenerator
                     ["dns"] = new Dictionary<string, object?> { ["provider"] = dnsProvider }
                 }
             };
-            if (!string.IsNullOrWhiteSpace(settings.AcmeEmail))
-                issuer["email"] = settings.AcmeEmail;
+            // Per-domain email overrides the global one; fall back to the global
+            // setting when the route doesn't specify its own.
+            var acmeEmail = (route.AcmeEmail ?? "").Trim();
+            if (acmeEmail.Length == 0) acmeEmail = settings.AcmeEmail?.Trim() ?? "";
+            // Let's Encrypt rejects contact emails on the example.com domain
+            // ("forbidden domain"), which would fail account registration and
+            // block ALL certificate issuance. Drop such placeholder emails so
+            // Caddy registers without a contact instead of breaking everything.
+            if (acmeEmail.Length > 0 &&
+                !acmeEmail.EndsWith("@example.com", StringComparison.OrdinalIgnoreCase) &&
+                !acmeEmail.EndsWith(".example.com", StringComparison.OrdinalIgnoreCase))
+                issuer["email"] = acmeEmail;
 
             // One wildcard cert per domain. Caddy subsumes concrete subdomains
             // (app.example.com, …) under the *.example.com subject, so they are

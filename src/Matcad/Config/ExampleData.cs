@@ -17,7 +17,10 @@ public static class ExampleData
         {
             BaseDomain = "example.com",
             AuthPortalUrl = "https://auth.example.com",
-            AcmeEmail = "admin@example.com",
+            // Intentionally empty: Let's Encrypt rejects contact emails on the
+            // example.com domain, which would break ALL certificate issuance.
+            // Caddy registers the ACME account fine without a contact email.
+            AcmeEmail = "",
             LogRetentionDays = 30,
             CaddyAdminUrl = "http://caddy:2019"
         });
