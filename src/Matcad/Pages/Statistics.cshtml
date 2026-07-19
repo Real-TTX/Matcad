@@ -1,0 +1,141 @@
+@page
+@model Matcad.Pages.StatisticsModel
+@{
+    ViewData["Title"] = "Statistics";
+    var maxBar = Model.Series.Count > 0 ? Math.Max(1, Model.Series.Max(b => b.Count)) : 1;
+    var statusClasses = new[] {
+        ("2xx", Model.C2xx, "st-2"), ("3xx", Model.C3xx, "st-3"),
+        ("4xx", Model.C4xx, "st-4"), ("5xx", Model.C5xx, "st-5") };
+    var maxCls = Math.Max(1, statusClasses.Max(c => c.Item2));
+}
+<div class="card">
+    <form method="get" class="toolbar">
+        <select name="Range" onchange="this.form.submit()">
+            <option value="1h" selected="@(Model.Range == "1h")">Last hour</option>
+            <option value="24h" selected="@(Model.Range == "24h")">Last 24 hours</option>
+            <option value="7d" selected="@(Model.Range == "7d")">Last 7 days</option>
+            <option value="30d" selected="@(Model.Range == "30d")">Last 30 days</option>
+            <option value="all" selected="@(Model.Range == "all")">All time</option>
+        </select>
+        <select name="Host" onchange="this.form.submit()">
+            <option value="">All hosts</option>
+            @foreach (var h in Model.HostOptions)
+            {
+                <option value="@h" selected="@(Model.Host == h)">@h</option>
+            }
+        </select>
+        <select name="Status" onchange="this.form.submit()">
+            <option value="" selected="@(Model.Status == "")">Any status</option>
+            <option value="2" selected="@(Model.Status == "2")">2xx</option>
+            <option value="3" selected="@(Model.Status == "3")">3xx</option>
+            <option value="4" selected="@(Model.Status == "4")">4xx</option>
+            <option value="5" selected="@(Model.Status == "5")">5xx</option>
+        </select>
+        <select name="Method" onchange="this.form.submit()">
+            <option value="">Any method</option>
+            @foreach (var m in Matcad.Pages.StatisticsModel.MethodOptions)
+            {
+                <option value="@m" selected="@(Model.Method == m)">@m</option>
+            }
+        </select>
+        <div class="search">
+            <icon name="search" />
+            <input type="search" name="Q" value="@Model.Q" placeholder="Path contains…" />
+        </div>
+        <button type="submit" class="btn"><icon name="search" /> Apply</button>
+    </form>
+
+    @if (Model.Total == 0)
+    {
+        <p class="empty">No requests match these filters.</p>
+    }
+    else
+    {
+        <div class="stat-grid">
+            <div class="stat"><div class="value">@Model.Total.ToString("N0")</div><div class="label">Requests</div></div>
+            <div class="stat"><div class="value">@Model.ErrorRate.ToString("0.0")%</div><div class="label">Error rate (4xx/5xx)</div></div>
+            <div class="stat"><div class="value">@Model.AvgDurationMs.ToString("0.0") ms</div><div class="label">Avg. duration</div></div>
+            <div class="stat"><div class="value">@Model.DistinctHosts</div><div class="label">Hosts</div></div>
+            <div class="stat"><div class="value">@Model.DistinctClients.ToString("N0")</div><div class="label">Client IPs</div></div>
+        </div>
+
+        <h2>Requests over time <span class="text-muted" style="font-weight:400;font-size:.85rem">(per @Model.SeriesUnit)</span></h2>
+        <div class="bars" role="img" aria-label="Requests over time">
+            @foreach (var b in Model.Series)
+            {
+                var h = (int)Math.Round(b.Count * 100.0 / maxBar);
+                <div class="bar" title="@b.Label — @b.Count">
+                    <div class="fill" style="height:@(b.Count == 0 ? 0 : Math.Max(2, h))%"></div>
+                </div>
+            }
+        </div>
+        <div class="bars-axis">
+            <span>@(Model.Series.FirstOrDefault()?.Label)</span>
+            <span>@(Model.Series.LastOrDefault()?.Label)</span>
+        </div>
+
+        <h2 style="margin-top:1.5rem">Status codes</h2>
+        <div class="status-bars">
+            @foreach (var (name, count, cls) in statusClasses)
+            {
+                <div class="status-row">
+                    <span class="status-name @cls">@name</span>
+                    <div class="status-track"><div class="status-fill @cls" style="width:@((int)Math.Round(count * 100.0 / maxCls))%"></div></div>
+                    <span class="status-count">@count.ToString("N0")</span>
+                </div>
+            }
+        </div>
+
+        <div class="form-row" style="margin-top:1.5rem">
+            <div class="form-group">
+                <h2>Top hosts</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Host</th><th style="width:1%">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopHosts)
+                            {
+                                <tr><td>@c.Key</td><td>@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="form-group">
+                <h2>Top paths</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Path</th><th style="width:1%">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopPaths)
+                            {
+                                <tr><td class="rtarget">@c.Key</td><td>@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="margin-top:1.5rem">Recent matching requests <span class="text-muted" style="font-weight:400;font-size:.85rem">(latest 100)</span></h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Time</th><th>Host</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Client</th></tr></thead>
+                <tbody>
+                    @foreach (var r in Model.RecentRows)
+                    {
+                        <tr>
+                            <td class="text-muted">@r.At.ToLocalTime().ToString("MM-dd HH:mm:ss")</td>
+                            <td>@r.Host</td>
+                            <td>@r.Method</td>
+                            <td class="rtarget">@r.Path</td>
+                            <td><span class="st-@(r.Status / 100)">@r.Status</span></td>
+                            <td class="text-muted">@r.DurationMs.ToString("0.0") ms</td>
+                            <td class="text-muted">@r.RemoteIp</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
