@@ -64,10 +64,24 @@ public class PortalModel : PageModel
                 Secure = https,
                 Expires = DateTimeOffset.UtcNow.Add(ForwardAuthTokens.Lifetime),
                 Path = "/",
-                Domain = string.IsNullOrEmpty(baseDomain) ? null : baseDomain
+                Domain = CookieDomain(currentHost, baseDomain)
             });
 
         return Redirect(SafeRedirect(Rd, baseDomain, currentHost));
+    }
+
+    /// <summary>Scope the forward-auth cookie so the browser sends it back on the
+    /// protected host. Use the configured base domain only when the current host is
+    /// actually within it (enables one sign-in across its subdomains); otherwise a
+    /// host-only cookie (Domain=null), which always works - critical when protected
+    /// hosts live on domains other than the base domain.</summary>
+    private static string? CookieDomain(string? currentHost, string? baseDomain)
+    {
+        if (string.IsNullOrEmpty(baseDomain) || string.IsNullOrEmpty(currentHost)) return null;
+        if (currentHost.Equals(baseDomain, StringComparison.OrdinalIgnoreCase) ||
+            currentHost.EndsWith("." + baseDomain, StringComparison.OrdinalIgnoreCase))
+            return baseDomain;
+        return null; // host on a different domain -> host-only cookie
     }
 
     /// <summary>Avoid open redirects: allow the same host the user is on (covers the
