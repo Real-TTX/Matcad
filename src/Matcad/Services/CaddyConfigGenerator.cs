@@ -41,13 +41,20 @@ public class CaddyConfigGenerator
         // Specific hosts must be matched before wildcards.
         var ordered = routes.OrderBy(r => r.Wildcard ? 1 : 0).ThenBy(r => r.Host).ToList();
 
-        var inline = (settings.PortalMode ?? "inline").ToLowerInvariant() == "inline";
+        // The login page is served ON the protected host (via a /auth/* bypass route)
+        // whenever the verify endpoint issues a RELATIVE redirect to /auth/portal:
+        // that is inline mode, and also redirect mode when no portal URL resolves
+        // (Verify falls back to relative). Without the bypass route that fallback
+        // would loop forever, so keep the two in sync.
+        var mode = (settings.PortalMode ?? "inline").ToLowerInvariant();
+        var serveAuthLocally = mode == "inline"
+            || (mode == "redirect" && string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
         var httpRoutes = new List<object>();
         foreach (var r in ordered)
         {
-            // Inline portal: serve /auth/* on the protected host itself (proxied to
-            // Matcad, unprotected) so the login never leaves the host.
-            if (inline && UsesMatcadAuth(r))
+            // Serve /auth/* on the protected host itself (proxied to Matcad,
+            // unprotected) so the login never leaves the host.
+            if (serveAuthLocally && UsesMatcadAuth(r))
                 httpRoutes.Add(BuildAuthPathRoute(r.Host));
             httpRoutes.Add(BuildRoute(r));
         }
