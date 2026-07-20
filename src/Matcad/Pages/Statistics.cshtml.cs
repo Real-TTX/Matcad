@@ -34,6 +34,7 @@ public class StatisticsModel : PageModel
     public string SeriesUnit { get; private set; } = "hour";
     public List<Count> TopHosts { get; private set; } = new();
     public List<Count> TopPaths { get; private set; } = new();
+    public List<Count> TopClients { get; private set; } = new();
     public List<Recent> RecentRows { get; private set; } = new();
 
     public List<string> HostOptions { get; private set; } = new();
@@ -88,6 +89,10 @@ public class StatisticsModel : PageModel
             .OrderByDescending(x => x.C).Take(10).ToListAsync())
             .Select(x => new Count(x.Key, x.C)).ToList();
         TopPaths = (await q.GroupBy(r => r.Path)
+            .Select(g => new { g.Key, C = g.Count() })
+            .OrderByDescending(x => x.C).Take(10).ToListAsync())
+            .Select(x => new Count(x.Key, x.C)).ToList();
+        TopClients = (await q.GroupBy(r => r.RemoteIp)
             .Select(g => new { g.Key, C = g.Count() })
             .OrderByDescending(x => x.C).Take(10).ToListAsync())
             .Select(x => new Count(x.Key, x.C)).ToList();

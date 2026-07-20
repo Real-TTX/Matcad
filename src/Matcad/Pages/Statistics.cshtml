@@ -115,6 +115,20 @@
                     </table>
                 </div>
             </div>
+            <div class="form-group">
+                <h2>Top clients</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Client IP</th><th style="width:1%">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopClients)
+                            {
+                                <tr><td class="rtarget">@(string.IsNullOrEmpty(c.Key) ? "(unknown)" : c.Key)</td><td>@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <h2 style="margin-top:1.5rem">Recent matching requests <span class="text-muted" style="font-weight:400;font-size:.85rem">(latest 100)</span></h2>
