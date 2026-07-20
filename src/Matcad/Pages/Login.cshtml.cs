@@ -26,11 +26,15 @@ public class LoginModel : PageModel
         }
 
         var session = await _auth.CreateSession(user);
+        // Behind Caddy the connection to Matcad is plain HTTP; trust X-Forwarded-Proto
+        // so the session cookie is still Secure for the real HTTPS client.
+        var https = Request.IsHttps ||
+            string.Equals(Request.Headers["X-Forwarded-Proto"].FirstOrDefault(), "https", StringComparison.OrdinalIgnoreCase);
         Response.Cookies.Append(AuthService.CookieName, session.Token.ToString(), new CookieOptions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
-            Secure = Request.IsHttps,
+            Secure = https,
             Expires = session.ExpiryDate,
             Path = "/"
         });

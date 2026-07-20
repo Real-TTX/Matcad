@@ -204,6 +204,11 @@ public class CaddyfileImporter
                         if (!TryCollect(ir["handle"] as JsonArray, c)) return false;
                     break;
                 case "reverse_proxy":
+                    // A reverse_proxy with handle_response is a forward_auth-style
+                    // verifier (Authelia/Authentik/Matcad). We can't model that, and
+                    // treating it as the upstream would silently strip the auth, so
+                    // keep the whole block as raw passthrough instead.
+                    if (h["handle_response"] != null) return false;
                     var dial = (h["upstreams"] as JsonArray)?.OfType<JsonObject>()
                         .Select(u => u["dial"]?.GetValue<string>()).FirstOrDefault(d => !string.IsNullOrEmpty(d));
                     if (dial != null)

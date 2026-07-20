@@ -15,14 +15,15 @@ public class ForwardAuthTokens
 
     private readonly IDataProtector _protector;
     public ForwardAuthTokens(IDataProtectionProvider dp) =>
-        _protector = dp.CreateProtector("Matcad.ForwardAuth.v1");
+        _protector = dp.CreateProtector("Matcad.ForwardAuth.v2");
 
     public static string CookieName(long authId) => $"matcad_auth_{authId}";
 
     public string Issue(long authId, string username)
     {
+        // Username is free-form (may contain '|'), so it goes LAST and is never split.
         var exp = DateTimeOffset.UtcNow.Add(Lifetime).ToUnixTimeSeconds();
-        return _protector.Protect($"{authId}|{username}|{exp}");
+        return _protector.Protect($"{authId}|{exp}|{username}");
     }
 
     /// <summary>Returns the username if the token is valid for this authentication, else null.</summary>
@@ -30,12 +31,12 @@ public class ForwardAuthTokens
     {
         try
         {
-            var parts = _protector.Unprotect(token).Split('|');
+            var parts = _protector.Unprotect(token).Split('|', 3);
             if (parts.Length != 3) return null;
             if (!long.TryParse(parts[0], out var a) || a != authId) return null;
-            if (!long.TryParse(parts[2], out var exp)) return null;
+            if (!long.TryParse(parts[1], out var exp)) return null;
             if (DateTimeOffset.FromUnixTimeSeconds(exp) < DateTimeOffset.UtcNow) return null;
-            return string.IsNullOrEmpty(parts[1]) ? null : parts[1];
+            return string.IsNullOrEmpty(parts[2]) ? null : parts[2];
         }
         catch { return null; }
     }
