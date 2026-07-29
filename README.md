@@ -52,8 +52,12 @@ VPN rather than exposing it directly.
 Pin a specific version instead of `latest`:
 
 ```bash
-MATCAD_VERSION=0.4.1 docker compose up -d
+MATCAD_VERSION=0.4.7 docker compose up -d
 ```
+
+The images are multi-arch (`linux/amd64` and `linux/arm64`), so they run on x86
+servers and on ARM (Raspberry Pi, ARM VPS) alike; Docker pulls the right one
+automatically.
 
 ## Screenshots
 

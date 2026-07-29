@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # QEMU is a safety net; the Dockerfiles cross-compile on the native runner,
+      # so arm64 builds don't actually emulate.
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -54,6 +57,7 @@ jobs:
           context: .
           file: Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ steps.ver.outputs.v }}
             CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
@@ -67,6 +71,7 @@ jobs:
           context: ./caddy
           file: caddy/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           build-args: |
             CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
           tags: |
