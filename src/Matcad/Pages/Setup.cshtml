@@ -184,6 +184,16 @@
             </div>
         </form>
     }
+
+    @if (Model.Step != "done")
+    {
+        <form method="post" asp-page-handler="Skip" style="margin-top:1.25rem">
+            <button type="submit" class="btn btn-ghost btn-sm" formnovalidate
+                    data-confirm="Skip setup? The default admin / admin login stays unless you already changed it.">
+                Skip setup for now
+            </button>
+        </form>
+    }
 </div>
 
 @section Scripts {

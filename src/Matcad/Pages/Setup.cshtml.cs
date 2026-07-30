@@ -129,7 +129,7 @@ public class SetupModel : PageModel
         return Page();
     }
 
-    public IActionResult OnPostProviderSave()
+    public async Task<IActionResult> OnPostProviderSaveAsync()
     {
         var creds = ReadProviderCreds(out var module);
         PopulateCreds(creds);
@@ -144,18 +144,38 @@ public class SetupModel : PageModel
         s.AcmePropagationTimeoutSeconds = PropagationTimeout < 0 ? -1 : PropagationTimeout;
         _store.SaveSettings(s);
 
+        await MarkComplete();
         return RedirectToPage(new { step = "done" });
     }
 
-    public IActionResult OnPostSkipProvider() => RedirectToPage(new { step = "done" });
+    public async Task<IActionResult> OnPostSkipProviderAsync()
+    {
+        await MarkComplete();
+        return RedirectToPage(new { step = "done" });
+    }
+
+    /// <summary>Skip the rest of the wizard entirely (keeps whatever is set so far,
+    /// including the default admin/admin login if the account step was not done).</summary>
+    public async Task<IActionResult> OnPostSkipAsync()
+    {
+        await MarkComplete();
+        TempData["Flash"] = "Setup skipped. You can re-run it any time under Settings.";
+        return RedirectToPage("/Index");
+    }
 
     public async Task<IActionResult> OnPostFinishAsync()
     {
-        var s = _store.Settings;
-        s.SetupCompleted = true;
-        _store.SaveSettings(s);
-        await _caddy.ApplyAsync();
+        await MarkComplete();
         TempData["Flash"] = "Setup complete. Welcome to Matcad!";
         return RedirectToPage("/Index");
+    }
+
+    /// <summary>Mark setup done (so the wizard no longer intercepts navigation) and
+    /// push the current config to Caddy. Idempotent.</summary>
+    private async Task MarkComplete()
+    {
+        var s = _store.Settings;
+        if (!s.SetupCompleted) { s.SetupCompleted = true; _store.SaveSettings(s); }
+        await _caddy.ApplyAsync();
     }
 }
