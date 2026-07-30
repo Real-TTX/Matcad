@@ -43,7 +43,7 @@
 
         <div class="alert alert-warn" id="wildcard-nudge" style="display:none">
             <span id="wildcard-nudge-text"></span>
-            <button type="button" class="btn btn-sm" style="margin-left:.5rem" onclick="matcadUseWildcard()">
+            <button type="button" class="btn btn-sm" id="wildcard-nudge-btn" style="margin-left:.5rem" onclick="matcadUseWildcard()">
                 <icon name="network" /> Use wildcard instead
             </button>
         </div>
@@ -170,19 +170,27 @@
             return i > 0 ? host.slice(i + 1) : '';
         }
 
-        // Warn when a single host is a subdomain not covered by any wildcard route.
+        // Warn when a single host (subdomain OR apex) is not covered by any
+        // wildcard route, so it would get its own individual certificate.
         function matcadCheckWildcard() {
             const nudge = document.getElementById('wildcard-nudge');
-            const host = (document.getElementById('host-input').value || '').trim().toLowerCase();
-            const parent = matcadParentOf(host);
-            const isSubdomain = host.split('.').length >= 3 && !host.startsWith('*.');
-            const internal = host === 'localhost' || host.endsWith('.localhost');
-            const covered = matcadWildcardParents.some(p => p.toLowerCase() === parent);
-            if (matcadCurrentType() === 'single' && isSubdomain && !internal && !covered) {
+            const host = (document.getElementById('host-input').value || '').trim().toLowerCase().replace(/\.+$/, '');
+            const labels = host.split('.').filter(Boolean).length;
+            const internal = host === 'localhost' || host.endsWith('.localhost') || /^[0-9.]+$/.test(host);
+            // The base domain a *.base wildcard would need to cover this host:
+            // a subdomain (3+ labels) needs *.<immediate parent>; an apex (2 labels)
+            // is folded into its own *.<host> wildcard cert.
+            const base = labels >= 3 ? matcadParentOf(host) : host;
+            const covered = matcadWildcardParents.some(p => p.toLowerCase() === base);
+            if (matcadCurrentType() === 'single' && labels >= 2 && !host.startsWith('*.') && !internal && !covered) {
                 document.getElementById('wildcard-nudge-text').textContent =
-                    'No wildcard covers this host -> an individual certificate would be requested. ' +
-                    'A *.' + parent + ' wildcard route would cover it (and all its siblings) with one certificate.';
-                nudge.dataset.parent = parent;
+                    'No wildcard covers "' + host + '" -> Caddy will request an individual certificate for it. ' +
+                    'Add a *.' + base + ' wildcard route to cover it (and its subdomains) with a single certificate.';
+                nudge.dataset.parent = base;
+                // Converting to a wildcard replaces this host; only offer it for a
+                // subdomain. For an apex we just warn (you keep the apex route and
+                // add a separate *.domain wildcard).
+                document.getElementById('wildcard-nudge-btn').style.display = labels >= 3 ? '' : 'none';
                 nudge.style.display = '';
             } else {
                 nudge.style.display = 'none';
@@ -204,12 +212,17 @@
             const hostHint = document.getElementById('host-hint');
             const typeHint = document.getElementById('type-hint');
             if (type === 'wildcard') {
+                // Make the wildcard explicit: ensure the host starts with "*.".
+                const h = host.value.trim();
+                if (!h.startsWith('*.')) host.value = '*.' + h.replace(/^[*.]+/, '');
                 provider.style.display = '';
                 acme.style.display = '';
-                host.placeholder = '*.example.com (or example.com - becomes *.)';
-                hostHint.textContent = 'Covers all subdomains. Requires a DNS provider (DNS-01).';
+                host.placeholder = '*.example.com';
+                hostHint.textContent = 'Wildcard: enter *.your-domain. Covers all direct subdomains (and the apex if you also add it). Requires a DNS provider (DNS-01).';
                 typeHint.textContent = 'One certificate for the whole domain; individual subdomains inherit it.';
             } else {
+                // Drop a stray "*." when switching back to a single host.
+                if (host.value.trim().startsWith('*.')) host.value = host.value.trim().slice(2);
                 provider.style.display = 'none';
                 acme.style.display = 'none';
                 host.placeholder = 'app.example.com';
