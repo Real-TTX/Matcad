@@ -158,4 +158,7 @@ app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, C
     }
 }).RequireAuthorization();
 
+// Machine-to-machine REST API (used by matOS). Guarded by the X-Api-Key header.
+Matcad.Api.MatcadApi.MapMatcadApi(app);
+
 app.Run();
