@@ -36,7 +36,11 @@ public class CaddyConfigGenerator
     {
         var settings = _store.Settings;
         // Manual routes merged with Docker-derived routes (manual wins on collision).
-        var routes = _routes.All().Where(r => r.Enabled && !string.IsNullOrWhiteSpace(r.Host)).ToList();
+        var enabled = _routes.All().Where(r => r.Enabled).ToList();
+        // Host-matched routes (served by the main :80/:443 server) vs. port-bound routes
+        // (each gets its own listener on a dedicated port — DNS-free, used by matOS embedding).
+        var routes = enabled.Where(r => !(r.ListenPort > 0) && !string.IsNullOrWhiteSpace(r.Host)).ToList();
+        var portRoutes = enabled.Where(r => r.ListenPort > 0 && !string.IsNullOrWhiteSpace(r.Upstream)).ToList();
 
         // Specific hosts must be matched before wildcards.
         var ordered = routes.OrderBy(r => r.Wildcard ? 1 : 0).ThenBy(r => r.Host).ToList();
@@ -57,6 +61,32 @@ public class CaddyConfigGenerator
             if (serveAuthLocally && UsesMatcadAuth(r))
                 httpRoutes.Add(BuildAuthPathRoute(r.Host));
             httpRoutes.Add(BuildRoute(r));
+        }
+
+        var servers = new Dictionary<string, object?>
+        {
+            ["matcad"] = new Dictionary<string, object?>
+            {
+                ["listen"] = new[] { ":80", ":443" },
+                ["routes"] = httpRoutes,
+                // Route this server's access logs to the "matcad" logger so the file log captures them.
+                ["logs"] = new Dictionary<string, object?> { ["default_logger_name"] = "matcad" }
+            }
+        };
+
+        // Port-bound routes: one server per port, listening on :<port>, no host matcher — reachable
+        // DNS-free as http://<host>:<port>. matOS uses these so embedded apps work over a bare
+        // hostname/IP where a wildcard app domain can't resolve.
+        foreach (var pr in portRoutes)
+        {
+            servers[$"port_{pr.ListenPort}"] = new Dictionary<string, object?>
+            {
+                ["listen"] = new[] { $":{pr.ListenPort}" },
+                ["routes"] = new object[]
+                {
+                    new Dictionary<string, object?> { ["handle"] = BuildHandlers(pr) }
+                }
+            };
         }
 
         var config = new Dictionary<string, object?>
@@ -85,20 +115,7 @@ public class CaddyConfigGenerator
             {
                 ["http"] = new Dictionary<string, object?>
                 {
-                    ["servers"] = new Dictionary<string, object?>
-                    {
-                        ["matcad"] = new Dictionary<string, object?>
-                        {
-                            ["listen"] = new[] { ":80", ":443" },
-                            ["routes"] = httpRoutes,
-                            // Route this server's access logs to the "matcad"
-                            // logger so the custom file log below captures them.
-                            ["logs"] = new Dictionary<string, object?>
-                            {
-                                ["default_logger_name"] = "matcad"
-                            }
-                        }
-                    }
+                    ["servers"] = servers
                 }
             }
         };
@@ -145,7 +162,16 @@ public class CaddyConfigGenerator
         };
     }
 
-    private Dictionary<string, object?> BuildRoute(RouteConfig route)
+    private Dictionary<string, object?> BuildRoute(RouteConfig route) => new()
+    {
+        ["match"] = new[] { new Dictionary<string, object?> { ["host"] = new[] { route.Host } } },
+        ["handle"] = BuildHandlers(route),
+        ["terminal"] = true
+    };
+
+    /// <summary>The handler chain for a route (framing-header strip → auth → reverse_proxy/redirect).
+    /// Shared by host-matched routes and port-bound listener servers.</summary>
+    private List<object> BuildHandlers(RouteConfig route)
     {
         var handlers = new List<object>();
 
@@ -176,13 +202,7 @@ public class CaddyConfigGenerator
             handlers.AddRange(BuildAuthHandlers(auth));
 
         handlers.Add(BuildTerminalHandler(route));
-
-        return new Dictionary<string, object?>
-        {
-            ["match"] = new[] { new Dictionary<string, object?> { ["host"] = new[] { route.Host } } },
-            ["handle"] = handlers,
-            ["terminal"] = true
-        };
+        return handlers;
     }
 
     /// <summary>reverse_proxy to the upstream, else redirect to the fallback URL.</summary>

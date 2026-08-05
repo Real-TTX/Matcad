@@ -24,7 +24,7 @@ public static class MatcadApi
     public record RouteInput(long? Id, string Host, bool Wildcard, string? Target, string? Upstream,
         bool InsecureSkipVerify, string? FallbackUrl, bool RedirectPermanent,
         long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name,
-        bool AllowEmbedding = false);
+        bool AllowEmbedding = false, int? ListenPort = null);
     public record BasicUserInput(string Username, string? Password);
     public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
@@ -160,6 +160,7 @@ public static class MatcadApi
                     providerId = r.ProviderId,
                     enabled = r.Enabled,
                     allowEmbedding = r.AllowEmbedding,
+                    listenPort = r.ListenPort,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
                     editable = r.Source == null,
@@ -172,11 +173,20 @@ public static class MatcadApi
         api.MapGet("/routes/manual", (ConfigStore s) => Results.Ok(s.Routes.Select(ToRouteDto)));
         api.MapPost("/routes", async (ConfigStore s, CaddyService caddy, RouteInput inp) =>
         {
+            var listenPort = inp.ListenPort is > 0 ? inp.ListenPort : null;
             var host = (inp.Host ?? "").Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(host)) return Results.BadRequest(new { error = "Host is required." });
-            var wildcard = inp.Wildcard;
+            // Port-bound route: no host matching, so a host is optional. Otherwise a host is required.
+            if (listenPort is null && string.IsNullOrWhiteSpace(host))
+                return Results.BadRequest(new { error = "Host is required." });
+            var wildcard = listenPort is null && inp.Wildcard;
             long? providerId = inp.ProviderId;
-            if (wildcard)
+            if (listenPort is not null)
+            {
+                if (string.IsNullOrWhiteSpace(inp.Upstream))
+                    return Results.BadRequest(new { error = "A port-bound route requires an upstream." });
+                providerId = null;
+            }
+            else if (wildcard)
             {
                 if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
                 if (host.Count(c => c == '.') < 2)
@@ -196,9 +206,12 @@ public static class MatcadApi
 
             var route = s.Routes.FirstOrDefault(x => x.Id == inp.Id) ?? new RouteConfig();
             route.Id = inp.Id ?? 0;
-            route.Name = string.IsNullOrWhiteSpace(inp.Name) ? host : inp.Name!.Trim();
+            route.Name = !string.IsNullOrWhiteSpace(inp.Name) ? inp.Name!.Trim()
+                       : !string.IsNullOrWhiteSpace(host) ? host
+                       : $"port {listenPort}";
             route.Host = host;
             route.Wildcard = wildcard;
+            route.ListenPort = listenPort;
             route.Upstream = redirect || string.IsNullOrWhiteSpace(inp.Upstream) ? null : inp.Upstream!.Trim();
             route.InsecureSkipVerify = !redirect && inp.InsecureSkipVerify;
             route.AllowEmbedding = inp.AllowEmbedding;
@@ -288,7 +301,8 @@ public static class MatcadApi
         providerId = r.ProviderId,
         acmeEmail = r.AcmeEmail,
         enabled = r.Enabled,
-        allowEmbedding = r.AllowEmbedding
+        allowEmbedding = r.AllowEmbedding,
+        listenPort = r.ListenPort
     };
 
     private static bool FixedTimeEquals(string a, string b)

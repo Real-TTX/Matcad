@@ -86,6 +86,12 @@ public class RouteConfig : ConfigEntity
     /// embedded in an iframe (e.g. inside matOS). Off by default — keeps the app's clickjacking
     /// protection unless you opt in.</summary>
     public bool AllowEmbedding { get; set; }
+    /// <summary>When set (&gt;0) this is a PORT-bound route: Caddy listens on this port and
+    /// reverse-proxies to <see cref="Upstream"/> with no host matching (<see cref="Host"/> is
+    /// optional/ignored for matching). Lets an app be reached DNS-free as http://&lt;host&gt;:&lt;port&gt;,
+    /// which is how matOS's compatibility mode embeds apps when accessed via a bare hostname/IP where
+    /// a wildcard domain like *.apps.localhost can't resolve.</summary>
+    public int? ListenPort { get; set; }
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
     /// <summary>Optional per-domain ACME contact email for this route's certificate.

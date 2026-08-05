@@ -146,6 +146,36 @@
         </table>
     </div>
 
+    @if (Model.PortRoutes.Count > 0)
+    {
+        <h2 class="section-title">Port bindings</h2>
+        <p class="section-hint">Reachable directly as <code>http://&lt;host&gt;:&lt;port&gt;</code> (no domain / DNS). Created by matOS to embed apps over a bare hostname or IP.</p>
+        <div class="list-wrap">
+            <table class="list">
+                <thead>
+                    <tr><th>Port</th><th>Target</th><th>Embedding</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.PortRoutes)
+                    {
+                        <tr class="@(r.Enabled ? "" : "route-off")">
+                            <td class="c-name"><span class="sub">:@r.ListenPort</span></td>
+                            <td class="rtarget">@(string.IsNullOrEmpty(r.Upstream) ? "-" : r.Upstream)</td>
+                            <td>@if (r.AllowEmbedding) { <span class="badge badge-info" title="X-Frame-Options / CSP frame-ancestors stripped">Allowed</span> } else { <text>-</text> }</td>
+                            <td>@if (r.Enabled) { <span class="badge badge-ok">Active</span> } else { <span class="badge badge-muted">Inactive</span> }</td>
+                            <td class="c-actions">
+                                @if (!r.IsDerived)
+                                {
+                                    <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Edit"><icon name="edit" /></a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
     <div class="list-actions">
         <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> New route</a>
     </div>
