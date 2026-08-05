@@ -82,6 +82,10 @@ public class RouteConfig : ConfigEntity
     /// of a temporary (302) one.</summary>
     public bool RedirectPermanent { get; set; }
     public long? AuthenticationId { get; set; }
+    /// <summary>Strip X-Frame-Options and CSP frame-ancestors from responses so the site can be
+    /// embedded in an iframe (e.g. inside matOS). Off by default — keeps the app's clickjacking
+    /// protection unless you opt in.</summary>
+    public bool AllowEmbedding { get; set; }
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
     /// <summary>Optional per-domain ACME contact email for this route's certificate.

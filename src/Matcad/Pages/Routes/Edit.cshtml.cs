@@ -26,6 +26,7 @@ public class EditModel : PageModel
     [BindProperty] public string Target { get; set; } = "proxy";
     [BindProperty] public string? Upstream { get; set; }
     [BindProperty] public bool InsecureSkipVerify { get; set; }
+    [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
     [BindProperty] public bool RedirectPermanent { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
@@ -54,7 +55,7 @@ public class EditModel : PageModel
             if (r == null) return RedirectToPage("Index");
             Name = r.Name; Host = r.Host;
             RouteType = r.Wildcard ? "wildcard" : "single";
-            Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify;
+            Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
             FallbackUrl = r.FallbackUrl; RedirectPermanent = r.RedirectPermanent;
             // A route with a redirect target and no upstream is a redirect.
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
@@ -115,6 +116,7 @@ public class EditModel : PageModel
         // Proxy and redirect are mutually exclusive.
         route.Upstream = redirect || string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
         route.InsecureSkipVerify = !redirect && InsecureSkipVerify;
+        route.AllowEmbedding = AllowEmbedding;
         route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(FallbackUrl) ? FallbackUrl!.Trim() : null;
         route.RedirectPermanent = redirect && RedirectPermanent;
         route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;

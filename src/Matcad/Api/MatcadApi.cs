@@ -23,7 +23,8 @@ public static class MatcadApi
     public record ProviderTestInput(string Type, Dictionary<string, string>? Credentials);
     public record RouteInput(long? Id, string Host, bool Wildcard, string? Target, string? Upstream,
         bool InsecureSkipVerify, string? FallbackUrl, bool RedirectPermanent,
-        long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name);
+        long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name,
+        bool AllowEmbedding = false);
     public record BasicUserInput(string Username, string? Password);
     public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
@@ -158,6 +159,7 @@ public static class MatcadApi
                     authenticationId = r.AuthenticationId,
                     providerId = r.ProviderId,
                     enabled = r.Enabled,
+                    allowEmbedding = r.AllowEmbedding,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
                     editable = r.Source == null,
@@ -199,6 +201,7 @@ public static class MatcadApi
             route.Wildcard = wildcard;
             route.Upstream = redirect || string.IsNullOrWhiteSpace(inp.Upstream) ? null : inp.Upstream!.Trim();
             route.InsecureSkipVerify = !redirect && inp.InsecureSkipVerify;
+            route.AllowEmbedding = inp.AllowEmbedding;
             route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(inp.FallbackUrl) ? inp.FallbackUrl!.Trim() : null;
             route.RedirectPermanent = redirect && inp.RedirectPermanent;
             route.AuthenticationId = inp.AuthenticationId is > 0 ? inp.AuthenticationId : null;
@@ -284,7 +287,8 @@ public static class MatcadApi
         authenticationId = r.AuthenticationId,
         providerId = r.ProviderId,
         acmeEmail = r.AcmeEmail,
-        enabled = r.Enabled
+        enabled = r.Enabled,
+        allowEmbedding = r.AllowEmbedding
     };
 
     private static bool FixedTimeEquals(string a, string b)

@@ -149,6 +149,26 @@ public class CaddyConfigGenerator
     {
         var handlers = new List<object>();
 
+        // Optional: strip framing headers so the site can be embedded in an iframe (e.g. matOS).
+        // Deferred so it runs after the upstream sets them; placed first so it wraps the response.
+        if (route.AllowEmbedding)
+            handlers.Add(new Dictionary<string, object?>
+            {
+                ["handler"] = "headers",
+                ["response"] = new Dictionary<string, object?>
+                {
+                    ["deferred"] = true,
+                    ["delete"] = new[] { "X-Frame-Options" },
+                    ["replace"] = new Dictionary<string, object?>
+                    {
+                        ["Content-Security-Policy"] = new[]
+                        {
+                            new Dictionary<string, object?> { ["search_regexp"] = "frame-ancestors[^;]*;?\\s*", ["replace"] = "" }
+                        }
+                    }
+                }
+            });
+
         var auth = route.AuthenticationId is > 0
             ? _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId)
             : null;
