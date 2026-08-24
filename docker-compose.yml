@@ -1,34 +1,32 @@
 name: matcad
 
-# Matcad — homelab / production stack. Pulls prebuilt images from GHCR (no build).
-#   docker compose up -d                       # start / update
-#   MATCAD_VERSION=0.2.0 docker compose up -d   # pin a version instead of latest
+# Matcad + Caddy, straight from GHCR. No build required.
+#   Start:   docker compose up -d
+#   Update:  docker compose pull && docker compose up -d
+#   Pin a version: change ":latest" below to e.g. ":0.4.9"
 
 services:
   caddy:
-    image: ghcr.io/real-ttx/matcad-caddy:${MATCAD_VERSION:-latest}
-    pull_policy: always      # always fetch the newest image on `up`
+    image: ghcr.io/real-ttx/matcad-caddy:latest
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"           # HTTP/3
+      - "443:443/udp"
     volumes:
-      - caddy-data:/data         # TLS certificates
-      - caddy-logs:/caddy-logs   # access logs (shared with Matcad)
+      - caddy-data:/data
+      - caddy-logs:/caddy-logs
 
   matcad:
-    image: ghcr.io/real-ttx/matcad:${MATCAD_VERSION:-latest}
-    pull_policy: always      # always fetch the newest image on `up`
+    image: ghcr.io/real-ttx/matcad:latest
     restart: unless-stopped
     depends_on:
       - caddy
     ports:
-      - "4433:4433"             # UI — put it behind Caddy or your VPN
+      - "4433:4433"
     volumes:
-      - matcad-data:/data        # SQLite + JSON config + keys
+      - matcad-data:/data
       - caddy-logs:/caddy-logs
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # optional: Docker discovery
 
 volumes:
   matcad-data:
