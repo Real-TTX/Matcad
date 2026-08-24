@@ -14,6 +14,9 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)] public string? Status { get; set; }
 
     public List<RouteTree.Group> Groups { get; private set; } = new();
+    /// <summary>Port-bound routes (Caddy listens on a host port, no host matching). These don't fit the
+    /// domain tree, so they're listed separately. matOS creates these for its embedded-apps mode.</summary>
+    public List<RouteConfig> PortRoutes { get; private set; } = new();
     private Dictionary<string, string> _wildcardParents = new();
 
     public string SubLabel(string host) => RouteTree.SubLabel(host);
@@ -34,14 +37,22 @@ public class IndexModel : PageModel
             .GroupBy(r => r.Host[2..], StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Host, StringComparer.OrdinalIgnoreCase);
 
-        var items = all.AsEnumerable();
+        // Host-less port bindings don't belong in the host tree — pull them out and list separately.
+        PortRoutes = all.Where(r => r.ListenPort > 0 && string.IsNullOrWhiteSpace(r.Host))
+                        .OrderBy(r => r.ListenPort).ToList();
+        var items = all.Where(r => !(r.ListenPort > 0 && string.IsNullOrWhiteSpace(r.Host)));
         if (!string.IsNullOrWhiteSpace(Q))
+        {
             items = items.Where(r =>
                 r.Host.Contains(Q, StringComparison.OrdinalIgnoreCase) ||
                 r.Name.Contains(Q, StringComparison.OrdinalIgnoreCase));
+            PortRoutes = PortRoutes.Where(r =>
+                r.Name.Contains(Q, StringComparison.OrdinalIgnoreCase) ||
+                (r.Upstream ?? "").Contains(Q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
 
-        if (Status == "enabled") items = items.Where(r => r.Enabled);
-        else if (Status == "disabled") items = items.Where(r => !r.Enabled);
+        if (Status == "enabled") { items = items.Where(r => r.Enabled); PortRoutes = PortRoutes.Where(r => r.Enabled).ToList(); }
+        else if (Status == "disabled") { items = items.Where(r => !r.Enabled); PortRoutes = PortRoutes.Where(r => !r.Enabled).ToList(); }
 
         Groups = RouteTree.Build(items);
     }

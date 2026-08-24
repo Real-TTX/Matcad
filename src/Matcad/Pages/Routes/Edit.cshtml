@@ -75,6 +75,14 @@
                 <div class="hint">For <code>https://</code> upstreams with a self-signed or invalid
                     certificate. Ignored for plain <code>http://</code> backends.</div>
             </div>
+            <div class="form-group">
+                <label style="font-weight:400">
+                    <input type="checkbox" asp-for="AllowEmbedding" /> Allow embedding in an iframe
+                </label>
+                <div class="hint">Strips <code>X-Frame-Options</code> and CSP <code>frame-ancestors</code>
+                    from responses so this site can be shown inside another page (e.g. a matOS window).
+                    Off by default — only enable it for apps you want to embed.</div>
+            </div>
         </div>
 
         <div id="redirect-block" style="display:none">
