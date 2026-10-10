@@ -209,6 +209,37 @@ volume; an update keeps all of it.
 └─ keys/            DataProtection keys (sessions and portal cookies survive restarts)
 ```
 
+## Provisioning (for Mattiverse)
+
+Mattiverse installs Docker apps and uses Matcad as its engine for routes,
+certificates, DNS providers and logins: it writes them through the REST API, and
+they stay visible and editable here. None of this is needed for normal use;
+without these variables Matcad behaves exactly as described above.
+
+| Environment variable | Effect |
+|---|---|
+| `Matcad__ApiKey` | Turns on the REST API (`/api/v1`, header `X-Api-Key`). Without a key the API answers `503`. |
+| `MATCAD_ADMIN_PASSWORD` | On the first start (no user yet) the `admin` login gets this password, the forced password change is skipped and the setup wizard counts as done, so a headless install is usable right away. It needs at least 6 characters and must not be `admin`; otherwise it is ignored with a warning and `admin` / `admin` applies as usual. It has no effect once a user exists. |
+
+```bash
+docker run -d -p 4433:4433 -v matcad-data:/data \
+  -e Matcad__ApiKey=change-me -e MATCAD_ADMIN_PASSWORD=a-long-password \
+  ghcr.io/real-ttx/matcad:latest
+```
+
+- **Health check:** `GET /healthz` answers `200` with `ok`, without a login and
+  without a redirect to the login or setup page.
+- **Status:** `GET /api/v1/status` returns `app` (`matcad`), `version` and
+  `apiVersion` (`1`) next to the counts it always had.
+- **Setup wizard:** `PUT /api/v1/settings` also takes `"setupCompleted": true|false`;
+  `GET /api/v1/settings` returns it.
+- **`managedBy`:** routes, DNS providers and authentications take an optional
+  `"managedBy": "mattiverse"` on `POST`. It is stored in the config, returned by
+  every `GET` and shown as a **Managed by Mattiverse** badge in the lists
+  ("Created by Mattiverse. Manual changes may be overwritten."). Leave the field out
+  of an update to keep the stored value, send `""` to clear it. Editing the object in
+  the UI keeps it.
+
 ## How it is built
 
 - **matcad**: ASP.NET Core 10 (Razor Pages), UI on port 4433. Configuration is
