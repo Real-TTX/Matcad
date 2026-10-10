@@ -6,7 +6,7 @@ using Matcad.Services;
 namespace Matcad.Api;
 
 /// <summary>
-/// Machine-to-machine REST API so a sibling control panel (matOS) can manage the
+/// Machine-to-machine REST API so a sibling control panel (matOS, Mattiverse) can manage the
 /// reverse proxy — DNS providers, routes/domains, authentications, certificates
 /// and a few settings — from its own UI instead of Matcad's Razor pages.
 ///
@@ -19,14 +19,17 @@ namespace Matcad.Api;
 public static class MatcadApi
 {
     // Input DTOs (audit fields / ids handled by ConfigStore, never trusted from the wire).
-    public record ProviderInput(long? Id, string Name, string Type, Dictionary<string, string>? Credentials);
+    // ManagedBy: null = leave the stored value alone, "" = clear it, otherwise set it (e.g. "mattiverse").
+    public record ProviderInput(long? Id, string Name, string Type, Dictionary<string, string>? Credentials,
+        string? ManagedBy = null);
     public record ProviderTestInput(string Type, Dictionary<string, string>? Credentials);
     public record RouteInput(long? Id, string Host, bool Wildcard, string? Target, string? Upstream,
         bool InsecureSkipVerify, string? FallbackUrl, bool RedirectPermanent,
         long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name,
-        bool AllowEmbedding = false, int? ListenPort = null);
+        bool AllowEmbedding = false, int? ListenPort = null, string? ManagedBy = null);
     public record BasicUserInput(string Username, string? Password);
-    public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users);
+    public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users,
+        string? ManagedBy = null);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
         int? AcmePropagationDelaySeconds, int? AcmePropagationTimeoutSeconds);
 
@@ -81,6 +84,7 @@ public static class MatcadApi
             p.Name = inp.Name.Trim();
             p.Type = inp.Type.Trim();
             p.Credentials = inp.Credentials ?? new();
+            SetManagedBy(p, inp.ManagedBy);
             s.UpsertProvider(p, null);
             return Results.Ok(ToProviderDto(p));
         });
@@ -103,7 +107,8 @@ public static class MatcadApi
             id = a.Id,
             name = a.Name,
             type = a.Type.ToString(),
-            users = a.Users.Select(u => u.Username)
+            users = a.Users.Select(u => u.Username),
+            managedBy = a.ManagedBy
         })));
         api.MapPost("/authentications", async (ConfigStore s, CaddyService caddy, AuthInput inp) =>
         {
@@ -126,9 +131,10 @@ public static class MatcadApi
                 users.Add(new BasicAuthUser { Username = name, PasswordHash = hash });
             }
             auth.Users = users;
+            SetManagedBy(auth, inp.ManagedBy);
             s.UpsertAuthentication(auth, null);
             var (ok, error) = await caddy.ApplyAsync();
-            return Results.Ok(new { id = auth.Id, name = auth.Name, type = auth.Type.ToString(), applied = new { ok, error } });
+            return Results.Ok(new { id = auth.Id, name = auth.Name, type = auth.Type.ToString(), managedBy = auth.ManagedBy, applied = new { ok, error } });
         });
         api.MapDelete("/authentications/{id:long}", async (ConfigStore s, CaddyService caddy, RouteProvider rp, long id) =>
         {
@@ -161,6 +167,7 @@ public static class MatcadApi
                     enabled = r.Enabled,
                     allowEmbedding = r.AllowEmbedding,
                     listenPort = r.ListenPort,
+                    managedBy = r.ManagedBy,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
                     editable = r.Source == null,
@@ -221,6 +228,7 @@ public static class MatcadApi
             route.ProviderId = providerId is > 0 ? providerId : null;
             route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(inp.AcmeEmail) ? inp.AcmeEmail!.Trim() : null;
             route.Enabled = inp.Enabled;
+            SetManagedBy(route, inp.ManagedBy);
             s.UpsertRoute(route, null);
             var (ok, error) = await caddy.ApplyAsync();
             return Results.Ok(new { route = ToRouteDto(route), applied = new { ok, error } });
@@ -279,12 +287,19 @@ public static class MatcadApi
         });
     }
 
+    /// <summary>null = leave as is, blank = clear, otherwise set (trimmed).</summary>
+    private static void SetManagedBy(ConfigEntity e, string? managedBy)
+    {
+        if (managedBy != null) e.ManagedBy = string.IsNullOrWhiteSpace(managedBy) ? null : managedBy.Trim();
+    }
+
     private static object ToProviderDto(ProviderConfig p) => new
     {
         id = p.Id,
         name = p.Name,
         type = p.Type,
-        credentials = p.Credentials
+        credentials = p.Credentials,
+        managedBy = p.ManagedBy
     };
 
     private static object ToRouteDto(RouteConfig r) => new
@@ -302,7 +317,8 @@ public static class MatcadApi
         acmeEmail = r.AcmeEmail,
         enabled = r.Enabled,
         allowEmbedding = r.AllowEmbedding,
-        listenPort = r.ListenPort
+        listenPort = r.ListenPort,
+        managedBy = r.ManagedBy
     };
 
     private static bool FixedTimeEquals(string a, string b)

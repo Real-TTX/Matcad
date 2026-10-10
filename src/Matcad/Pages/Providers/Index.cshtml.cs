@@ -47,7 +47,7 @@ public class IndexModel : PageModel
                 new DataColumn("Credentials")
             },
             Rows = items.Select(p => new DataRow(
-                Cell.Text(p.Name),
+                Cell.TextManaged(p.Name, p.ManagedBy),
                 Cell.Badge(ProviderTypes.DisplayName(p.Type), "info"),
                 Cell.Muted(string.Join(", ", p.Credentials.Keys))
             ) { EditUrl = $"/Providers/Edit?id={p.Id}" }).ToList()

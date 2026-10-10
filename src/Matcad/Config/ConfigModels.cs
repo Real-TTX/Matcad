@@ -14,6 +14,10 @@ public abstract class ConfigEntity
     public long? CreateUserId { get; set; }
     public DateTime? UpdateDate { get; set; }
     public long? UpdateUserId { get; set; }
+    /// <summary>Which tool writes this object, e.g. "mattiverse" (set through the REST API).
+    /// The lists show a "Managed by ..." badge for it; null for objects created by hand.
+    /// Older config files do not have the field and load as null.</summary>
+    public string? ManagedBy { get; set; }
 }
 
 /// <summary>A DNS provider (e.g. Netcup). Credentials are provider-specific key/value pairs.</summary>

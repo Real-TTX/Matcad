@@ -70,6 +70,7 @@
                                 {
                                     <span class="badge badge-info" title="From Docker container @r.SourceDetail">Docker</span>
                                 }
+                                @Matcad.Controls.Cell.ManagedBy(r.ManagedBy)
                             </td>
                             <td class="rtarget">
                                 @if (!string.IsNullOrEmpty(r.Upstream))
@@ -159,7 +160,7 @@
                     @foreach (var r in Model.PortRoutes)
                     {
                         <tr class="@(r.Enabled ? "" : "route-off")">
-                            <td class="c-name"><span class="sub">:@r.ListenPort</span></td>
+                            <td class="c-name"><span class="sub">:@r.ListenPort</span> @Matcad.Controls.Cell.ManagedBy(r.ManagedBy)</td>
                             <td class="rtarget">@(string.IsNullOrEmpty(r.Upstream) ? "-" : r.Upstream)</td>
                             <td>@if (r.AllowEmbedding) { <span class="badge badge-info" title="X-Frame-Options / CSP frame-ancestors stripped">Allowed</span> } else { <text>-</text> }</td>
                             <td>@if (r.Enabled) { <span class="badge badge-ok">Active</span> } else { <span class="badge badge-muted">Inactive</span> }</td>
