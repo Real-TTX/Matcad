@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Matcad.Config;
@@ -18,6 +19,9 @@ namespace Matcad.Api;
 /// </summary>
 public static class MatcadApi
 {
+    /// <summary>Version of this REST API (the <c>apiVersion</c> of <c>/status</c>). Raise it when an endpoint is added.</summary>
+    public const int ApiVersion = 1;
+
     // Input DTOs (audit fields / ids handled by ConfigStore, never trusted from the wire).
     // ManagedBy: null = leave the stored value alone, "" = clear it, otherwise set it (e.g. "mattiverse").
     public record ProviderInput(long? Id, string Name, string Type, Dictionary<string, string>? Credentials,
@@ -31,7 +35,11 @@ public static class MatcadApi
     public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users,
         string? ManagedBy = null);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
-        int? AcmePropagationDelaySeconds, int? AcmePropagationTimeoutSeconds);
+        int? AcmePropagationDelaySeconds, int? AcmePropagationTimeoutSeconds, bool? SetupCompleted = null);
+
+    // Same string the sidebar footer shows.
+    private static readonly string AppVersion = Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
 
     public static void MapMatcadApi(this WebApplication app)
     {
@@ -42,10 +50,10 @@ public static class MatcadApi
                 var cfg = ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
                 var key = cfg["Matcad:ApiKey"];
                 if (string.IsNullOrWhiteSpace(key))
-                    return Results.Problem("Matcad API is disabled: no Matcad:ApiKey configured.", statusCode: 503);
+                    return Problem("Matcad API is disabled: no Matcad:ApiKey configured.", 503);
                 var got = ctx.HttpContext.Request.Headers["X-Api-Key"].ToString();
                 if (!FixedTimeEquals(got, key))
-                    return Results.Problem("Invalid or missing X-Api-Key.", statusCode: 401);
+                    return Problem("Invalid or missing X-Api-Key.", 401);
                 return await next(ctx);
             });
 
@@ -53,6 +61,9 @@ public static class MatcadApi
         api.MapGet("/status", (ConfigStore s, RouteProvider rp) => Results.Ok(new
         {
             ok = true,
+            app = "matcad",
+            version = AppVersion,
+            apiVersion = ApiVersion,
             baseDomain = s.Settings.BaseDomain,
             setupCompleted = s.Settings.SetupCompleted,
             counts = new
@@ -269,7 +280,8 @@ public static class MatcadApi
                 matcadHost = x.MatcadHost,
                 portalMode = x.PortalMode,
                 acmePropagationDelaySeconds = x.AcmePropagationDelaySeconds,
-                acmePropagationTimeoutSeconds = x.AcmePropagationTimeoutSeconds
+                acmePropagationTimeoutSeconds = x.AcmePropagationTimeoutSeconds,
+                setupCompleted = x.SetupCompleted
             });
         });
         api.MapPut("/settings", async (ConfigStore s, CaddyService caddy, SettingsInput inp) =>
@@ -281,11 +293,16 @@ public static class MatcadApi
             if (inp.PortalMode != null) x.PortalMode = inp.PortalMode.Trim();
             if (inp.AcmePropagationDelaySeconds.HasValue) x.AcmePropagationDelaySeconds = inp.AcmePropagationDelaySeconds.Value;
             if (inp.AcmePropagationTimeoutSeconds.HasValue) x.AcmePropagationTimeoutSeconds = inp.AcmePropagationTimeoutSeconds.Value;
+            if (inp.SetupCompleted.HasValue) x.SetupCompleted = inp.SetupCompleted.Value;
             s.SaveSettings(x);
             var (ok, error) = await caddy.ApplyAsync();
-            return Results.Ok(new { ok, error });
+            return Results.Ok(new { ok, error, setupCompleted = x.SetupCompleted });
         });
     }
+
+    // The usual problem-details body plus the "error" member that every other error of this API has.
+    private static IResult Problem(string message, int status) =>
+        Results.Problem(message, statusCode: status, extensions: new Dictionary<string, object?> { ["error"] = message });
 
     /// <summary>null = leave as is, blank = clear, otherwise set (trimmed).</summary>
     private static void SetManagedBy(ConfigEntity e, string? managedBy)

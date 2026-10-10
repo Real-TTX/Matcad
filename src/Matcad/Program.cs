@@ -120,7 +120,7 @@ app.Use(async (ctx, next) =>
 {
     var path = ctx.Request.Path.Value ?? "";
     bool Exempt(string p) => path.StartsWith(p, StringComparison.OrdinalIgnoreCase);
-    var exempt = Exempt("/Setup") || Exempt("/Login") || Exempt("/Logout") || Exempt("/Auth/")
+    var exempt = Exempt("/Setup") || Exempt("/Login") || Exempt("/Logout") || Exempt("/Auth/") || Exempt("/healthz")
         || Exempt("/css") || Exempt("/js") || Exempt("/lib") || Exempt("/logs") || Exempt("/favicon");
     if (!exempt && ctx.User.Identity?.IsAuthenticated == true && ctx.User.IsInRole(nameof(UserRole.Admin)))
     {
@@ -131,6 +131,9 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapRazorPages();
+
+// Liveness probe for container health checks / orchestrators. Anonymous on purpose; reveals nothing.
+app.MapMethods("/healthz", new[] { "GET", "HEAD" }, () => Results.Text("ok")).AllowAnonymous();
 
 // Real-time log stream (Server-Sent Events). Dependency-free live updates.
 app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, CancellationToken ct) =>
