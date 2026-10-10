@@ -1,68 +1,96 @@
 @using System.Reflection
 @{
-    string CurrentPage(string page) =>
-        (ViewContext.RouteData.Values["page"]?.ToString() ?? "").StartsWith(page, StringComparison.OrdinalIgnoreCase)
-            ? "active" : "";
+    string IsActive(string page) =>
+        (ViewContext.RouteData.Values["page"]?.ToString() ?? "").StartsWith(page, StringComparison.OrdinalIgnoreCase) ? "is-active" : "";
     var version = Assembly.GetExecutingAssembly()
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
-    var userName = User.Identity?.Name ?? "";
+    var title = ViewData["Title"] as string;
+    var isAdmin = User.IsInRole("Admin");
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-app-version="@version">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] · Matcad</title>
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <partial name="_Head" />
+    <title>@(string.IsNullOrEmpty(title) ? "Matcad" : $"{title} · Matcad")</title>
 </head>
-<body>
-    <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden />
-    <div class="layout">
+<body class="is-app">
+    <div class="app">
+        <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden />
         <aside class="sidebar">
-            <div class="sidebar-brand"><partial name="_Logo" /> <span>Matcad</span></div>
-            <nav class="nav">
-                <a class="nav-item @CurrentPage("/Index")" asp-page="/Index"><icon name="dashboard" /> <span>Dashboard</span></a>
-                <a class="nav-item @CurrentPage("/Routes")" asp-page="/Routes/Index"><icon name="routes" /> <span>Routes</span></a>
-                <a class="nav-item @CurrentPage("/Authentications")" asp-page="/Authentications/Index"><icon name="auth" /> <span>Authentications</span></a>
-                <a class="nav-item @CurrentPage("/Providers")" asp-page="/Providers/Index"><icon name="provider" /> <span>Providers</span></a>
-                <a class="nav-item @CurrentPage("/Statistics")" asp-page="/Statistics"><icon name="chart" /> <span>Statistics</span></a>
-                @if (User.IsInRole("Admin"))
+            <a class="brand" asp-page="/Index" aria-label="Dashboard">
+                <img class="brand__logo" src="~/img/logo.svg" alt="" width="36" height="36" />
+                <span class="brand__text">
+                    <span class="brand__name">Matcad</span>
+                    <span class="brand__version">@version</span>
+                </span>
+            </a>
+
+            <nav class="sidebar__nav" aria-label="Main navigation">
+                <a class="nav-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "is-active" : "")" asp-page="/Index"><icon name="dashboard" /><span>Dashboard</span></a>
+                <a class="nav-link @IsActive("/Routes")" asp-page="/Routes/Index"><icon name="route" /><span>Routes</span></a>
+                <a class="nav-link @IsActive("/Authentications")" asp-page="/Authentications/Index"><icon name="lock" /><span>Authentications</span></a>
+                @if (isAdmin)
                 {
-                    <a class="nav-item @CurrentPage("/Settings")" asp-page="/Settings/Index"><icon name="settings" /> <span>Settings</span></a>
+                    <a class="nav-link @IsActive("/Providers")" asp-page="/Providers/Index"><icon name="cloud" /><span>Providers</span></a>
+                }
+                <a class="nav-link @IsActive("/Statistics")" asp-page="/Statistics"><icon name="bar-chart" /><span>Statistics</span></a>
+                @if (isAdmin)
+                {
+                    <div class="nav-sep"></div>
+                    <a class="nav-link @IsActive("/Settings")" asp-page="/Settings/Index"><icon name="settings" /><span>Settings</span></a>
                 }
             </nav>
-            <div class="sidebar-footer">
-                <div class="sidebar-user">
-                    <span class="user-badge"><icon name="auth" /> <span>@userName</span></span>
-                    <a class="btn btn-ghost btn-sm" asp-page="/Logout" title="Sign out"><icon name="logout" /> Sign out</a>
+
+            <div class="sidebar__footer">
+                <a class="account" asp-page="/Account/Profile" title="Account">
+                    <span class="account__avatar"><icon name="user" /></span>
+                    <span class="account__meta">
+                        <span class="account__name">@User.Identity?.Name</span>
+                        <span class="account__role">@(isAdmin ? "Admin" : "User")</span>
+                    </span>
+                </a>
+
+                <div class="theme-switch" role="group" aria-label="Theme">
+                    <button type="button" class="theme-switch__btn" data-theme-set="system" title="System" aria-label="System theme"><icon name="monitor" /></button>
+                    <button type="button" class="theme-switch__btn" data-theme-set="light" title="Light" aria-label="Light theme"><icon name="sun" /></button>
+                    <button type="button" class="theme-switch__btn" data-theme-set="dark" title="Dark" aria-label="Dark theme"><icon name="moon" /></button>
                 </div>
-                <div class="sidebar-version">v@(version)</div>
+
+                <form method="post" asp-page="/Logout" class="logout-form">
+                    <button type="submit" class="nav-link nav-link--logout"><icon name="logout" /><span>Sign out</span></button>
+                </form>
             </div>
         </aside>
-        <label for="nav-toggle" class="nav-scrim" aria-hidden="true"></label>
 
-        <div class="main">
+        <div class="content">
             <header class="topbar">
-                <label for="nav-toggle" class="nav-burger" aria-label="Menu"><icon name="menu" /></label>
-                <div class="topbar-title">@ViewData["Title"]</div>
+                <label for="nav-toggle" class="topbar__menu" aria-label="Menu"><icon name="menu" /></label>
+                <span class="topbar__title">@title</span>
             </header>
-            <main class="content">
+            <partial name="_ConnectionBanner" />
+            <main class="main">
                 @if (TempData["Flash"] is string flash)
                 {
-                    <div class="alert alert-success">@flash</div>
+                    <div class="alert alert--success"><icon name="check-circle" /><span>@flash</span></div>
                 }
                 @if (TempData["FlashError"] is string flashError)
                 {
-                    <div class="alert alert-error">@flashError</div>
+                    <div class="alert alert--error"><icon name="x-circle" /><span>@flashError</span></div>
                 }
                 @if (TempData["FlashWarn"] is string flashWarn)
                 {
-                    <div class="alert alert-warn">@flashWarn</div>
+                    <div class="alert alert--warning"><icon name="alert" /><span>@flashWarn</span></div>
                 }
+                <div class="page-head page-head--auto">
+                    <div class="page-head__title"><h1>@title</h1></div>
+                    @await RenderSectionAsync("Actions", required: false)
+                </div>
                 @RenderBody()
             </main>
         </div>
+        <label for="nav-toggle" class="nav-backdrop" aria-hidden="true"></label>
     </div>
+
     <script src="~/js/matcad.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

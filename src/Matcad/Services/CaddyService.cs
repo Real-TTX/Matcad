@@ -17,6 +17,7 @@ public class CaddyService
     private readonly ConfigStore _store;
     private readonly IConfiguration _cfg;
     private readonly ILogger<CaddyService> _log;
+    private readonly SemaphoreSlim _pushLock = new(1, 1);
 
     public CaddyService(IHttpClientFactory http, CaddyConfigGenerator generator,
         ConfigStore store, IConfiguration cfg, ILogger<CaddyService> log)
@@ -71,9 +72,11 @@ public class CaddyService
     /// <summary>Regenerates and pushes the config. Returns (success, error?).</summary>
     public async Task<(bool Ok, string? Error)> ApplyAsync(CancellationToken ct = default)
     {
-        var json = BuildJson();
+        // One push at a time, each built when it is its turn: two quick changes cannot reach Caddy in reverse order.
+        await _pushLock.WaitAsync(ct);
         try
         {
+            var json = BuildJson();
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(15);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -91,6 +94,10 @@ public class CaddyService
         {
             _log.LogError(ex, "Failed to reach Caddy admin API at {Url}", AdminUrl);
             return (false, ex.Message);
+        }
+        finally
+        {
+            _pushLock.Release();
         }
     }
 

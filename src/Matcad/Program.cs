@@ -1,16 +1,23 @@
+using Matcad.Api;
 using Matcad.Auth;
 using Matcad.Config;
-using Microsoft.AspNetCore.DataProtection;
 using Matcad.Data;
 using Matcad.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+
+// "docker HEALTHCHECK": the image has no curl, so the app asks itself and exits with 0 (healthy) or 1.
+if (args.Contains("--healthcheck"))
+    return await HealthCheck.RunAsync();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Data volume layout -----------------------------------------------------
-// /data/matcad.db  -> SQLite (logic)     /data/config/*.json -> configs
+// /data/matcad.db  -> SQLite (users, sessions, request log)   /data/config/*.json -> configuration
 var dataDir = builder.Configuration["Matcad:DataDir"] ?? "/data";
 Directory.CreateDirectory(dataDir);
 var dbPath = Path.Combine(dataDir, "matcad.db");
@@ -20,16 +27,21 @@ builder.Services.AddRazorPages(o =>
 {
     o.Conventions.AllowAnonymousToPage("/Login");
     o.Conventions.AllowAnonymousToPage("/Logout");
+    o.Conventions.AllowAnonymousToPage("/Error");
+    o.Conventions.AllowAnonymousToPage("/StatusCode");
     // Forward-auth endpoints must be reachable without an admin session.
     o.Conventions.AllowAnonymousToPage("/Auth/Verify");
     o.Conventions.AllowAnonymousToPage("/Auth/Portal");
-    // Settings, user management and the setup wizard are admin-only.
+    // Settings, user management, DNS provider credentials and the setup wizard are admin-only.
     o.Conventions.AuthorizeFolder("/Settings", "Admin");
+    o.Conventions.AuthorizeFolder("/Providers", "Admin");
     o.Conventions.AuthorizePage("/Setup", "Admin");
 });
 builder.Services.AddDbContext<MatcadDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ConfigStore>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ForwardAuthTokens>();
 builder.Services.AddSingleton<CaddyfileAdapter>();
@@ -44,8 +56,8 @@ builder.Services.AddHostedService<LogIngestService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerService>());
 
-// Persist Data Protection keys on the volume so antiforgery tokens and any
-// protected payloads stay valid across container restarts.
+// Persist Data Protection keys on the volume so antiforgery tokens and the forward-auth
+// cookies stay valid across container restarts.
 var keysDir = Path.Combine(dataDir, "keys");
 Directory.CreateDirectory(keysDir);
 builder.Services.AddDataProtection()
@@ -66,33 +78,40 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Admin", p => p.RequireRole(nameof(UserRole.Admin)));
 });
 
-// Listen on 4433 inside the container (mapped 1:1 by compose).
-builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(4433));
+// Caddy and Matcad share a private Docker network: believe the client address Caddy forwards, but only from
+// there. Anyone reaching port 4433 directly from elsewhere cannot make up an address to dodge the login limits.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+    foreach (var network in new[] { "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7" })
+        o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+});
+
+// Listen on 4433 inside the container (mapped 1:1 by compose); Matcad__Port changes it.
+builder.WebHost.ConfigureKestrel(k => k.ListenAnyIP(builder.Configuration.GetValue("Matcad:Port", 4433)));
 
 var app = builder.Build();
 
 // --- Database bootstrap + seed ---------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
-    db.Database.EnsureCreated();
-    // WAL improves concurrent read/write throughput for the high-volume request log.
-    db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
-    var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await auth.EnsureSeedAdmin(app.Logger);
+    await DatabaseBootstrapper.InitializeAsync(scope.ServiceProvider.GetRequiredService<MatcadDbContext>(), app.Logger);
+    await scope.ServiceProvider.GetRequiredService<AuthService>().EnsureSeedAdmin(app.Logger);
 
     // Fresh installs start EMPTY and run the first-run setup wizard. Example data
     // is only loaded on demand (Settings -> Import / Export). Upgraded installs
     // that already carry configuration are marked "set up" so the wizard never
     // interrupts them.
     var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
-    var s0 = store.Settings;
-    if (!s0.SetupCompleted &&
+    var settings = store.Settings;
+    if (!settings.SetupCompleted &&
         (store.Providers.Any() || store.Routes.Any() || store.Authentications.Any()
-         || !string.IsNullOrWhiteSpace(s0.BaseDomain)))
+         || !string.IsNullOrWhiteSpace(settings.BaseDomain)))
     {
-        s0.SetupCompleted = true;
-        store.SaveSettings(s0);
+        settings.SetupCompleted = true;
+        store.SaveSettings(settings);
         app.Logger.LogInformation("Existing configuration detected - setup wizard skipped.");
     }
 }
@@ -101,36 +120,55 @@ using (var scope = app.Services.CreateScope())
 // still be starting). Route changes re-push at runtime.
 _ = Task.Run(async () =>
 {
+    var caddy = app.Services.GetRequiredService<CaddyService>();
     for (var attempt = 0; attempt < 10; attempt++)
     {
-        var caddy = app.Services.GetRequiredService<CaddyService>();
         var (ok, _) = await caddy.ApplyAsync();
         if (ok) break;
         await Task.Delay(TimeSpan.FromSeconds(3));
     }
 });
 
-app.UseStaticFiles();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseForwardedHeaders();
+if (!app.Environment.IsDevelopment())
+    app.UseExceptionHandler("/Error");
 
-// First-run: funnel the logged-in admin into the setup wizard until it's done.
-app.Use(async (ctx, next) =>
+app.Use(async (context, next) =>
 {
-    var path = ctx.Request.Path.Value ?? "";
-    bool Exempt(string p) => path.StartsWith(p, StringComparison.OrdinalIgnoreCase);
-    var exempt = Exempt("/Setup") || Exempt("/Login") || Exempt("/Logout") || Exempt("/Auth/")
-        || Exempt("/css") || Exempt("/js") || Exempt("/lib") || Exempt("/logs") || Exempt("/favicon");
-    if (!exempt && ctx.User.Identity?.IsAuthenticated == true && ctx.User.IsInRole(nameof(UserRole.Admin)))
-    {
-        var store = ctx.RequestServices.GetRequiredService<ConfigStore>();
-        if (!store.Settings.SetupCompleted) { ctx.Response.Redirect("/Setup"); return; }
-    }
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "same-origin";
     await next();
 });
 
+var contentTypes = new FileExtensionContentTypeProvider();
+contentTypes.Mappings[".webmanifest"] = "application/manifest+json";
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = contentTypes,
+    // CSS and JS are linked with ?v=<file hash> (asp-append-version): a changed file has a new address, so the old one may be kept for good.
+    OnPrepareResponse = context =>
+    {
+        // (The service worker script must always be re-checked.)
+        if (context.Context.Request.Query.ContainsKey("v") && context.File.Name != "sw.js")
+            context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+    }
+});
+// A 404 or 403 shows a page of the app (with the original status code) instead of an empty response.
+app.UseStatusCodePagesWithReExecute("/StatusCode/{0}");
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<AccountGuardMiddleware>();
+
 app.MapRazorPages();
+
+// Reachability probe for the container health check and for the browser: the offline page and the connection
+// banner ask it to find out whether Matcad is back.
+app.MapGet("/healthz", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Text("ok");
+}).AllowAnonymous();
 
 // Real-time log stream (Server-Sent Events). Dependency-free live updates.
 app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, CancellationToken ct) =>
@@ -139,26 +177,50 @@ app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, C
     ctx.Response.Headers.CacheControl = "no-cache";
     ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-    var jsonOpts = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
-    async Task Send(LogEntry e)
+    var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+    async Task Send(LogEntry entry)
     {
-        await ctx.Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(e, jsonOpts)}\n\n", ct);
+        await ctx.Response.WriteAsync($"data: {System.Text.Json.JsonSerializer.Serialize(entry, jsonOptions)}\n\n", ct);
         await ctx.Response.Body.FlushAsync(ct);
     }
+
+    // Send the headers right away: the browser reports "connected" when they arrive, not when the first entry does.
+    await ctx.Response.StartAsync(ct);
+    await ctx.Response.Body.FlushAsync(ct);
 
     var (reader, lease) = broadcaster.Subscribe();
     using (lease)
     {
-        foreach (var e in broadcaster.Recent().Reverse()) await Send(e);
         try
         {
-            await foreach (var e in reader.ReadAllAsync(ct)) await Send(e);
+            // Oldest first: the page puts every line on top of the list.
+            foreach (var entry in broadcaster.Recent().Reverse()) await Send(entry);
+            while (!ct.IsCancellationRequested)
+            {
+                // A comment line now and then keeps idle connections open through proxies, and shows a dead client.
+                using var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                heartbeat.CancelAfter(TimeSpan.FromSeconds(15));
+                try
+                {
+                    if (!await reader.WaitToReadAsync(heartbeat.Token)) break;
+                    while (reader.TryRead(out var entry)) await Send(entry);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    await ctx.Response.WriteAsync(": keep-alive\n\n", ct);
+                    await ctx.Response.Body.FlushAsync(ct);
+                }
+            }
         }
         catch (OperationCanceledException) { }
     }
 }).RequireAuthorization();
 
 // Machine-to-machine REST API (used by matOS). Guarded by the X-Api-Key header.
-Matcad.Api.MatcadApi.MapMatcadApi(app);
+app.MapMatcadApi();
 
 app.Run();
+return 0;
+
+// Lets the integration tests start the app (WebApplicationFactory<Program>).
+public partial class Program;

@@ -17,6 +17,21 @@ public class VerifyModel : PageModel
     private readonly ConfigStore _store;
     public VerifyModel(ForwardAuthTokens tokens, ConfigStore store) { _tokens = tokens; _store = store; }
 
+    /// <summary>A cookie only counts while its user still exists in the authentication and has not changed the password since.</summary>
+    private string? IsStillValid(ForwardAuthTicket? ticket, long authId)
+    {
+        if (ticket == null) return null;
+        var user = _store.Authentications
+            .FirstOrDefault(a => a.Id == authId && a.Type == AuthType.Matcad)?.Users
+            .FirstOrDefault(u => u.Username.Equals(ticket.Username, StringComparison.OrdinalIgnoreCase));
+        return user != null && ForwardAuthTokens.Fingerprint(user.PasswordHash) == ticket.PasswordFingerprint
+            ? user.Username : null;
+    }
+
+    /// <summary>Header values must be plain ASCII; other names (for example "Jürgen") are sent percent-encoded.</summary>
+    private static string HeaderSafe(string value) =>
+        value.All(c => c is >= ' ' and <= '~') ? value : Uri.EscapeDataString(value);
+
     public IActionResult OnGet()
     {
         long.TryParse(Request.Headers["X-Matcad-Auth"].FirstOrDefault(), out var authId);
@@ -25,10 +40,9 @@ public class VerifyModel : PageModel
             Request.Cookies.TryGetValue(ForwardAuthTokens.CookieName(authId), out var token) &&
             !string.IsNullOrEmpty(token))
         {
-            var user = _tokens.Validate(token, authId);
-            if (user != null)
+            if (IsStillValid(_tokens.Validate(token, authId), authId) is { } username)
             {
-                Response.Headers["X-Matcad-User"] = user;
+                Response.Headers["X-Matcad-User"] = HeaderSafe(username);
                 return StatusCode(200);
             }
         }

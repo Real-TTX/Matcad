@@ -1,3 +1,4 @@
+using Matcad.Auth;
 using Matcad.Config;
 using Matcad.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -13,9 +14,14 @@ namespace Matcad.Pages.Auth;
 /// </summary>
 public class PortalModel : PageModel
 {
+    // Verified when the user does not exist, so the response time does not reveal which users exist.
+    private static readonly Lazy<string> TimingEqualizerHash = new(() => BCrypt.Net.BCrypt.HashPassword("matcad-timing-equalizer"));
+
     private readonly ConfigStore _store;
     private readonly ForwardAuthTokens _tokens;
-    public PortalModel(ConfigStore store, ForwardAuthTokens tokens) { _store = store; _tokens = tokens; }
+    private readonly LoginAttemptTracker _attempts;
+    public PortalModel(ConfigStore store, ForwardAuthTokens tokens, LoginAttemptTracker attempts)
+    { _store = store; _tokens = tokens; _attempts = attempts; }
 
     [BindProperty] public string Username { get; set; } = "";
     [BindProperty] public string Password { get; set; } = "";
@@ -39,29 +45,33 @@ public class PortalModel : PageModel
             return Page();
         }
 
-        var user = AuthConfig.Users.FirstOrDefault(u =>
-            u.Username.Equals(Username?.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (user == null || !BCrypt.Net.BCrypt.Verify(Password, user.PasswordHash))
+        var username = Username?.Trim() ?? "";
+        if (_attempts.Begin($"portal{AuthConfig.Id}", username, HttpContext.ClientIp()) is not { } attempt)
+        {
+            Error = "Too many failed attempts. Please wait a few minutes and try again.";
+            return Page();
+        }
+
+        var user = AuthConfig.Users.FirstOrDefault(u => u.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+        var valid = PasswordHashing.Verify(Password ?? "", user?.PasswordHash ?? TimingEqualizerHash.Value);
+        if (user == null || !valid)
         {
             Error = "Incorrect username or password.";
             return Page();
         }
+        _attempts.Succeeded(attempt);
 
         var baseDomain = _store.Settings.BaseDomain?.Trim();
-        // Behind Caddy the request to Matcad is plain HTTP; trust X-Forwarded-Proto
-        // so the cookie is still marked Secure for the real HTTPS client connection.
-        var https = Request.IsHttps ||
-            string.Equals(Request.Headers["X-Forwarded-Proto"].FirstOrDefault(), "https", StringComparison.OrdinalIgnoreCase);
         // The public host the browser used (Caddy forwards it); host only, no port.
         var currentHost = (Request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? Request.Host.Value ?? "")
             .Split(',')[0].Split(':')[0].Trim();
 
         Response.Cookies.Append(ForwardAuthTokens.CookieName(AuthConfig.Id),
-            _tokens.Issue(AuthConfig.Id, user.Username), new CookieOptions
+            _tokens.Issue(AuthConfig.Id, user.Username, user.PasswordHash), new CookieOptions
             {
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax,
-                Secure = https,
+                Secure = Request.IsHttpsClient(),
                 Expires = DateTimeOffset.UtcNow.Add(ForwardAuthTokens.Lifetime),
                 Path = "/",
                 Domain = CookieDomain(currentHost, baseDomain)
@@ -75,31 +85,31 @@ public class PortalModel : PageModel
     /// actually within it (enables one sign-in across its subdomains); otherwise a
     /// host-only cookie (Domain=null), which always works - critical when protected
     /// hosts live on domains other than the base domain.</summary>
-    private static string? CookieDomain(string? currentHost, string? baseDomain)
+    public static string? CookieDomain(string? currentHost, string? baseDomain)
     {
         if (string.IsNullOrEmpty(baseDomain) || string.IsNullOrEmpty(currentHost)) return null;
-        if (currentHost.Equals(baseDomain, StringComparison.OrdinalIgnoreCase) ||
-            currentHost.EndsWith("." + baseDomain, StringComparison.OrdinalIgnoreCase))
-            return baseDomain;
-        return null; // host on a different domain -> host-only cookie
+        return IsWithin(currentHost, baseDomain) ? baseDomain : null;
     }
 
     /// <summary>Avoid open redirects: allow the same host the user is on (covers the
     /// single-host / no-base-domain case), any host within the configured base
-    /// domain, or a relative path. Everything else falls back to "/".</summary>
-    private static string SafeRedirect(string? rd, string? baseDomain, string? currentHost)
+    /// domain, or a path on this site. Everything else falls back to "/".</summary>
+    public static string SafeRedirect(string? rd, string? baseDomain, string? currentHost)
     {
-        if (string.IsNullOrWhiteSpace(rd)) return "/";
-        if (!Uri.TryCreate(rd, UriKind.Absolute, out var uri))
-            return rd.StartsWith('/') && !rd.StartsWith("//") ? rd : "/";
-        if (uri.Scheme != "http" && uri.Scheme != "https") return "/";
+        // Browsers drop tabs and line breaks inside a URL, so "/<tab>/host" would become "//host": no control characters at all.
+        if (string.IsNullOrWhiteSpace(rd) || rd.Any(char.IsControl)) return "/";
+        // "//host" and "/\host" are addresses on another site, not paths.
+        if (rd[0] == '/') return rd.Length > 1 && rd[1] is '/' or '\\' ? "/" : rd;
+
+        if (!Uri.TryCreate(rd, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return "/";
         var host = uri.Host;
-        if (!string.IsNullOrEmpty(currentHost) && host.Equals(currentHost, StringComparison.OrdinalIgnoreCase))
-            return rd; // back to the same protected host
-        if (!string.IsNullOrEmpty(baseDomain) &&
-            (host.Equals(baseDomain, StringComparison.OrdinalIgnoreCase) ||
-             host.EndsWith("." + baseDomain, StringComparison.OrdinalIgnoreCase)))
-            return rd;
-        return "/";
+        var sameHost = !string.IsNullOrEmpty(currentHost) && host.Equals(currentHost, StringComparison.OrdinalIgnoreCase);
+        var insideBaseDomain = !string.IsNullOrEmpty(baseDomain) && IsWithin(host, baseDomain);
+        // What is sent is the address that was checked, in its canonical form, not the raw text.
+        return sameHost || insideBaseDomain ? uri.AbsoluteUri : "/";
     }
+
+    private static bool IsWithin(string host, string domain) =>
+        host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
 }

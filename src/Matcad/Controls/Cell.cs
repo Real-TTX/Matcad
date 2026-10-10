@@ -12,21 +12,20 @@ public static class Cell
 {
     private static string E(string? s) => WebUtility.HtmlEncode(s ?? "");
 
+    /// <summary>A UTC time that the browser shows in its own time zone (matcad.js); without script it reads as UTC.
+    /// <paramref name="kind"/> is short, datetime or date.</summary>
+    public static IHtmlContent LocalTime(DateTime utc, string kind = "datetime")
+    {
+        var instant = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return new HtmlString($"<time data-local=\"{kind}\" datetime=\"{instant:yyyy-MM-ddTHH:mm:ss}Z\">{instant:yyyy-MM-dd HH:mm} UTC</time>");
+    }
+
     public static IHtmlContent Text(string? value) => new HtmlString(E(value));
 
     public static IHtmlContent Muted(string? value) =>
         new HtmlString($"<span class=\"text-muted\">{E(value)}</span>");
 
-    public static IHtmlContent Raw(string html) => new HtmlString(html);
-
-    public static IHtmlContent Badge(string text, string kind = "muted") =>
-        new HtmlString($"<span class=\"badge badge-{kind}\">{E(text)}</span>");
-
-    /// <summary>A text link.</summary>
-    public static IHtmlContent Link(string href, string text) =>
-        new HtmlString($"<a href=\"{E(href)}\">{E(text)}</a>");
-
-    /// <summary>An external link that opens in a new tab.</summary>
-    public static IHtmlContent ExternalLink(string href, string text) =>
-        new HtmlString($"<a href=\"{E(href)}\" target=\"_blank\" rel=\"noopener\">{E(text)}</a>");
+    /// <summary>A badge; <paramref name="kind"/> is info (default), success, warning, danger or muted.</summary>
+    public static IHtmlContent Badge(string text, string kind = "info") =>
+        new HtmlString($"<span class=\"mat-badge{(kind == "info" ? "" : $" mat-badge--{kind}")}\">{E(text)}</span>");
 }

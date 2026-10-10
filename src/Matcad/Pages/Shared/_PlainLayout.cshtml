@@ -1,0 +1,20 @@
+@using System.Reflection
+@{
+    var version = Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
+}
+<!DOCTYPE html>
+<html lang="en" data-app-version="@version">
+<head>
+    <partial name="_Head" />
+    <title>@ViewData["Title"] · Matcad</title>
+</head>
+<body class="is-plain">
+    <partial name="_ConnectionBanner" />
+    <main class="plain-main">
+        @RenderBody()
+    </main>
+    <script src="~/js/matcad.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

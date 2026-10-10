@@ -18,7 +18,7 @@ public class DataTable
     // Toolbar state (bound to the query string so it round-trips on GET).
     public string SearchParam { get; set; } = "q";
     public string? SearchValue { get; set; }
-    public string SearchPlaceholder { get; set; } = "Suchen...";
+    public string SearchPlaceholder { get; set; } = "Search...";
     public List<TableFilter> Filters { get; set; } = new();
 
     // Sorting.
@@ -33,6 +33,10 @@ public class DataTable
     public int TotalPages { get; set; } = 1;
 
     public string EmptyText { get; set; } = "No entries.";
+
+    /// <summary>When set, the table ends with a primary "new" button linking here.</summary>
+    public string? NewUrl { get; set; }
+    public string NewLabel { get; set; } = "New";
 
     /// <summary>Extra query params (besides search/filter/sort) to preserve in links.</summary>
     public Dictionary<string, string?> ExtraQuery { get; set; } = new();
@@ -78,6 +82,8 @@ public class DataColumn
     public string Header { get; set; } = "";
     /// <summary>When set, the header becomes a sort link using this key.</summary>
     public string? SortKey { get; set; }
+    /// <summary>Secondary column: hidden on phones.</summary>
+    public bool HideOnSmall { get; set; }
     public DataColumn() { }
     public DataColumn(string header, string? sortKey = null) { Header = header; SortKey = sortKey; }
 }

@@ -1,114 +1,43 @@
 @page
-@using Matcad.Config
 @model Matcad.Pages.Providers.EditModel
 @{
     ViewData["Title"] = Model.IsNew ? "Create provider" : "Edit provider";
 }
 <div class="card">
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    @if (Model.TestResult is { } tr)
-    {
-        var cls = tr.Ok == true ? "alert-success" : (tr.Ok == false ? "alert-error" : "alert-warn");
-        <div class="alert @cls">@tr.Message</div>
-    }
-    <form method="post">
-        <input type="hidden" asp-for="Id" />
-        <div class="form-group">
-            <label for="Name">Name</label>
-            <input id="Name" asp-for="Name" autofocus placeholder="e.g. Netcup production" />
-        </div>
-        <div class="form-group">
-            <label for="Type">Type</label>
-            <select id="Type" asp-for="Type" onchange="matcadToggleCreds(this.value)">
-                @foreach (var t in ProviderTypes.All)
-                {
-                    <option value="@t.Id">@t.DisplayName</option>
-                }
-                <option value="@ProviderTypes.CustomId">Custom (any compiled module)...</option>
-            </select>
-        </div>
-
-        @foreach (var t in ProviderTypes.All)
+    <div class="card__body">
+        @if (Model.Error != null)
         {
-            <div class="cred-block" data-cred-type="@t.Id" style="@(t.Id == Model.Type ? "" : "display:none")">
-                <h2>Credentials · @t.DisplayName</h2>
-                @foreach (var field in t.Fields)
-                {
-                    var key = $"{t.Id}:{field.Key}";
-                    Model.CredentialValues.TryGetValue(key, out var val);
-                    <div class="form-group">
-                        <label for="cred_@(t.Id)_@(field.Key)">@field.Label</label>
-                        <input id="cred_@(t.Id)_@(field.Key)" name="cred_@(t.Id)_@(field.Key)"
-                               type="@(field.Secret ? "password" : "text")" value="@val"
-                               autocomplete="off" />
-                    </div>
-                }
-            </div>
+            <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
         }
+        @if (Model.TestResult is { } test)
+        {
+            var kind = test.Ok == true ? "success" : (test.Ok == false ? "error" : "warning");
+            <div class="alert alert--@kind"><icon name="@(test.Ok == true ? "check-circle" : test.Ok == false ? "x-circle" : "info")" /><span>@test.Message</span></div>
+        }
+        <form method="post" class="mat-form">
+            <input type="hidden" asp-for="Id" />
+            <mat-field label="Name" asp-for="Name">
+                <input asp-for="Name" class="mat-input" placeholder="e.g. Netcup production" autofocus />
+            </mat-field>
 
-        <div class="cred-block" data-cred-type="@ProviderTypes.CustomId"
-             style="@(Model.Type == ProviderTypes.CustomId ? "" : "display:none")">
-            <h2>Custom provider</h2>
-            <div class="form-group">
-                <label asp-for="CustomModule">Caddy DNS module name</label>
-                <input asp-for="CustomModule" placeholder="e.g. cloudflare, route53, hetzner" autocomplete="off" />
-                <div class="hint">The module must be compiled in (see <code>CADDY_DNS_MODULES</code> in .env).</div>
-            </div>
-            <label>Credentials</label>
-            <div class="table-wrap">
-                <table class="data" id="custom-creds">
-                    <thead><tr><th>Key</th><th>Value</th><th style="width:1%"></th></tr></thead>
-                    <tbody>
-                        @foreach (var kv in Model.CustomCredentials)
-                        {
-                            <tr>
-                                <td><input name="CustomKeys" value="@kv.Key" autocomplete="off" /></td>
-                                <td><input name="CustomValues" value="@kv.Value" autocomplete="off" /></td>
-                                <td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('tr').remove()"><icon name="delete" /></button></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <div class="list-actions">
-                <button type="button" class="btn" onclick="matcadAddCred()"><icon name="add" /> Add credential</button>
-            </div>
-        </div>
-
-        <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
-            <button type="submit" class="btn" asp-page-handler="Test" formnovalidate><icon name="check" /> Test credentials</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
-            @if (!Model.IsNew)
+            <partial name="Controls/_ProviderFields" model="@(new ProviderFieldsModel
             {
-                <span class="spacer"></span>
-                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Delete this provider?">
-                    <icon name="delete" /> Delete
-                </button>
-            }
-        </div>
-    </form>
-</div>
+                TypeFieldName = nameof(Model.Type), Type = Model.Type, CustomModule = Model.CustomModule,
+                Values = Model.CredentialValues, CustomCredentials = Model.CustomCredentials
+            })" />
 
-@section Scripts {
-    <script>
-        function matcadToggleCreds(type) {
-            document.querySelectorAll('.cred-block').forEach(b => {
-                b.style.display = b.getAttribute('data-cred-type') === type ? '' : 'none';
-            });
-        }
-        function matcadAddCred() {
-            const tbody = document.querySelector('#custom-creds tbody');
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                '<td><input name="CustomKeys" autocomplete="off" /></td>' +
-                '<td><input name="CustomValues" autocomplete="off" /></td>' +
-                '<td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest(\'tr\').remove()">✕</button></td>';
-            tbody.appendChild(tr);
-        }
-    </script>
-}
+            <mat-form-buttons>
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                <button type="submit" class="mat-btn" asp-page-handler="Test" formnovalidate><icon name="check-circle" /><span>Test credentials</span></button>
+                <a class="mat-btn mat-btn--ghost" asp-page="Index"><icon name="back" /><span>Back</span></a>
+                @if (!Model.IsNew)
+                {
+                    <span class="mat-buttons__spacer"></span>
+                    <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete this provider?">
+                        <icon name="trash" /><span>Delete</span>
+                    </button>
+                }
+            </mat-form-buttons>
+        </form>
+    </div>
+</div>

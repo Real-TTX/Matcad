@@ -1,0 +1,50 @@
+@page
+@model Matcad.Pages.Account.ProfileModel
+@{
+    ViewData["Title"] = "Account";
+}
+
+@if (Model.MustChange)
+{
+    <div class="alert alert--warning"><icon name="alert" /><span>Please set your own password before you go on.</span></div>
+}
+@if (Model.Error != null)
+{
+    <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
+}
+
+<div class="card" style="max-width:560px">
+    <div class="card__header"><icon name="user" /><span>Your account</span></div>
+    <div class="card__body">
+        <form method="post" class="mat-form">
+            <mat-field label="Username" asp-for="Username" hint="Signs you in, like your e-mail address.">
+                <input asp-for="Username" class="mat-input" autocomplete="username" />
+            </mat-field>
+            <mat-field label="E-mail address" asp-for="Email" hint="Optional.">
+                <input asp-for="Email" type="email" class="mat-input" autocomplete="email" />
+            </mat-field>
+
+            <div class="settings-section" style="margin:0;padding:0;border:0"><h2>Password</h2></div>
+            @if (!Model.MustChange)
+            {
+                <mat-field label="Current password" asp-for="CurrentPassword">
+                    <input asp-for="CurrentPassword" type="password" class="mat-input" autocomplete="current-password" />
+                </mat-field>
+            }
+            <mat-field label="New password" asp-for="NewPassword" hint="At least 8 characters. Leave empty to keep the current one.">
+                <input asp-for="NewPassword" type="password" class="mat-input" autocomplete="new-password" />
+            </mat-field>
+            <mat-field label="Confirm new password" asp-for="ConfirmPassword">
+                <input asp-for="ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" />
+            </mat-field>
+
+            <mat-form-buttons>
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                @if (!Model.MustChange)
+                {
+                    <a class="mat-btn mat-btn--ghost" asp-page="/Index"><icon name="back" /><span>Back</span></a>
+                }
+            </mat-form-buttons>
+        </form>
+    </div>
+</div>

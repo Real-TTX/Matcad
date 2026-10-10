@@ -39,6 +39,8 @@ public class IndexModel : PageModel
             Id = "auths",
             SearchValue = Q,
             SearchPlaceholder = "Search authentications...",
+            NewUrl = "/Authentications/Edit",
+            NewLabel = "New authentication",
             Sort = sort,
             Dir = Dir ?? "asc",
             Filters =
@@ -53,12 +55,12 @@ public class IndexModel : PageModel
             {
                 new DataColumn("Name", "name"),
                 new DataColumn("Type", "type"),
-                new DataColumn("Details"),
-                new DataColumn("Used by")
+                new DataColumn("Details") { HideOnSmall = true },
+                new DataColumn("Used by") { HideOnSmall = true }
             },
             Rows = items.Select(a => new DataRow(
                 Cell.Text(a.Name),
-                a.Type == AuthType.BasicAuth ? Cell.Badge("Basic Auth", "info") : Cell.Badge("Matcad", "warn"),
+                a.Type == AuthType.BasicAuth ? Cell.Badge("Basic Auth") : Cell.Badge("Matcad", "warning"),
                 Cell.Muted(a.Type == AuthType.Matcad ? $"{a.Users.Count} users · portal" : $"{a.Users.Count} users"),
                 Cell.Muted($"{_store.Routes.Count(r => r.AuthenticationId == a.Id)} route(s)")
             ) { EditUrl = $"/Authentications/Edit?id={a.Id}" }).ToList()

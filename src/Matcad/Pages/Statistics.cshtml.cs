@@ -72,13 +72,17 @@ public class StatisticsModel : PageModel
             _ => q
         };
 
-        Total = await q.LongCountAsync();
+        // One pass over the filtered rows gives the total and the split by status class.
+        var byClass = await q.GroupBy(r => r.Status / 100)
+            .Select(g => new { StatusClass = g.Key, Count = g.Count() })
+            .ToListAsync();
+        Total = byClass.Sum(x => (long)x.Count);
         if (Total == 0) return;
 
-        C2xx = await q.CountAsync(r => r.Status >= 200 && r.Status < 300);
-        C3xx = await q.CountAsync(r => r.Status >= 300 && r.Status < 400);
-        C4xx = await q.CountAsync(r => r.Status >= 400 && r.Status < 500);
-        C5xx = await q.CountAsync(r => r.Status >= 500);
+        C2xx = byClass.Where(x => x.StatusClass == 2).Sum(x => x.Count);
+        C3xx = byClass.Where(x => x.StatusClass == 3).Sum(x => x.Count);
+        C4xx = byClass.Where(x => x.StatusClass == 4).Sum(x => x.Count);
+        C5xx = byClass.Where(x => x.StatusClass >= 5).Sum(x => x.Count);
         Errors = C4xx + C5xx;
         AvgDurationMs = await q.Select(r => (double?)r.DurationMs).AverageAsync() ?? 0;
         DistinctHosts = await q.Select(r => r.Host).Distinct().CountAsync();

@@ -3,41 +3,43 @@
 @{
     ViewData["Title"] = Model.IsNew ? "Create user" : "Edit user";
 }
-<div class="card">
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    <form method="post">
-        <input type="hidden" asp-for="Id" />
-        <div class="form-group">
-            <label asp-for="Username">Username</label>
-            <input asp-for="Username" autofocus autocomplete="off" />
-        </div>
-        <div class="form-group">
-            <label asp-for="Password">Password</label>
-            <input asp-for="Password" type="password" autocomplete="new-password"
-                   placeholder="@(Model.IsNew ? "" : "leave empty = unchanged")" />
-        </div>
-        <div class="form-group" style="max-width:220px">
-            <label asp-for="Role">Role</label>
-            <select asp-for="Role">
-                <option value="User">User</option>
-                <option value="Admin">Admin</option>
-            </select>
-        </div>
+<div class="card" style="max-width:640px">
+    <div class="card__body">
+        @if (Model.Error != null)
+        {
+            <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
+        }
+        <form method="post" class="mat-form">
+            <input type="hidden" asp-for="Id" />
+            <mat-field label="Username" asp-for="Username" hint="Signs the user in, like the e-mail address.">
+                <input asp-for="Username" class="mat-input" autofocus autocomplete="off" autocapitalize="none" spellcheck="false" />
+            </mat-field>
+            <mat-field label="E-mail address" asp-for="Email" hint="Optional.">
+                <input asp-for="Email" type="email" class="mat-input" autocomplete="off" />
+            </mat-field>
+            <mat-field label="Password" asp-for="Password" hint="At least 8 characters.">
+                <input asp-for="Password" type="password" class="mat-input" autocomplete="new-password"
+                       placeholder="@(Model.IsNew ? "" : "leave empty = unchanged")" />
+            </mat-field>
+            <label class="mat-switch"><input type="checkbox" asp-for="MustChangePassword" /><span>Must choose a new password at the next sign-in</span></label>
+            <mat-field label="Role" asp-for="Role">
+                <select asp-for="Role" class="mat-select">
+                    <option value="User">User</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </mat-field>
 
-        <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
-            @if (!Model.IsNew)
-            {
-                <span class="spacer"></span>
-                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Delete this user?">
-                    <icon name="delete" /> Delete
-                </button>
-            }
-        </div>
-    </form>
+            <mat-form-buttons>
+                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                <a class="mat-btn mat-btn--ghost" asp-page="Index"><icon name="back" /><span>Back</span></a>
+                @if (!Model.IsNew)
+                {
+                    <span class="mat-buttons__spacer"></span>
+                    <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete this user?">
+                        <icon name="trash" /><span>Delete</span>
+                    </button>
+                }
+            </mat-form-buttons>
+        </form>
+    </div>
 </div>

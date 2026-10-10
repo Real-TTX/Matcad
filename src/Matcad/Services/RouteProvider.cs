@@ -56,7 +56,7 @@ public class RouteProvider
     {
         var byHost = new Dictionary<string, RouteConfig>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in _store.Routes)
-            if (!string.IsNullOrWhiteSpace(r.Host)) byHost[r.Host] = r;
+            if (r.ListenPort is not > 0 && !string.IsNullOrWhiteSpace(r.Host)) byHost[r.Host] = r;
 
         var system = SystemRoute();
         if (system != null && !byHost.ContainsKey(system.Host)) byHost[system.Host] = system;
@@ -66,7 +66,7 @@ public class RouteProvider
 
         var result = byHost.Values.ToList();
         // Port-bound routes are keyed by their listen port, not a host, so they're not in byHost.
-        result.AddRange(_store.Routes.Where(r => r.ListenPort > 0 && string.IsNullOrWhiteSpace(r.Host)));
+        result.AddRange(_store.Routes.Where(r => r.ListenPort > 0));
         return result;
     }
 }

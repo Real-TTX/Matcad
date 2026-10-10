@@ -76,11 +76,7 @@ public static class MatcadApi
         {
             if (string.IsNullOrWhiteSpace(inp.Name)) return Results.BadRequest(new { error = "Name is required." });
             if (string.IsNullOrWhiteSpace(inp.Type)) return Results.BadRequest(new { error = "Type (Caddy DNS module, e.g. netcup) is required." });
-            var p = s.Providers.FirstOrDefault(x => x.Id == inp.Id) ?? new ProviderConfig();
-            p.Id = inp.Id ?? 0;
-            p.Name = inp.Name.Trim();
-            p.Type = inp.Type.Trim();
-            p.Credentials = inp.Credentials ?? new();
+            var p = new ProviderConfig { Id = inp.Id ?? 0, Name = inp.Name.Trim(), Type = inp.Type.Trim(), Credentials = inp.Credentials ?? new() };
             s.UpsertProvider(p, null);
             return Results.Ok(ToProviderDto(p));
         });
@@ -109,23 +105,27 @@ public static class MatcadApi
         {
             if (string.IsNullOrWhiteSpace(inp.Name)) return Results.BadRequest(new { error = "Name is required." });
             if (!Enum.TryParse<AuthType>(inp.Type, ignoreCase: true, out var type)) type = AuthType.BasicAuth;
-            var auth = s.Authentications.FirstOrDefault(x => x.Id == inp.Id) ?? new AuthenticationConfig();
-            var previous = auth.Users.ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
-            auth.Id = inp.Id ?? 0;
-            auth.Name = inp.Name.Trim();
-            auth.Type = type;
+            var existing = inp.Id is > 0 ? s.Authentications.FirstOrDefault(x => x.Id == inp.Id) : null;
+            var previous = (existing?.Users ?? new()).ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
             var users = new List<BasicAuthUser>();
             foreach (var u in inp.Users ?? new())
             {
                 var name = (u.Username ?? "").Trim();
-                if (name.Length == 0) continue;
+                if (name.Length == 0 || users.Any(x => x.Username.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
                 string hash;
-                if (!string.IsNullOrEmpty(u.Password)) hash = BCrypt.Net.BCrypt.HashPassword(u.Password);
+                if (!string.IsNullOrEmpty(u.Password)) hash = PasswordHashing.HashOrKeep(u.Password, previous.GetValueOrDefault(name));
                 else if (previous.TryGetValue(name, out var old)) hash = old; // keep existing when blank
                 else continue; // new user without a password
                 users.Add(new BasicAuthUser { Username = name, PasswordHash = hash });
             }
-            auth.Users = users;
+            // The API does not carry the login-page branding; an update keeps what the UI set.
+            var auth = new AuthenticationConfig
+            {
+                Id = inp.Id is > 0 ? inp.Id.Value : 0, Name = inp.Name.Trim(), Type = type, Users = users,
+                BrandTitle = existing?.BrandTitle ?? "", BrandLogo = existing?.BrandLogo ?? "",
+                BrandLogoLayout = existing?.BrandLogoLayout ?? "left", BrandColor = existing?.BrandColor ?? "",
+                BrandText = existing?.BrandText ?? ""
+            };
             s.UpsertAuthentication(auth, null);
             var (ok, error) = await caddy.ApplyAsync();
             return Results.Ok(new { id = auth.Id, name = auth.Name, type = auth.Type.ToString(), applied = new { ok, error } });
@@ -173,57 +173,21 @@ public static class MatcadApi
         api.MapGet("/routes/manual", (ConfigStore s) => Results.Ok(s.Routes.Select(ToRouteDto)));
         api.MapPost("/routes", async (ConfigStore s, CaddyService caddy, RouteInput inp) =>
         {
-            var listenPort = inp.ListenPort is > 0 ? inp.ListenPort : null;
-            var host = (inp.Host ?? "").Trim().ToLowerInvariant();
-            // Port-bound route: no host matching, so a host is optional. Otherwise a host is required.
-            if (listenPort is null && string.IsNullOrWhiteSpace(host))
-                return Results.BadRequest(new { error = "Host is required." });
-            var wildcard = listenPort is null && inp.Wildcard;
-            long? providerId = inp.ProviderId;
-            if (listenPort is not null)
-            {
-                if (string.IsNullOrWhiteSpace(inp.Upstream))
-                    return Results.BadRequest(new { error = "A port-bound route requires an upstream." });
-                providerId = null;
-            }
-            else if (wildcard)
-            {
-                if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
-                if (host.Count(c => c == '.') < 2)
-                    return Results.BadRequest(new { error = "A wildcard host must include a domain, e.g. *.example.com." });
-                if (!(providerId > 0))
-                    return Results.BadRequest(new { error = "A wildcard route requires a DNS provider (DNS-01 challenge)." });
-            }
-            else
-            {
-                if (host.StartsWith("*."))
-                    return Results.BadRequest(new { error = "A single domain must not start with '*.'. Use the wildcard type instead." });
-                providerId = null;
-            }
-            var redirect = string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase);
-            if (redirect && string.IsNullOrWhiteSpace(inp.FallbackUrl))
-                return Results.BadRequest(new { error = "A redirect route needs a target URL." });
+            // Edit a copy: a rejected request must not leave half-applied changes in the stored route.
+            var route = new RouteConfig { Id = inp.Id is > 0 ? inp.Id.Value : 0 };
+            var error = RouteEditor.Apply(
+                new RouteForm(inp.Host, inp.Wildcard, string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase),
+                    inp.Upstream, inp.InsecureSkipVerify, inp.FallbackUrl, inp.RedirectPermanent, inp.AuthenticationId,
+                    inp.ProviderId, inp.AcmeEmail, inp.Enabled, inp.Name, inp.AllowEmbedding, inp.ListenPort),
+                route);
+            if (error != null) return Results.BadRequest(new { error });
 
-            var route = s.Routes.FirstOrDefault(x => x.Id == inp.Id) ?? new RouteConfig();
-            route.Id = inp.Id ?? 0;
-            route.Name = !string.IsNullOrWhiteSpace(inp.Name) ? inp.Name!.Trim()
-                       : !string.IsNullOrWhiteSpace(host) ? host
-                       : $"port {listenPort}";
-            route.Host = host;
-            route.Wildcard = wildcard;
-            route.ListenPort = listenPort;
-            route.Upstream = redirect || string.IsNullOrWhiteSpace(inp.Upstream) ? null : inp.Upstream!.Trim();
-            route.InsecureSkipVerify = !redirect && inp.InsecureSkipVerify;
-            route.AllowEmbedding = inp.AllowEmbedding;
-            route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(inp.FallbackUrl) ? inp.FallbackUrl!.Trim() : null;
-            route.RedirectPermanent = redirect && inp.RedirectPermanent;
-            route.AuthenticationId = inp.AuthenticationId is > 0 ? inp.AuthenticationId : null;
-            route.ProviderId = providerId is > 0 ? providerId : null;
-            route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(inp.AcmeEmail) ? inp.AcmeEmail!.Trim() : null;
-            route.Enabled = inp.Enabled;
-            s.UpsertRoute(route, null);
-            var (ok, error) = await caddy.ApplyAsync();
-            return Results.Ok(new { route = ToRouteDto(route), applied = new { ok, error } });
+            // A host (or a port) belongs to one route. Without an id the call means "make sure this route exists",
+            // so it updates the route that already has the host; with an id it must not take over another host.
+            if (!s.TryUpsertRoute(route, null, updateSameTarget: true))
+                return Results.Conflict(new { error = "Another route already uses this host or port." });
+            var (ok, applyError) = await caddy.ApplyAsync();
+            return Results.Ok(new { route = ToRouteDto(route), applied = new { ok, error = applyError } });
         });
         api.MapDelete("/routes/{id:long}", async (ConfigStore s, CaddyService caddy, long id) =>
         {
@@ -267,10 +231,17 @@ public static class MatcadApi
         api.MapPut("/settings", async (ConfigStore s, CaddyService caddy, SettingsInput inp) =>
         {
             var x = s.Settings;
-            if (inp.BaseDomain != null) x.BaseDomain = inp.BaseDomain.Trim();
+            // Check everything first, so a rejected call changes nothing.
+            foreach (var domain in new[] { inp.BaseDomain, inp.MatcadHost })
+                if (!string.IsNullOrWhiteSpace(domain) && !RouteEditor.IsHostName(domain.Trim()))
+                    return Results.BadRequest(new { error = "Domains must be plain names like example.com (no http://, path or port)." });
+            if (inp.PortalMode != null && inp.PortalMode.Trim().ToLowerInvariant() is not ("inline" or "redirect" or "unauthorized"))
+                return Results.BadRequest(new { error = "PortalMode must be inline, redirect or unauthorized." });
+
+            if (inp.BaseDomain != null) x.BaseDomain = inp.BaseDomain.Trim().ToLowerInvariant();
             if (inp.AcmeEmail != null) x.AcmeEmail = inp.AcmeEmail.Trim();
-            if (inp.MatcadHost != null) x.MatcadHost = inp.MatcadHost.Trim();
-            if (inp.PortalMode != null) x.PortalMode = inp.PortalMode.Trim();
+            if (inp.MatcadHost != null) x.MatcadHost = inp.MatcadHost.Trim().ToLowerInvariant();
+            if (inp.PortalMode != null) x.PortalMode = inp.PortalMode.Trim().ToLowerInvariant();
             if (inp.AcmePropagationDelaySeconds.HasValue) x.AcmePropagationDelaySeconds = inp.AcmePropagationDelaySeconds.Value;
             if (inp.AcmePropagationTimeoutSeconds.HasValue) x.AcmePropagationTimeoutSeconds = inp.AcmePropagationTimeoutSeconds.Value;
             s.SaveSettings(x);

@@ -1,0 +1,62 @@
+@model Matcad.Controls.ProviderFieldsModel
+@using Matcad.Config
+@* Type picker plus the credential fields of the chosen type. Behaviour lives in matcad.js (data-cred-select, data-add-cred). *@
+<mat-field label="Type">
+    <select name="@Model.TypeFieldName" id="@Model.TypeFieldName" class="mat-select" data-cred-select>
+        @foreach (var t in ProviderTypes.All)
+        {
+            <option value="@t.Id" selected="@(t.Id == Model.Type)">@t.DisplayName</option>
+        }
+        <option value="@ProviderTypes.CustomId" selected="@(Model.Type == ProviderTypes.CustomId)">Custom (any compiled module)...</option>
+    </select>
+</mat-field>
+
+@foreach (var t in ProviderTypes.All)
+{
+    <div class="cred-block mat-form" data-cred-type="@t.Id" hidden="@(t.Id != Model.Type)">
+        @foreach (var field in t.Fields)
+        {
+            Model.Values.TryGetValue($"{t.Id}:{field.Key}", out var value);
+            <mat-field label="@field.Label">
+                <input id="cred_@(t.Id)_@(field.Key)" name="cred_@(t.Id)_@(field.Key)" class="mat-input"
+                       type="@(field.Secret ? "password" : "text")" value="@value" autocomplete="off" spellcheck="false" />
+            </mat-field>
+        }
+    </div>
+}
+
+<div class="cred-block mat-form" data-cred-type="@ProviderTypes.CustomId" hidden="@(Model.Type != ProviderTypes.CustomId)">
+    <mat-field label="Caddy DNS module name" hint="The module must be compiled in (see CADDY_DNS_MODULES in .env).">
+        <input name="CustomModule" value="@Model.CustomModule" class="mat-input" placeholder="e.g. cloudflare, route53" autocomplete="off" spellcheck="false" />
+    </mat-field>
+    <div>
+        <div class="mat-label" style="margin-bottom:6px">Credentials</div>
+        <div class="mat-table">
+            <div class="mat-table__scroll">
+                <table class="data" id="custom-creds">
+                    <thead><tr><th>Key</th><th>Value</th><th class="actions"></th></tr></thead>
+                    <tbody>
+                        @foreach (var kv in Model.CustomCredentials)
+                        {
+                            <tr>
+                                <td><input name="CustomKeys" value="@kv.Key" class="mat-input" autocomplete="off" spellcheck="false" /></td>
+                                <td><input name="CustomValues" value="@kv.Value" class="mat-input" autocomplete="off" spellcheck="false" /></td>
+                                <td class="actions"><button type="button" class="mat-btn mat-btn--icon mat-btn--quiet" data-remove-row aria-label="Remove"><icon name="trash" /></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="mat-table__actions">
+                <button type="button" class="mat-btn mat-btn--sm" data-add-row="#custom-creds tbody" data-template="cred-row-template"><icon name="plus" /><span>Add credential</span></button>
+            </div>
+        </div>
+    </div>
+    <template id="cred-row-template">
+        <tr>
+            <td><input name="CustomKeys" class="mat-input" autocomplete="off" spellcheck="false" /></td>
+            <td><input name="CustomValues" class="mat-input" autocomplete="off" spellcheck="false" /></td>
+            <td class="actions"><button type="button" class="mat-btn mat-btn--icon mat-btn--quiet" data-remove-row aria-label="Remove"><icon name="trash" /></button></td>
+        </tr>
+    </template>
+</div>

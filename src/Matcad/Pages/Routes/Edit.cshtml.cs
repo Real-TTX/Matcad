@@ -28,7 +28,7 @@ public class EditModel : PageModel
     [BindProperty] public bool InsecureSkipVerify { get; set; }
     [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
-    [BindProperty] public bool RedirectPermanent { get; set; }
+    [BindProperty] public bool PermanentRedirect { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
     [BindProperty] public string? AcmeEmail { get; set; }
@@ -36,6 +36,8 @@ public class EditModel : PageModel
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
+    /// <summary>The port of a port-bound route. Those are managed through the API; here they can only be deleted.</summary>
+    public int? PortBinding { get; private set; }
 
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
@@ -54,9 +56,10 @@ public class EditModel : PageModel
             var r = _store.Routes.FirstOrDefault(x => x.Id == Id);
             if (r == null) return RedirectToPage("Index");
             Name = r.Name; Host = r.Host;
+            PortBinding = r.ListenPort > 0 ? r.ListenPort : null;
             RouteType = r.Wildcard ? "wildcard" : "single";
             Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
-            FallbackUrl = r.FallbackUrl; RedirectPermanent = r.RedirectPermanent;
+            FallbackUrl = r.FallbackUrl; PermanentRedirect = r.RedirectPermanent;
             // A route with a redirect target and no upstream is a redirect.
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
@@ -74,62 +77,23 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var host = (Host ?? "").Trim().ToLowerInvariant();
-        var wildcard = RouteType == "wildcard";
+        var existing = IsNew ? null : _store.Routes.FirstOrDefault(x => x.Id == Id);
+        if (!IsNew && existing == null) return RedirectToPage("Index");
+        if (existing?.ListenPort > 0) return Fail("Port bindings are managed through the API. Here they can only be deleted.", existing.ListenPort);
 
-        IActionResult Fail(string message)
-        {
-            Error = message;
-            BuildOptions();
-            return Page();
-        }
-
-        if (string.IsNullOrWhiteSpace(host))
-            return Fail("Host is required.");
-
-        if (wildcard)
-        {
-            // Normalize to the *.domain form and enforce a DNS provider (wildcards
-            // can only be validated via DNS-01, so a provider is mandatory).
-            if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
-            if (host.Count(c => c == '.') < 2)
-                return Fail("A wildcard host must include a domain, e.g. *.example.com.");
-            if (ProviderId is not > 0)
-                return Fail("A wildcard route requires a DNS provider (DNS-01 challenge).");
-        }
-        else
-        {
-            if (host.StartsWith("*."))
-                return Fail("A single domain must not start with '*.'. Choose the 'Wildcard' type instead.");
-            ProviderId = null; // not applicable for single domains
-        }
-
-        var redirect = Target == "redirect";
-        if (redirect && string.IsNullOrWhiteSpace(FallbackUrl))
-            return Fail("A redirect route needs a target URL.");
-
-        var route = _store.Routes.FirstOrDefault(x => x.Id == Id) ?? new RouteConfig();
-        route.Id = Id ?? 0;
-        route.Name = string.IsNullOrWhiteSpace(Name) ? host : Name.Trim();
-        route.Host = host;
-        route.Wildcard = wildcard;
-        // Proxy and redirect are mutually exclusive.
-        route.Upstream = redirect || string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
-        route.InsecureSkipVerify = !redirect && InsecureSkipVerify;
-        route.AllowEmbedding = AllowEmbedding;
-        route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(FallbackUrl) ? FallbackUrl!.Trim() : null;
-        route.RedirectPermanent = redirect && RedirectPermanent;
-        route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
-        route.ProviderId = ProviderId is > 0 ? ProviderId : null;
-        // Per-domain ACME email only applies to wildcard (DNS-01) certificates.
-        route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(AcmeEmail) ? AcmeEmail.Trim() : null;
-        route.Enabled = Enabled;
-        _store.UpsertRoute(route, User.GetUserId());
+        // Work on a copy: a rejected form must not leave half-applied changes in the stored route.
+        var route = new RouteConfig { Id = existing?.Id ?? 0 };
+        var form = new RouteForm(Host, RouteType == "wildcard", Target == "redirect", Upstream, InsecureSkipVerify,
+            FallbackUrl, PermanentRedirect, AuthenticationId, ProviderId, AcmeEmail, Enabled, Name, AllowEmbedding, ListenPort: null);
+        var error = RouteEditor.Apply(form, route);
+        if (error != null) return Fail(error);
+        if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))
+            return Fail($"A route for '{route.Host}' already exists.");
 
         var warnings = new List<string>();
 
         // Non-blocking heads-up when a single host isn't covered by any wildcard.
-        if (!wildcard)
+        if (!route.Wildcard)
         {
             var coverage = CertificatePlanner.ForRoute(route, _routes.All());
             if (coverage.Kind == CertificatePlanner.CertKind.Individual)
@@ -151,6 +115,14 @@ public class EditModel : PageModel
 
         await ApplyAndFlash($"Route '{route.Host}' saved.");
         return RedirectToPage("Index");
+    }
+
+    private IActionResult Fail(string message, int? portBinding = null)
+    {
+        Error = message;
+        PortBinding = portBinding;
+        BuildOptions();
+        return Page();
     }
 
     private static string ParentOf(string host) =>

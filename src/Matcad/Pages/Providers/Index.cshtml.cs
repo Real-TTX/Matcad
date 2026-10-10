@@ -38,17 +38,19 @@ public class IndexModel : PageModel
             Id = "providers",
             SearchValue = Q,
             SearchPlaceholder = "Search providers...",
+            NewUrl = "/Providers/Edit",
+            NewLabel = "New provider",
             Sort = sort,
             Dir = Dir ?? "asc",
             Columns =
             {
                 new DataColumn("Name", "name"),
                 new DataColumn("Type", "type"),
-                new DataColumn("Credentials")
+                new DataColumn("Credentials") { HideOnSmall = true }
             },
             Rows = items.Select(p => new DataRow(
                 Cell.Text(p.Name),
-                Cell.Badge(ProviderTypes.DisplayName(p.Type), "info"),
+                Cell.Badge(ProviderTypes.DisplayName(p.Type)),
                 Cell.Muted(string.Join(", ", p.Credentials.Keys))
             ) { EditUrl = $"/Providers/Edit?id={p.Id}" }).ToList()
         };

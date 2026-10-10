@@ -1,37 +1,42 @@
 @page
+@using Matcad.Config
 @model Matcad.Pages.Routes.IndexModel
 @{
     ViewData["Title"] = "Routes";
 }
-<div class="card">
-    <form method="get" class="toolbar">
-        <div class="search">
-            <icon name="search" />
-            <input type="search" name="Q" value="@Model.Q" placeholder="Search routes..." />
-        </div>
-        <select name="Status" onchange="this.form.submit()">
-            <option value="" selected="@(string.IsNullOrEmpty(Model.Status))">All</option>
-            <option value="enabled" selected="@(Model.Status == "enabled")">Active</option>
-            <option value="disabled" selected="@(Model.Status == "disabled")">Inactive</option>
-        </select>
-        <button type="submit" class="btn"><icon name="search" /> Search</button>
-    </form>
+<div class="mat-table">
+    <div class="mat-table__toolbar">
+        <form method="get" class="js-autosubmit">
+            <div class="search">
+                <icon name="search" />
+                <input type="search" name="Q" value="@Model.Q" class="mat-input" placeholder="Search routes..." aria-label="Search routes" enterkeyhint="search" />
+            </div>
+            <div class="toolbar-field">
+                <label for="route-status">Status</label>
+                <select id="route-status" name="Status" class="mat-select">
+                    <option value="" selected="@(string.IsNullOrEmpty(Model.Status))">All</option>
+                    <option value="enabled" selected="@(Model.Status == "enabled")">Active</option>
+                    <option value="disabled" selected="@(Model.Status == "disabled")">Inactive</option>
+                </select>
+            </div>
+        </form>
+    </div>
 
-    <div class="table-wrap">
+    <div class="mat-table__scroll">
         <table class="route-table">
             <thead>
                 <tr>
                     <th>Host</th>
-                    <th>Target</th>
-                    <th>Certificate</th>
-                    <th>Auth</th>
+                    <th class="hide-sm">Target</th>
+                    <th class="hide-sm">Certificate</th>
+                    <th class="hide-sm">Auth</th>
                     <th>Status</th>
                     <th class="c-actions"></th>
                 </tr>
             </thead>
             @if (Model.Groups.Count == 0)
             {
-                <tbody><tr><td colspan="6" class="empty">No routes found.</td></tr></tbody>
+                <tbody><tr><td colspan="6" class="empty-state">No routes found.</td></tr></tbody>
             }
             @foreach (var group in Model.Groups)
             {
@@ -45,12 +50,12 @@
                     @foreach (var r in group.Routes)
                     {
                         var label = Model.SubLabel(r.Host);
-                        var apex = label == "@";
                         var authName = Model.AuthName(r);
+                        var cert = Model.Cert(r);
                         <tr class="child @(r.Enabled ? "" : "route-off")">
                             <td class="c-name">
                                 <span class="branch">↳</span>
-                                @if (apex)
+                                @if (label == "@")
                                 {
                                     <span class="apex">(root)</span>
                                 }
@@ -60,18 +65,18 @@
                                 }
                                 @if (r.Wildcard)
                                 {
-                                    <span class="badge badge-warn">Wildcard</span>
+                                    <span class="mat-badge mat-badge--warning">Wildcard</span>
                                 }
                                 @if (r.Source == "system")
                                 {
-                                    <span class="badge badge-warn" title="Matcad self-exposure">System</span>
+                                    <span class="mat-badge mat-badge--warning" title="Matcad self-exposure">System</span>
                                 }
                                 else if (r.Source == "docker")
                                 {
-                                    <span class="badge badge-info" title="From Docker container @r.SourceDetail">Docker</span>
+                                    <span class="mat-badge" title="From Docker container @r.SourceDetail">Docker</span>
                                 }
                             </td>
-                            <td class="rtarget">
+                            <td class="rtarget hide-sm">
                                 @if (!string.IsNullOrEmpty(r.Upstream))
                                 {
                                     @r.Upstream
@@ -79,37 +84,34 @@
                                 else if (!string.IsNullOrEmpty(r.FallbackUrl))
                                 {
                                     <text>↪ @r.FallbackUrl</text>
-                                    <span class="badge badge-muted" title="Redirect">@(r.RedirectPermanent ? "301" : "302")</span>
+                                    <span class="mat-badge mat-badge--muted" title="Redirect">@(r.RedirectPermanent ? "301" : "302")</span>
                                 }
                                 else
                                 {
                                     <text>-</text>
                                 }
                             </td>
-                            <td>
-                                @{
-                                    var cert = Model.Cert(r);
-                                }
+                            <td class="hide-sm">
                                 @switch (cert.Kind)
                                 {
-                                    case Matcad.Config.CertificatePlanner.CertKind.Wildcard:
-                                        <span class="badge badge-success" title="Wildcard certificate">🛡 @cert.Subject</span>
+                                    case CertificatePlanner.CertKind.Wildcard:
+                                        <span class="mat-badge mat-badge--success" title="Wildcard certificate"><icon name="shield" /> @cert.Subject</span>
                                         break;
-                                    case Matcad.Config.CertificatePlanner.CertKind.Covered:
-                                        <span class="badge badge-muted" title="Covered by wildcard certificate">🛡 @cert.Subject</span>
+                                    case CertificatePlanner.CertKind.Covered:
+                                        <span class="mat-badge mat-badge--muted" title="Covered by a wildcard certificate"><icon name="shield" /> @cert.Subject</span>
                                         break;
-                                    case Matcad.Config.CertificatePlanner.CertKind.Internal:
-                                        <span class="badge badge-muted" title="Caddy internal CA (localhost/IP)">internal</span>
+                                    case CertificatePlanner.CertKind.Internal:
+                                        <span class="mat-badge mat-badge--muted" title="Caddy internal CA (localhost/IP)">internal</span>
                                         break;
                                     default:
-                                        <span class="badge badge-warn" title="Would request its own individual certificate">⚠ Individual</span>
+                                        <span class="mat-badge mat-badge--warning" title="Would request its own individual certificate"><icon name="alert" /> Individual</span>
                                         break;
                                 }
                             </td>
-                            <td>
+                            <td class="hide-sm">
                                 @if (authName != null)
                                 {
-                                    <span class="badge badge-info">@authName</span>
+                                    <span class="mat-badge">@authName</span>
                                 }
                                 else
                                 {
@@ -119,25 +121,25 @@
                             <td>
                                 @if (r.Enabled)
                                 {
-                                    <span><span class="dot dot-ok"></span> Active</span>
+                                    <span class="pill pill--online">Active</span>
                                 }
                                 else
                                 {
-                                    <span><span class="dot dot-off"></span> Inactive</span>
+                                    <span class="pill pill--unknown">Inactive</span>
                                 }
                             </td>
                             <td class="c-actions">
                                 @if (!r.IsDerived)
                                 {
-                                    <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Edit"><icon name="edit" /></a>
+                                    <a class="mat-btn mat-btn--icon mat-btn--sm mat-btn--ghost" asp-page="Edit" asp-route-id="@r.Id" title="Edit" aria-label="Edit @r.Host"><icon name="edit" /></a>
                                 }
                             </td>
                         </tr>
                     }
                     <tr class="child add-sub">
                         <td colspan="6">
-                            <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-sub="@group.BaseDomain">
-                                <icon name="add" /> Add subdomain
+                            <a class="mat-btn mat-btn--sm mat-btn--quiet" asp-page="Edit" asp-route-sub="@group.BaseDomain">
+                                <icon name="plus" /><span>Add subdomain</span>
                             </a>
                         </td>
                     </tr>
@@ -146,27 +148,46 @@
         </table>
     </div>
 
-    @if (Model.PortRoutes.Count > 0)
-    {
-        <h2 class="section-title">Port bindings</h2>
-        <p class="section-hint">Reachable directly as <code>http://&lt;host&gt;:&lt;port&gt;</code> (no domain / DNS). Created by matOS to embed apps over a bare hostname or IP.</p>
-        <div class="list-wrap">
-            <table class="list">
+    <div class="mat-table__actions">
+        <a class="mat-btn mat-btn--primary" asp-page="Edit"><icon name="plus" /><span>New route</span></a>
+    </div>
+</div>
+
+@if (Model.PortRoutes.Count > 0)
+{
+    <div class="mat-table">
+        <div class="mat-table__head"><icon name="plug" /><span>Port bindings</span></div>
+        <p class="text-muted" style="margin:0;padding:4px 20px 12px">
+            Reachable directly as <code>http://&lt;host&gt;:&lt;port&gt;</code> (no domain, no DNS). Created through the API, for example to embed apps over a bare hostname or IP.
+        </p>
+        <div class="mat-table__scroll">
+            <table class="route-table">
                 <thead>
-                    <tr><th>Port</th><th>Target</th><th>Embedding</th><th>Status</th><th></th></tr>
+                    <tr><th>Port</th><th>Target</th><th class="hide-sm">Embedding</th><th>Status</th><th class="c-actions"></th></tr>
                 </thead>
-                <tbody>
+                <tbody class="group">
                     @foreach (var r in Model.PortRoutes)
                     {
-                        <tr class="@(r.Enabled ? "" : "route-off")">
+                        <tr class="child @(r.Enabled ? "" : "route-off")">
                             <td class="c-name"><span class="sub">:@r.ListenPort</span></td>
                             <td class="rtarget">@(string.IsNullOrEmpty(r.Upstream) ? "-" : r.Upstream)</td>
-                            <td>@if (r.AllowEmbedding) { <span class="badge badge-info" title="X-Frame-Options / CSP frame-ancestors stripped">Allowed</span> } else { <text>-</text> }</td>
-                            <td>@if (r.Enabled) { <span class="badge badge-ok">Active</span> } else { <span class="badge badge-muted">Inactive</span> }</td>
+                            <td class="hide-sm">
+                                @if (r.AllowEmbedding)
+                                {
+                                    <span class="mat-badge" title="X-Frame-Options and CSP frame-ancestors are removed">Allowed</span>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </td>
+                            <td>
+                                @if (r.Enabled) { <span class="pill pill--online">Active</span> } else { <span class="pill pill--unknown">Inactive</span> }
+                            </td>
                             <td class="c-actions">
                                 @if (!r.IsDerived)
                                 {
-                                    <a class="btn btn-sm btn-ghost" asp-page="Edit" asp-route-id="@r.Id" title="Edit"><icon name="edit" /></a>
+                                    <a class="mat-btn mat-btn--icon mat-btn--sm mat-btn--ghost" asp-page="Edit" asp-route-id="@r.Id" title="Edit" aria-label="Edit port @r.ListenPort"><icon name="edit" /></a>
                                 }
                             </td>
                         </tr>
@@ -174,9 +195,5 @@
                 </tbody>
             </table>
         </div>
-    }
-
-    <div class="list-actions">
-        <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> New route</a>
     </div>
-</div>
+}

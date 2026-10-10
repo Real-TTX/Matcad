@@ -1,216 +1,154 @@
 @page
-@using Matcad.Config
 @model Matcad.Pages.SetupModel
 @{
-    Layout = "_SetupLayout";
+    Layout = "_PlainLayout";
     ViewData["Title"] = "Setup";
     var steps = new[] { ("account", "Account"), ("domains", "Domains & login"), ("provider", "DNS provider"), ("done", "Finish") };
-    var current = Array.FindIndex(steps, s => s.Item1 == Model.Step);
-    if (current < 0) current = 0;
+    var current = Math.Max(0, Array.FindIndex(steps, s => s.Item1 == Model.Step));
 }
 
-<ol class="setup-steps">
-    @for (var i = 0; i < steps.Length; i++)
-    {
-        <li class="@(i == current ? "active" : i < current ? "done" : "")">
-            <span class="n">@(i + 1)</span> <span class="t">@steps[i].Item2</span>
-        </li>
-    }
-</ol>
+<div class="login login--wide">
+    <div class="login__brand">
+        <img src="~/img/logo.svg" alt="" />
+        <span class="name">Welcome to Matcad</span>
+        <span class="tagline">A few quick steps to get going</span>
+    </div>
 
-<div class="card">
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    @if (Model.TestResult is { } tr)
-    {
-        var cls = tr.Ok == true ? "alert-success" : (tr.Ok == false ? "alert-error" : "alert-warn");
-        <div class="alert @cls">@tr.Message</div>
-    }
-
-    @if (Model.Step == "account")
-    {
-        <h2>Secure your account</h2>
-        <p class="hint">Matcad ships with the default login <code>admin / admin</code>. Change it before you go on.</p>
-        <form method="post" asp-page-handler="Account">
-            <div class="form-group">
-                <label asp-for="NewUsername">Username</label>
-                <input asp-for="NewUsername" autocomplete="username" />
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="NewPassword">New password</label>
-                    <input asp-for="NewPassword" type="password" autocomplete="new-password" autofocus />
-                </div>
-                <div class="form-group">
-                    <label asp-for="ConfirmPassword">Confirm password</label>
-                    <input asp-for="ConfirmPassword" type="password" autocomplete="new-password" />
-                </div>
-            </div>
-            <div class="btn-row">
-                <button type="submit" class="btn btn-primary">Continue <icon name="open" /></button>
-            </div>
-        </form>
-    }
-    else if (Model.Step == "domains")
-    {
-        <h2>Domains &amp; login</h2>
-        <form method="post" asp-page-handler="Domains">
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="BaseDomain">Base domain</label>
-                    <input asp-for="BaseDomain" placeholder="example.com" autofocus />
-                    <div class="hint">Parent domain shared by your sites. Enables one Matcad sign-in across subdomains.</div>
-                </div>
-                <div class="form-group">
-                    <label asp-for="MatcadHost">Matcad host <span class="text-muted">(optional)</span></label>
-                    <input asp-for="MatcadHost" placeholder="matcad.example.com" />
-                    <div class="hint">Exposes this UI through Caddy under that domain.</div>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="PortalMode">Login behaviour</label>
-                    <select asp-for="PortalMode">
-                        <option value="inline">Inline - login on the protected site (hides Matcad)</option>
-                        <option value="redirect">Redirect - send users to the Matcad host</option>
-                        <option value="unauthorized">Unauthorized - plain 401, no login form</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional)</span></label>
-                    <input asp-for="AcmeEmail" type="email" placeholder="empty = anonymous (like plain Caddy)" />
-                    <div class="hint">Only for Let's Encrypt expiry notices. Leave empty - certificates still work.</div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" asp-for="SystemRouteEnabled" /> Expose the Matcad UI via the Matcad host (system route)</label>
-            </div>
-            <div class="btn-row">
-                <button type="submit" class="btn btn-primary">Continue <icon name="open" /></button>
-                <a class="btn" asp-page="Setup" asp-route-step="account"><icon name="back" /> Back</a>
-            </div>
-        </form>
-    }
-    else if (Model.Step == "provider")
-    {
-        <h2>DNS provider <span class="text-muted">(optional)</span></h2>
-        <div class="alert alert-warn">
-            Only needed for <strong>wildcard certificates</strong> (<code>*.domain</code>) via the DNS-01 challenge.
-            For single hostnames Caddy uses HTTP validation - no provider required. You can skip this and add one later.
-        </div>
-        <form method="post">
-            <div class="form-row">
-                <div class="form-group">
-                    <label asp-for="ProviderName">Name</label>
-                    <input asp-for="ProviderName" placeholder="e.g. Netcup" />
-                </div>
-                <div class="form-group">
-                    <label asp-for="ProviderType">Type</label>
-                    <select asp-for="ProviderType" onchange="matcadToggleCreds(this.value)">
-                        @foreach (var t in ProviderTypes.All)
-                        {
-                            <option value="@t.Id">@t.DisplayName</option>
-                        }
-                        <option value="@ProviderTypes.CustomId">Custom (any compiled module)...</option>
-                    </select>
-                </div>
-            </div>
-
-            @foreach (var t in ProviderTypes.All)
+    <div class="wizard">
+        <div class="wizard__steps" aria-hidden="true">
+            @for (var i = 0; i < steps.Length; i++)
             {
-                <div class="cred-block" data-cred-type="@t.Id" style="@(t.Id == Model.ProviderType ? "" : "display:none")">
-                    @foreach (var field in t.Fields)
-                    {
-                        Model.CredentialValues.TryGetValue($"{t.Id}:{field.Key}", out var val);
-                        <div class="form-group">
-                            <label for="cred_@(t.Id)_@(field.Key)">@field.Label</label>
-                            <input id="cred_@(t.Id)_@(field.Key)" name="cred_@(t.Id)_@(field.Key)"
-                                   type="@(field.Secret ? "password" : "text")" value="@val" autocomplete="off" />
-                        </div>
-                    }
-                </div>
+                <span class="wizard__dot @(i == current ? "is-active" : i < current ? "is-done" : "")"></span>
             }
-            <div class="cred-block" data-cred-type="@ProviderTypes.CustomId" style="@(Model.ProviderType == ProviderTypes.CustomId ? "" : "display:none")">
-                <div class="form-group">
-                    <label>Caddy DNS module name</label>
-                    <input name="CustomModule" placeholder="e.g. cloudflare, route53" autocomplete="off" />
-                </div>
-                <label>Credentials</label>
-                <div class="table-wrap">
-                    <table class="data" id="custom-creds">
-                        <thead><tr><th>Key</th><th>Value</th><th style="width:1%"></th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="list-actions">
-                    <button type="button" class="btn" onclick="matcadAddCred()"><icon name="add" /> Add credential</button>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group" style="max-width:220px">
-                    <label asp-for="PropagationDelay">DNS propagation delay (s)</label>
-                    <input asp-for="PropagationDelay" type="number" min="0" />
-                    <div class="hint">Slow providers (netcup): 120.</div>
-                </div>
-                <div class="form-group" style="max-width:220px">
-                    <label asp-for="PropagationTimeout">Propagation timeout (s)</label>
-                    <input asp-for="PropagationTimeout" type="number" min="-1" />
-                    <div class="hint">-1 = skip the check (recommended for netcup).</div>
-                </div>
-            </div>
-
-            <div class="btn-row">
-                <button type="submit" class="btn btn-primary" asp-page-handler="ProviderSave"><icon name="save" /> Save &amp; continue</button>
-                <button type="submit" class="btn" asp-page-handler="ProviderTest" formnovalidate><icon name="check" /> Test credentials</button>
-                <button type="submit" class="btn btn-ghost" asp-page-handler="SkipProvider" formnovalidate>Skip <icon name="open" /></button>
-            </div>
-        </form>
-    }
-    else // done
-    {
-        <h2>You're set up 🎉</h2>
-        <p class="hint">Next, add the sites Caddy should serve - create routes by hand, or import an existing Caddyfile.</p>
-        <div class="list-actions" style="margin-bottom:1rem">
-            <a class="btn" asp-page="/Routes/Edit"><icon name="add" /> Add a route</a>
-            <a class="btn" asp-page="/Settings/Import"><icon name="routes" /> Import a Caddyfile</a>
         </div>
-        <form method="post" asp-page-handler="Finish">
-            <div class="btn-row">
-                <button type="submit" class="btn btn-primary"><icon name="check" /> Finish setup</button>
-                <a class="btn" asp-page="Setup" asp-route-step="provider"><icon name="back" /> Back</a>
+        <div class="wizard__step-title">Step @(current + 1) of @steps.Length: @steps[current].Item2</div>
+
+        <div class="card">
+            <div class="card__body">
+                @if (Model.Error != null)
+                {
+                    <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
+                }
+                @if (Model.TestResult is { } test)
+                {
+                    var kind = test.Ok == true ? "success" : (test.Ok == false ? "error" : "warning");
+                    <div class="alert alert--@kind"><icon name="@(test.Ok == true ? "check-circle" : test.Ok == false ? "x-circle" : "info")" /><span>@test.Message</span></div>
+                }
+
+                @if (Model.Step == "account")
+                {
+                    <h2>@(Model.MustChange ? "Secure your account" : "Your account")</h2>
+                    @if (Model.MustChange)
+                    {
+                        <p class="text-muted" style="margin-top:6px">Matcad starts with the default login <code>admin / admin</code>. Choose your own before you go on.</p>
+                    }
+                    <form method="post" asp-page-handler="Account" class="mat-form" style="margin-top:14px">
+                        <div class="form-grid">
+                            <mat-field label="Username" asp-for="NewUsername">
+                                <input asp-for="NewUsername" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" />
+                            </mat-field>
+                            <mat-field label="E-mail address (optional)" asp-for="NewEmail" hint="Can be used to sign in, too.">
+                                <input asp-for="NewEmail" type="email" class="mat-input" autocomplete="email" />
+                            </mat-field>
+                            <mat-field label="@(Model.MustChange ? "New password" : "New password (optional)")" asp-for="NewPassword" hint="At least 8 characters.">
+                                <input asp-for="NewPassword" type="password" class="mat-input" autocomplete="new-password" autofocus />
+                            </mat-field>
+                            <mat-field label="Confirm password" asp-for="ConfirmPassword">
+                                <input asp-for="ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" />
+                            </mat-field>
+                        </div>
+                        <mat-form-buttons>
+                            <button type="submit" class="mat-btn mat-btn--primary"><span>Continue</span><icon name="chevron-right" /></button>
+                        </mat-form-buttons>
+                    </form>
+                }
+                else if (Model.Step == "domains")
+                {
+                    <h2>Domains &amp; login</h2>
+                    <form method="post" asp-page-handler="Domains" class="mat-form" style="margin-top:14px">
+                        <div class="form-grid">
+                            <mat-field label="Base domain" asp-for="BaseDomain" hint="Parent domain shared by your sites. Enables one Matcad sign-in across subdomains.">
+                                <input asp-for="BaseDomain" class="mat-input" placeholder="example.com" autocapitalize="none" spellcheck="false" autofocus />
+                            </mat-field>
+                            <mat-field label="Matcad host (optional)" asp-for="MatcadHost" hint="Exposes this UI through Caddy under that domain.">
+                                <input asp-for="MatcadHost" class="mat-input" placeholder="matcad.example.com" autocapitalize="none" spellcheck="false" />
+                            </mat-field>
+                            <mat-field label="Login behaviour" asp-for="PortalMode">
+                                <select asp-for="PortalMode" class="mat-select">
+                                    <option value="inline">Inline (login on the protected site)</option>
+                                    <option value="redirect">Redirect (to the Matcad host)</option>
+                                    <option value="unauthorized">Unauthorized (plain 401, no form)</option>
+                                </select>
+                            </mat-field>
+                            <mat-field label="ACME e-mail (optional)" asp-for="AcmeEmail" hint="Only for Let's Encrypt expiry notices. Leave empty - certificates still work.">
+                                <input asp-for="AcmeEmail" type="email" class="mat-input" placeholder="empty = anonymous (like plain Caddy)" />
+                            </mat-field>
+                        </div>
+                        <label class="mat-switch"><input type="checkbox" asp-for="SystemRouteEnabled" /><span>Expose the Matcad UI via the Matcad host (system route)</span></label>
+                        <mat-form-buttons>
+                            <button type="submit" class="mat-btn mat-btn--primary"><span>Continue</span><icon name="chevron-right" /></button>
+                            <a class="mat-btn mat-btn--ghost" asp-page="Setup" asp-route-step="account"><icon name="back" /><span>Back</span></a>
+                        </mat-form-buttons>
+                    </form>
+                }
+                else if (Model.Step == "provider")
+                {
+                    <h2>DNS provider <span class="text-muted" style="font-weight:400">(optional)</span></h2>
+                    <div class="alert alert--info" style="margin-top:12px">
+                        <icon name="info" />
+                        <span>
+                            Only needed for <strong>wildcard certificates</strong> (<code>*.domain</code>) via the DNS-01 challenge.
+                            For single hostnames Caddy uses HTTP validation: no provider required. You can skip this and add one later.
+                        </span>
+                    </div>
+                    <form method="post" class="mat-form">
+                        <mat-field label="Name" asp-for="ProviderName">
+                            <input asp-for="ProviderName" class="mat-input" placeholder="e.g. Netcup" />
+                        </mat-field>
+
+                        <partial name="Controls/_ProviderFields" model="Model.ProviderFields" />
+
+                        <div class="form-grid">
+                            <mat-field label="DNS propagation delay (s)" asp-for="PropagationDelay" hint="Slow providers (netcup): 120.">
+                                <input asp-for="PropagationDelay" type="number" min="0" inputmode="numeric" class="mat-input" />
+                            </mat-field>
+                            <mat-field label="Propagation timeout (s)" asp-for="PropagationTimeout" hint="-1 = skip the check (recommended for netcup).">
+                                <input asp-for="PropagationTimeout" type="number" min="-1" inputmode="numeric" class="mat-input" />
+                            </mat-field>
+                        </div>
+
+                        <mat-form-buttons>
+                            <button type="submit" class="mat-btn mat-btn--primary" asp-page-handler="ProviderSave"><icon name="save" /><span>Save &amp; continue</span></button>
+                            <button type="submit" class="mat-btn" asp-page-handler="ProviderTest" formnovalidate><icon name="check-circle" /><span>Test credentials</span></button>
+                            <button type="submit" class="mat-btn mat-btn--ghost" asp-page-handler="SkipProvider" formnovalidate><span>Skip</span><icon name="chevron-right" /></button>
+                        </mat-form-buttons>
+                    </form>
+                }
+                else // done
+                {
+                    <h2>You're set up</h2>
+                    <p class="text-muted" style="margin-top:6px">Next, add the sites Caddy should serve: create routes by hand, or import an existing Caddyfile.</p>
+                    <mat-form-buttons>
+                        <a class="mat-btn" asp-page="/Routes/Edit"><icon name="plus" /><span>Add a route</span></a>
+                        <a class="mat-btn" asp-page="/Settings/Import"><icon name="upload" /><span>Import a Caddyfile</span></a>
+                    </mat-form-buttons>
+                    <form method="post" asp-page-handler="Finish">
+                        <mat-form-buttons>
+                            <button type="submit" class="mat-btn mat-btn--primary"><icon name="check" /><span>Finish setup</span></button>
+                            <a class="mat-btn mat-btn--ghost" asp-page="Setup" asp-route-step="provider"><icon name="back" /><span>Back</span></a>
+                        </mat-form-buttons>
+                    </form>
+                }
             </div>
-        </form>
-    }
+        </div>
 
-    @if (Model.Step != "done")
-    {
-        <form method="post" asp-page-handler="Skip" style="margin-top:1.25rem">
-            <button type="submit" class="btn btn-ghost btn-sm" formnovalidate
-                    data-confirm="Skip setup? The default admin / admin login stays unless you already changed it.">
-                Skip setup for now
-            </button>
-        </form>
-    }
+        @if (Model.Step != "done" && !Model.MustChange)
+        {
+            <form method="post" asp-page-handler="Skip" style="margin-top:14px;text-align:center">
+                <button type="submit" class="mat-btn mat-btn--quiet mat-btn--sm" formnovalidate data-confirm="Skip the setup? You can run it again under Settings." data-confirm-ok="Skip">
+                    Skip setup for now
+                </button>
+            </form>
+        }
+    </div>
 </div>
-
-@section Scripts {
-    <script>
-        function matcadToggleCreds(type) {
-            document.querySelectorAll('.cred-block').forEach(b => {
-                b.style.display = b.getAttribute('data-cred-type') === type ? '' : 'none';
-            });
-        }
-        function matcadAddCred() {
-            const tbody = document.querySelector('#custom-creds tbody');
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                '<td><input name="CustomKeys" autocomplete="off" /></td>' +
-                '<td><input name="CustomValues" autocomplete="off" /></td>' +
-                '<td><button type="button" class="btn btn-sm btn-ghost" onclick="this.closest(\'tr\').remove()">✕</button></td>';
-            tbody.appendChild(tr);
-        }
-    </script>
-}

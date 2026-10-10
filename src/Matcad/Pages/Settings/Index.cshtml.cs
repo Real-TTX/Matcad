@@ -40,6 +40,10 @@ public class IndexModel : PageModel
     [BindProperty] public string DockerBaseDomain { get; set; } = "";
     [BindProperty] public bool DockerRequireLabel { get; set; } = true;
 
+    private const long MaxBackupBytes = 20 * 1024 * 1024;
+
+    [BindProperty] public IFormFile? BackupFile { get; set; }
+
     public List<User> Users { get; private set; } = new();
     public string? CaddyStatus { get; private set; }
     public string CaddyConfigJson { get; private set; } = "";
@@ -95,9 +99,17 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
+        var baseDomain = BaseDomain?.Trim().ToLowerInvariant() ?? "";
+        var matcadHost = MatcadHost?.Trim().ToLowerInvariant() ?? "";
+        if ((baseDomain.Length > 0 && !RouteEditor.IsHostName(baseDomain)) || (matcadHost.Length > 0 && !RouteEditor.IsHostName(matcadHost)))
+        {
+            TempData["FlashError"] = "Domains must be plain names like example.com (no http://, path or port). Nothing was saved.";
+            return RedirectToPage("Index");
+        }
+
         var s = _store.Settings;
-        s.BaseDomain = BaseDomain?.Trim() ?? "";
-        s.MatcadHost = MatcadHost?.Trim() ?? "";
+        s.BaseDomain = baseDomain;
+        s.MatcadHost = matcadHost;
         s.SystemRouteEnabled = SystemRouteEnabled;
         s.PortalMode = PortalMode is "inline" or "redirect" or "unauthorized" ? PortalMode : "inline";
         s.AuthPortalUrl = AuthPortalUrl?.Trim() ?? "";
@@ -157,21 +169,18 @@ public class IndexModel : PageModel
         return RedirectToPage("Index");
     }
 
-    [BindProperty] public IFormFile? BackupFile { get; set; }
-
-    public IActionResult OnGetExport()
+    public async Task<IActionResult> OnGetExportAsync()
     {
-        var s = _store.Settings;
         var backup = new BackupData
         {
             ExportedAt = DateTime.UtcNow,
-            Settings = s,
-            Providers = _store.Providers,
-            Routes = _store.Routes,
-            Authentications = _store.Authentications,
+            Settings = _store.Settings,
+            Providers = _store.Providers.ToList(),
+            Routes = _store.Routes.ToList(),
+            Authentications = _store.Authentications.ToList(),
             Sequences = _store.SequenceSnapshot(),
-            Users = _auth.ListUsers().GetAwaiter().GetResult()
-                .Select(u => new BackupUser { Username = u.Username, PasswordHash = u.PasswordHash, Role = u.Role.ToString() })
+            Users = (await _auth.ListUsers())
+                .Select(u => new BackupUser { Username = u.Username, Email = u.Email, PasswordHash = u.PasswordHash, Role = u.Role.ToString(), MustChangePassword = u.MustChangePassword })
                 .ToList()
         };
         var json = System.Text.Json.JsonSerializer.Serialize(backup,
@@ -182,11 +191,15 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostRestoreAsync()
     {
-        if (BackupFile is not { Length: > 0 })
+        IActionResult Fail(string message)
         {
-            TempData["FlashError"] = "Please choose a backup file.";
+            TempData["FlashError"] = message;
             return RedirectToPage("Index");
         }
+
+        if (BackupFile is not { Length: > 0 }) return Fail("Please choose a backup file.");
+        if (BackupFile.Length > MaxBackupBytes) return Fail("The backup file is too large.");
+
         BackupData? backup;
         try
         {
@@ -196,26 +209,24 @@ public class IndexModel : PageModel
         }
         catch (Exception ex)
         {
-            TempData["FlashError"] = "Invalid backup file: " + ex.Message;
-            return RedirectToPage("Index");
+            return Fail("Invalid backup file: " + ex.Message);
         }
-        if (backup == null || backup.Version < 1)
-        {
-            TempData["FlashError"] = "Unrecognized backup format.";
-            return RedirectToPage("Index");
-        }
+        if (backup is not { Version: >= 1, Settings: not null, Providers: not null, Routes: not null, Authentications: not null, Users: not null })
+            return Fail("Unrecognized backup format.");
+
+        // Everything is checked before anything is replaced.
+        var (users, usersError) = BackupRestore.CheckUsers(backup.Users);
+        if (usersError != null) return Fail(usersError);
+        BackupRestore.SanitizeSettings(backup.Settings);
 
         _store.ImportConfig(backup.Settings, backup.Providers, backup.Routes, backup.Authentications, backup.Sequences);
-        if (backup.Users.Count > 0)
-            await _auth.ReplaceAllUsers(
-                backup.Users.Select(u => (u.Username, u.PasswordHash,
-                    Enum.TryParse<UserRole>(u.Role, out var r) ? r : UserRole.User)),
-                User.GetUserId());
+        if (users.Count > 0)
+            await _auth.ReplaceAllUsers(users, User.GetUserId());
 
         var (ok, error) = await _caddy.ApplyAsync();
         TempData[ok ? "Flash" : "FlashError"] =
             $"Backup restored ({backup.Providers.Count} providers, {backup.Routes.Count} routes, " +
-            $"{backup.Authentications.Count} authentications, {backup.Users.Count} users)." +
+            $"{backup.Authentications.Count} authentications, {users.Count} users)." +
             (ok ? "" : $" Caddy push failed: {error}");
         return RedirectToPage("Index");
     }

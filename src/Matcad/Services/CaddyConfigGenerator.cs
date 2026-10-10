@@ -51,8 +51,8 @@ public class CaddyConfigGenerator
         // (Verify falls back to relative). Without the bypass route that fallback
         // would loop forever, so keep the two in sync.
         var mode = (settings.PortalMode ?? "inline").ToLowerInvariant();
-        var serveAuthLocally = mode == "inline"
-            || (mode == "redirect" && string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
+        var serveAuthLocally = mode != "unauthorized"
+            && (mode != "redirect" || string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
         var httpRoutes = new List<object>();
         foreach (var r in ordered)
         {
@@ -195,11 +195,23 @@ public class CaddyConfigGenerator
                 }
             });
 
-        var auth = route.AuthenticationId is > 0
-            ? _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId)
-            : null;
-        if (auth != null)
+        if (route.AuthenticationId is > 0)
+        {
+            var auth = _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId);
+            // Fail closed: a route that asks for a login must never be served without one, whatever went wrong
+            // with the authentication (deleted, restored from a backup without it, no users).
+            if (auth == null || (auth.Type == AuthType.BasicAuth && auth.Users.Count == 0))
+                return new List<object>
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["handler"] = "static_response",
+                        ["status_code"] = 503,
+                        ["body"] = "Matcad: the authentication of this route is missing or has no users, so the route is not served."
+                    }
+                };
             handlers.AddRange(BuildAuthHandlers(auth));
+        }
 
         handlers.Add(BuildTerminalHandler(route));
         return handlers;
@@ -300,7 +312,7 @@ public class CaddyConfigGenerator
                         {
                             ["X-Forwarded-Method"] = new[] { "{http.request.method}" },
                             ["X-Forwarded-Uri"] = new[] { "{http.request.uri}" },
-                            ["X-Forwarded-Host"] = new[] { "{http.request.host}" },
+                            ["X-Forwarded-Host"] = new[] { "{http.request.hostport}" }, // with the port, so the login sends the user back to the same address
                             // Tells /auth/verify which authentication (and portal) applies.
                             ["X-Matcad-Auth"] = new[] { auth.Id.ToString() }
                         }

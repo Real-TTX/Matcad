@@ -2,26 +2,31 @@
 @model Matcad.Pages.LoginModel
 @{
     ViewData["Title"] = "Sign in";
-    Layout = "_LoginLayout";
+    Layout = "_PlainLayout";
 }
-<div class="login-card">
-    <h1 class="login-brand"><partial name="_Logo" /> Matcad</h1>
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    <form method="post">
-        <input type="hidden" asp-for="ReturnUrl" />
-        <div class="form-group">
-            <label asp-for="Username">Username</label>
-            <input asp-for="Username" autocomplete="username" autofocus />
+<div class="login">
+    <div class="login__brand">
+        <img src="~/img/logo.svg" alt="" />
+        <span class="name">Matcad</span>
+        <span class="tagline">Reverse proxy, simply managed</span>
+    </div>
+
+    <div class="card">
+        <div class="card__body">
+            @if (Model.Error != null)
+            {
+                <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
+            }
+            <form method="post" class="mat-form">
+                <input type="hidden" asp-for="ReturnUrl" />
+                <mat-field label="Username or e-mail address" asp-for="Username">
+                    <input asp-for="Username" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus />
+                </mat-field>
+                <mat-field label="Password" asp-for="Password">
+                    <input asp-for="Password" type="password" class="mat-input" autocomplete="current-password" />
+                </mat-field>
+                <button type="submit" class="mat-btn mat-btn--primary mat-btn--block"><icon name="login" /><span>Sign in</span></button>
+            </form>
         </div>
-        <div class="form-group">
-            <label asp-for="Password">Password</label>
-            <input asp-for="Password" type="password" autocomplete="current-password" />
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">
-            <icon name="logout" /> Sign in
-        </button>
-    </form>
+    </div>
 </div>
