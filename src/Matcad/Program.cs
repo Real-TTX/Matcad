@@ -79,14 +79,22 @@ using (var scope = app.Services.CreateScope())
     // WAL improves concurrent read/write throughput for the high-volume request log.
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
-    await auth.EnsureSeedAdmin(app.Logger);
+    // MATCAD_ADMIN_PASSWORD = headless install (e.g. by Mattiverse): the admin gets that password.
+    var seededFromEnv = await auth.EnsureSeedAdmin(app.Logger, builder.Configuration["MATCAD_ADMIN_PASSWORD"]);
 
     // Fresh installs start EMPTY and run the first-run setup wizard. Example data
     // is only loaded on demand (Settings -> Import / Export). Upgraded installs
     // that already carry configuration are marked "set up" so the wizard never
-    // interrupts them.
+    // interrupts them. So is a headless install: the wizard's first step only
+    // exists to replace admin/admin.
     var store = scope.ServiceProvider.GetRequiredService<ConfigStore>();
     var s0 = store.Settings;
+    if (seededFromEnv && !s0.SetupCompleted)
+    {
+        s0.SetupCompleted = true;
+        store.SaveSettings(s0);
+        app.Logger.LogInformation("MATCAD_ADMIN_PASSWORD set - setup wizard skipped.");
+    }
     if (!s0.SetupCompleted &&
         (store.Providers.Any() || store.Routes.Any() || store.Authentications.Any()
          || !string.IsNullOrWhiteSpace(s0.BaseDomain)))

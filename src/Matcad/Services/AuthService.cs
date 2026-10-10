@@ -152,11 +152,28 @@ public class AuthService
         await _db.UserSessions.Where(s => s.Token == token).ExecuteDeleteAsync();
     }
 
-    /// <summary>Creates the default admin (admin/admin) on first start if no users exist.</summary>
-    public async Task EnsureSeedAdmin(ILogger logger)
+    /// <summary>Creates the default admin on first start if no users exist: with <paramref name="adminPassword"/>
+    /// (env <c>MATCAD_ADMIN_PASSWORD</c>, for a headless install) when that is set and acceptable, otherwise
+    /// admin/admin. Returns true only when the admin was seeded with the given password, so the caller can
+    /// skip the first-run wizard that would otherwise force a password change.</summary>
+    public async Task<bool> EnsureSeedAdmin(ILogger logger, string? adminPassword = null)
     {
-        if (await _db.Users.AnyAsync()) return;
+        if (await _db.Users.AnyAsync()) return false;
+        if (!string.IsNullOrEmpty(adminPassword))
+        {
+            // Same rules as the setup wizard's account step.
+            if (adminPassword.Length < 6 || adminPassword == "admin")
+                logger.LogWarning("MATCAD_ADMIN_PASSWORD is ignored: it must be at least 6 characters and not 'admin'. " +
+                    "Falling back to the default admin login.");
+            else
+            {
+                await CreateUser("admin", adminPassword, UserRole.Admin, actorId: null);
+                logger.LogInformation("Seeded admin user 'admin' with the password from MATCAD_ADMIN_PASSWORD.");
+                return true;
+            }
+        }
         await CreateUser("admin", "admin", UserRole.Admin, actorId: null);
         logger.LogWarning("Seeded default admin user 'admin' with password 'admin'. Change it immediately.");
+        return false;
     }
 }
