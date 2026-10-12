@@ -1,96 +1,159 @@
-@using System.Reflection
+@inject Toolkit Toolkit
 @{
-    string IsActive(string page) =>
-        (ViewContext.RouteData.Values["page"]?.ToString() ?? "").StartsWith(page, StringComparison.OrdinalIgnoreCase) ? "is-active" : "";
-    var version = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
-    var title = ViewData["Title"] as string;
+    // A page fills these in: Title, PageSub (one line under the title), Crumbs (the breadcrumb below the app name, see Crumbs.Of) and Width ("narrow" for a form).
     var isAdmin = User.IsInRole("Admin");
+    var page = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+    var name = User.Identity?.Name ?? "";
+    var role = isAdmin ? "Administrator" : "User";
+
+    var title = ViewData["Title"] as string;
+    var sub = ViewData["PageSub"] as string;
+    var width = ViewData["Width"] as string;
+    var crumbs = ViewData["Crumbs"] as IReadOnlyList<Crumb> ?? [];
+
+    bool IsCurrent(string folder) => folder == "/Index" ? page == "/Index" : page.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+
+    void Item(string folder, string href, string icon, string text)
+    {
+        var current = IsCurrent(folder);
+        <li><a class="mat-nav__item @(current ? "is-active" : "")" href="@href" aria-current="@(current ? "page" : null)">@Ui.Icon(icon)<span>@text</span></a></li>
+    }
+
+    // The flash of a redirect after a POST (SHELL-12): "done" is a toast, something to read is an alert at the top of the content.
+    var flash = TempData["Flash"] as string;
+    var flashError = TempData["FlashError"] as string;
+    var flashWarn = TempData["FlashWarn"] as string;
 }
 <!DOCTYPE html>
-<html lang="en" data-app-version="@version">
-<head>
-    <partial name="_Head" />
-    <title>@(string.IsNullOrEmpty(title) ? "Matcad" : $"{title} · Matcad")</title>
-</head>
-<body class="is-app">
-    <div class="app">
-        <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden />
-        <aside class="sidebar">
-            <a class="brand" asp-page="/Index" aria-label="Dashboard">
-                <img class="brand__logo" src="~/img/logo.svg" alt="" width="36" height="36" />
-                <span class="brand__text">
-                    <span class="brand__name">Matcad</span>
-                    <span class="brand__version">@version</span>
-                </span>
-            </a>
+<html lang="en" data-app="@Ui.App.Id" data-app-version="@Ui.Version">
+<partial name="_Head" model="@(string.IsNullOrEmpty(title) ? Ui.App.Name : $"{title} · {Ui.App.Name}")" />
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
 
-            <nav class="sidebar__nav" aria-label="Main navigation">
-                <a class="nav-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "is-active" : "")" asp-page="/Index"><icon name="dashboard" /><span>Dashboard</span></a>
-                <a class="nav-link @IsActive("/Routes")" asp-page="/Routes/Index"><icon name="route" /><span>Routes</span></a>
-                <a class="nav-link @IsActive("/Authentications")" asp-page="/Authentications/Index"><icon name="lock" /><span>Authentications</span></a>
-                @if (isAdmin)
-                {
-                    <a class="nav-link @IsActive("/Providers")" asp-page="/Providers/Index"><icon name="cloud" /><span>Providers</span></a>
-                }
-                <a class="nav-link @IsActive("/Statistics")" asp-page="/Statistics"><icon name="bar-chart" /><span>Statistics</span></a>
-                @if (isAdmin)
-                {
-                    <div class="nav-sep"></div>
-                    <a class="nav-link @IsActive("/Settings")" asp-page="/Settings/Index"><icon name="settings" /><span>Settings</span></a>
-                }
-            </nav>
-
-            <div class="sidebar__footer">
-                <a class="account" asp-page="/Account/Profile" title="Account">
-                    <span class="account__avatar"><icon name="user" /></span>
-                    <span class="account__meta">
-                        <span class="account__name">@User.Identity?.Name</span>
-                        <span class="account__role">@(isAdmin ? "Admin" : "User")</span>
+    <div class="mat-app">
+        <aside class="mat-nav" id="mat-nav">
+            <div class="mat-nav__brand">
+                <a href="/" aria-label="@Ui.App.Name, dashboard">
+                    @Ui.Logo()
+                    <span>
+                        <span class="mat-nav__name">@Ui.App.Name</span>
+                        <span class="mat-nav__tagline">@Ui.App.Tagline</span>
                     </span>
                 </a>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-nav__close" data-nav-close aria-label="Close the menu">@Ui.Icon("x")</button>
+            </div>
 
-                <div class="theme-switch" role="group" aria-label="Theme">
-                    <button type="button" class="theme-switch__btn" data-theme-set="system" title="System" aria-label="System theme"><icon name="monitor" /></button>
-                    <button type="button" class="theme-switch__btn" data-theme-set="light" title="Light" aria-label="Light theme"><icon name="sun" /></button>
-                    <button type="button" class="theme-switch__btn" data-theme-set="dark" title="Dark" aria-label="Dark theme"><icon name="moon" /></button>
+            <nav class="mat-nav__scroll" aria-label="Main">
+                <ul class="mat-nav__list">
+                    @{ Item("/Index", "/", "dashboard", "Dashboard"); }
+                    @{ Item("/Statistics", "/Statistics", "bar-chart", "Statistics"); }
+                    <li class="mat-nav__group" role="presentation">Proxy</li>
+                    @{ Item("/Routes", "/Routes", "route", "Routes"); }
+                    @{ Item("/Authentications", "/Authentications", "lock", "Authentications"); }
+                    @if (isAdmin)
+                    {
+                        Item("/Providers", "/Providers", "cloud", "DNS providers");
+                        <li class="mat-nav__group" role="presentation">System</li>
+                        Item("/Settings", "/Settings", "settings", "Settings");
+                    }
+                </ul>
+            </nav>
+
+            <div class="mat-nav__foot">
+                <div class="mat-nav__account">
+                    <button type="button" class="mat-user" data-menu-toggle="user-menu" aria-haspopup="menu" aria-expanded="false">
+                        <span class="mat-avatar" aria-hidden="true">@Ui.Initials(name)</span>
+                        <span class="mat-user__text">
+                            <span class="mat-user__name">@name</span>
+                            <span class="mat-user__role">@role</span>
+                        </span>
+                        @Ui.Icon("chevron-up", "mat-user__chev")
+                    </button>
+                    <button type="button" class="mat-theme" data-theme-toggle data-theme-state="system" aria-label="Theme: System. Click for Light." title="Theme: System. Click for Light.">
+                        <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+                    </button>
                 </div>
-
-                <form method="post" asp-page="/Logout" class="logout-form">
-                    <button type="submit" class="nav-link nav-link--logout"><icon name="logout" /><span>Sign out</span></button>
-                </form>
+                <div class="mat-nav__version">@Ui.App.Name @Ui.Version</div>
             </div>
         </aside>
 
-        <div class="content">
-            <header class="topbar">
-                <label for="nav-toggle" class="topbar__menu" aria-label="Menu"><icon name="menu" /></label>
-                <span class="topbar__title">@title</span>
+        <div class="mat-main">
+            <header class="mat-topbar">
+                <button type="button" class="mat-burger" data-nav-toggle aria-label="Open the menu" aria-controls="mat-nav" aria-expanded="false">@Ui.Icon("menu")</button>
+                <nav class="mat-crumbs" aria-label="Breadcrumb">
+                    <ol>
+                        @if (crumbs.Count == 0)
+                        {
+                            <li aria-current="page">@Ui.App.Name</li>
+                        }
+                        else
+                        {
+                            <li><a href="/">@Ui.App.Name</a></li>
+                            @for (var i = 0; i < crumbs.Count; i++)
+                            {
+                                var crumb = crumbs[i];
+                                if (i == crumbs.Count - 1 || crumb.Url is null)
+                                {
+                                    <li aria-current="page">@crumb.Text</li>
+                                }
+                                else
+                                {
+                                    <li><a href="@crumb.Url">@crumb.Text</a></li>
+                                }
+                            }
+                        }
+                    </ol>
+                </nav>
             </header>
-            <partial name="_ConnectionBanner" />
-            <main class="main">
-                @if (TempData["Flash"] is string flash)
+
+            <main class="mat-page @(width == "narrow" ? "mat-page--narrow" : width == "wide" ? "mat-page--wide" : "")" id="main">
+                @if (!string.IsNullOrEmpty(flashError))
                 {
-                    <div class="alert alert--success"><icon name="check-circle" /><span>@flash</span></div>
+                    <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@flashError</div></div>
                 }
-                @if (TempData["FlashError"] is string flashError)
+                @if (!string.IsNullOrEmpty(flashWarn))
                 {
-                    <div class="alert alert--error"><icon name="x-circle" /><span>@flashError</span></div>
+                    <div class="mat-alert mat-alert--warning" role="alert">@Ui.Icon("alert")<div class="mat-alert__body">@flashWarn</div></div>
                 }
-                @if (TempData["FlashWarn"] is string flashWarn)
-                {
-                    <div class="alert alert--warning"><icon name="alert" /><span>@flashWarn</span></div>
-                }
-                <div class="page-head page-head--auto">
-                    <div class="page-head__title"><h1>@title</h1></div>
-                    @await RenderSectionAsync("Actions", required: false)
+
+                <div class="mat-page__head">
+                    <div class="mat-page__title">
+                        <h1>@title</h1>
+                        @if (!string.IsNullOrEmpty(sub))
+                        {
+                            <p class="mat-page__sub">@sub</p>
+                        }
+                    </div>
                 </div>
+
                 @RenderBody()
             </main>
         </div>
-        <label for="nav-toggle" class="nav-backdrop" aria-hidden="true"></label>
     </div>
 
+    <div class="mat-menu" id="user-menu" role="menu" aria-label="@name" hidden>
+        <div class="mat-menu__head">
+            <span class="mat-avatar" aria-hidden="true">@Ui.Initials(name)</span>
+            <div><strong>@name</strong><small>@role</small></div>
+        </div>
+        <a class="mat-menu__item" role="menuitem" href="/Account/Profile">@Ui.Icon("user")<span>Show account</span></a>
+        <div class="mat-menu__sep" role="separator"></div>
+        <form method="post" asp-page="/Logout">
+            <button type="submit" class="mat-menu__item" role="menuitem">@Ui.Icon("logout")<span>Sign out</span></button>
+        </form>
+    </div>
+
+    <partial name="_ConnectionBanner" />
+
+    @if (!string.IsNullOrEmpty(flash))
+    {
+        <div data-toast="@flash" data-tone="success" hidden></div>
+    }
+
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
     <script src="~/js/matcad.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

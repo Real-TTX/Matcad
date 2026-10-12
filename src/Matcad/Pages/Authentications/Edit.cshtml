@@ -1,195 +1,146 @@
 @page
 @model Matcad.Pages.Authentications.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Create authentication" : "Edit authentication";
+    ViewData["Title"] = Model.IsNew ? "New authentication" : "Edit authentication";
+    ViewData["PageSub"] = "Who may open the routes that use it, and for the Matcad login page how it looks.";
+    ViewData["Crumbs"] = Crumbs.Of(("Authentications", "/Authentications"), (Model.IsNew ? "New authentication" : "Edit authentication", null));
     var logoMissing = string.IsNullOrWhiteSpace(Model.BrandLogo);
 }
-<div class="card">
-    <div class="card__body">
-        @if (Model.Error != null)
-        {
-            <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
-        }
-        <form method="post" enctype="multipart/form-data" class="mat-form">
-            <input type="hidden" asp-for="Id" />
-            <div class="form-grid">
-                <mat-field label="Name" asp-for="Name">
-                    <input asp-for="Name" class="mat-input" placeholder="e.g. Internal area" autofocus />
+
+<form method="post" enctype="multipart/form-data" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Id" />
+
+    @if (Model.Error != null)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+    }
+
+    <section class="mat-card" aria-labelledby="auth-title">
+        <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="auth-title">Authentication</h2></div>
+        <div class="mat-card__body mat-stack">
+            <div class="mat-form__grid">
+                <mat-field label="Name" asp-for="Name" required>
+                    <input asp-for="Name" class="mat-input" autofocus required data-msg-required="Please give the authentication a name." />
                 </mat-field>
                 <mat-field label="Type" asp-for="Type">
                     <select asp-for="Type" class="mat-select" id="auth-type">
-                        <option value="BasicAuth">Basic Auth (browser dialog)</option>
-                        <option value="Matcad">Matcad (login portal with redirect)</option>
+                        <option value="BasicAuth">Basic Auth (the browser's own dialog)</option>
+                        <option value="Matcad">Matcad (login page with a redirect back)</option>
                     </select>
                 </mat-field>
             </div>
+        </div>
+    </section>
 
-            @* Both types keep their login accounts here. *@
-            <div>
-                <div class="mat-label" style="margin-bottom:6px">Users - leave the password empty to keep an existing one</div>
-                <div class="mat-table">
-                    <div class="mat-table__scroll">
-                        <table class="data" id="basic-users">
-                            <thead><tr><th>Username</th><th>Password</th><th class="actions"></th></tr></thead>
-                            <tbody>
-                                @foreach (var u in Model.ExistingUsers)
-                                {
-                                    <tr>
-                                        <td><input name="Usernames" value="@u.Username" class="mat-input" aria-label="Username" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
-                                        <td><input name="Passwords" type="password" class="mat-input" placeholder="•••••••• (unchanged)" aria-label="Password" autocomplete="new-password" /></td>
-                                        <td class="actions"><button type="button" class="mat-btn mat-btn--icon mat-btn--quiet" data-remove-row aria-label="Remove user"><icon name="trash" /></button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="mat-table__actions">
-                        <button type="button" class="mat-btn mat-btn--sm" data-add-row="#basic-users tbody" data-template="user-row-template"><icon name="plus" /><span>Add user</span></button>
-                    </div>
-                </div>
-                <template id="user-row-template">
-                    <tr>
-                        <td><input name="Usernames" class="mat-input" aria-label="Username" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
-                        <td><input name="Passwords" type="password" class="mat-input" aria-label="Password" autocomplete="new-password" /></td>
-                        <td class="actions"><button type="button" class="mat-btn mat-btn--icon mat-btn--quiet" data-remove-row aria-label="Remove user"><icon name="trash" /></button></td>
-                    </tr>
-                </template>
+    <section class="mat-card" aria-labelledby="auth-users-title">
+        <div class="mat-card__head">@Ui.Icon("users")<h2 class="mat-card__title" id="auth-users-title">Users</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p class="mat-muted">Both types keep their accounts here. Leave the password empty to keep an existing one.</p>
+            <div class="mat-table-wrap">
+                <table class="mat-table" id="basic-users">
+                    <caption class="mat-sr-only">Users of this authentication</caption>
+                    <thead><tr><th scope="col">Username</th><th scope="col">Password</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var u in Model.ExistingUsers)
+                        {
+                            <tr>
+                                <td data-label="Username"><input name="Usernames" value="@u.Username" class="mat-input" aria-label="Username" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                <td data-label="Password"><input name="Passwords" type="password" class="mat-input" placeholder="Unchanged" aria-label="Password" autocomplete="new-password" /></td>
+                                <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the user @u.Username" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
+            <div class="mat-actions">
+                <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#basic-users tbody" data-template="user-row-template">@Ui.Icon("plus")<span>Add a user</span></button>
+            </div>
+            <template id="user-row-template">
+                <tr>
+                    <td data-label="Username"><input name="Usernames" class="mat-input" aria-label="Username" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                    <td data-label="Password"><input name="Passwords" type="password" class="mat-input" aria-label="Password" autocomplete="new-password" /></td>
+                    <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the user" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                </tr>
+            </template>
+        </div>
+    </section>
 
-            <div class="mat-form" data-show-if="#auth-type" data-show-value="Matcad">
-                <div class="alert alert--info">
-                    <icon name="info" />
-                    <span>
-                        Unauthenticated requests see the Matcad login page and, after a successful sign-in, are sent back to the page they asked for (Caddy <code>forward_auth</code>).
-                        Where the login is shown (inline, redirect or 401) and the base domain are set under <a asp-page="/Settings/Index">Settings</a>.
-                    </span>
-                </div>
-                <h2>Login page branding</h2>
-                <div class="brand-editor">
-                    <div class="brand-fields mat-form">
-                        <mat-field label="Title" asp-for="BrandTitle">
-                            <input asp-for="BrandTitle" class="mat-input" placeholder="Matcad" data-preview="title" />
+    <section class="mat-card" aria-labelledby="auth-login-title" data-show-if="#auth-type" data-show-value="Matcad">
+        <div class="mat-card__head">@Ui.Icon("login")<h2 class="mat-card__title" id="auth-login-title">Login page</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p class="mat-muted">
+                Visitors without a login see this page and, after signing in, go back to the page they asked for (Caddy <code>forward_auth</code>).
+                Where the login is shown (on the site itself, as a redirect or as a plain 401) and the base domain are set under <a asp-page="/Settings/Index">Settings</a>.
+            </p>
+            <div class="mat-cols">
+                <div class="mat-col-12 mat-col-lg-7">
+                    <div class="mat-stack">
+                        <mat-field label="Title" asp-for="BrandTitle" hint="Empty shows Matcad.">
+                            <input asp-for="BrandTitle" class="mat-input" data-preview="title" />
                         </mat-field>
-                        <mat-field label="Welcome text" asp-for="BrandText">
-                            <input asp-for="BrandText" class="mat-input" placeholder="Protected area - please sign in" data-preview="text" />
+                        <mat-field label="Welcome text" asp-for="BrandText" hint="Empty shows “Protected area - please sign in”.">
+                            <input asp-for="BrandText" class="mat-input" data-preview="text" />
                         </mat-field>
-                        <mat-field label="Accent colour" asp-for="BrandColor" hint="Pick a colour, or leave it empty for the default.">
-                            <div class="color-field">
-                                <input type="color" id="brand-color-picker" class="mat-input" value="@(string.IsNullOrWhiteSpace(Model.BrandColor) ? "#6366f1" : Model.BrandColor)" aria-label="Pick accent colour" />
-                                <input asp-for="BrandColor" type="text" class="mat-input" placeholder="#6366f1 (default)" spellcheck="false" autocapitalize="none" data-preview="color" />
-                                <button type="button" class="mat-btn mat-btn--icon mat-btn--quiet" id="brand-color-clear" title="Reset to the default colour" aria-label="Reset colour"><icon name="x" /></button>
+                        <mat-field label="Accent colour" asp-for="BrandColor" hint="The colour of the button and the focus. Empty keeps the colour of Matcad.">
+                            <div class="mat-picker" data-picker="colour" data-clearable data-placeholder="The colour of Matcad">
+                                <input class="mat-picker__input" asp-for="BrandColor" data-preview="color" />
                             </div>
                         </mat-field>
-                        <mat-field label="Logo URL" asp-for="BrandLogo" hint="Or upload a file below (PNG, JPEG, GIF, WebP, SVG, max 256 KB; stored inline).">
-                            <input asp-for="BrandLogo" class="mat-input" placeholder="https://... or leave empty" data-preview="logo" autocapitalize="none" spellcheck="false" />
+                        <mat-field label="Logo address" asp-for="BrandLogo" hint="An address, or upload a file below (PNG, JPEG, GIF, WebP, SVG or ICO, up to 256 KB, kept inside the configuration).">
+                            <input asp-for="BrandLogo" class="mat-input" data-preview="logo" autocapitalize="none" spellcheck="false" />
                         </mat-field>
                         <mat-field label="Logo upload" asp-for="LogoFile">
                             <input asp-for="LogoFile" type="file" accept="image/*" class="mat-input" />
                         </mat-field>
-                        <mat-field label="Logo position">
-                            <div class="segmented">
-                                <label class="seg-option">
-                                    <input type="radio" asp-for="BrandLogoLayout" value="left" />
-                                    <span>Beside title</span>
-                                </label>
-                                <label class="seg-option">
-                                    <input type="radio" asp-for="BrandLogoLayout" value="top" />
-                                    <span>Above title</span>
-                                </label>
+                        <fieldset class="mat-field mat-fieldset">
+                            <legend class="mat-legend">Logo position</legend>
+                            <div class="mat-checks mat-checks--inline">
+                                <label class="mat-check"><input type="radio" asp-for="BrandLogoLayout" value="left" id="logo-layout-left" /><span class="mat-check__text">Beside the title</span></label>
+                                <label class="mat-check"><input type="radio" asp-for="BrandLogoLayout" value="top" id="logo-layout-top" /><span class="mat-check__text">Above the title</span></label>
                             </div>
-                        </mat-field>
+                        </fieldset>
                     </div>
+                </div>
 
-                    <div class="brand-preview">
-                        <span class="mat-label">Preview</span>
-                        <div class="preview-frame">
-                            <div class="card" id="preview-card" style="padding:22px;width:100%;max-width:280px">
-                                <h3 class="login-brand @(Model.BrandLogoLayout == "top" ? "brand-top" : "")" id="preview-brand">
-                                    <img id="preview-logo" alt="" style="height:2rem;max-width:100%;@(logoMissing ? "display:none" : "")" src="@Model.BrandLogo" />
-                                    <span id="preview-logo-fallback" style="@(logoMissing ? "" : "display:none")"><partial name="_Logo" /></span>
-                                    <span id="preview-title">@(string.IsNullOrWhiteSpace(Model.BrandTitle) ? "Matcad" : Model.BrandTitle)</span>
-                                </h3>
-                                <p class="text-muted" id="preview-text" style="text-align:center">@(string.IsNullOrWhiteSpace(Model.BrandText) ? "Protected area - please sign in" : Model.BrandText)</p>
-                                <div class="mat-form">
-                                    <div class="mat-field"><span class="mat-label">Username</span><input type="text" class="mat-input" tabindex="-1" readonly aria-hidden="true" /></div>
-                                    <div class="mat-field"><span class="mat-label">Password</span><input type="password" class="mat-input" tabindex="-1" readonly aria-hidden="true" /></div>
-                                    <button type="button" tabindex="-1" class="mat-btn mat-btn--primary mat-btn--block"><icon name="login" /><span>Sign in</span></button>
+                <div class="mat-col-12 mat-col-lg-5">
+                    <div class="mat-field">
+                        <span class="mat-label" id="preview-label">Preview</span>
+                        <div class="mc-preview" data-app="matcad" id="preview-scope" role="group" aria-labelledby="preview-label">
+                            <div class="mat-auth__card">
+                                <div class="mat-auth__brand">
+                                    <div class="mc-brand @(Model.BrandLogoLayout == "top" ? "mc-brand--top" : "")" id="preview-brand">
+                                        <img class="mc-brand__img" id="preview-logo" alt="" src="@Model.BrandLogo" hidden="@logoMissing" />
+                                        <span id="preview-logo-fallback" hidden="@(!logoMissing)">@Ui.Logo("lg")</span>
+                                        <h3 id="preview-title">@(string.IsNullOrWhiteSpace(Model.BrandTitle) ? "Matcad" : Model.BrandTitle)</h3>
+                                    </div>
+                                    <p class="mat-muted" id="preview-text">@(string.IsNullOrWhiteSpace(Model.BrandText) ? "Protected area - please sign in" : Model.BrandText)</p>
+                                </div>
+                                <div class="mat-form" aria-hidden="true">
+                                    <div class="mat-field"><span class="mat-label">Username</span><input type="text" class="mat-input" tabindex="-1" readonly /></div>
+                                    <div class="mat-field"><span class="mat-label">Password</span><input type="password" class="mat-input" tabindex="-1" readonly /></div>
+                                    <span class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Sign in</span></span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
 
-            <mat-form-buttons>
-                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
-                <a class="mat-btn mat-btn--ghost" asp-page="Index"><icon name="back" /><span>Back</span></a>
-                @if (!Model.IsNew)
-                {
-                    <span class="mat-buttons__spacer"></span>
-                    <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete this authentication?">
-                        <icon name="trash" /><span>Delete</span>
-                    </button>
-                }
-            </mat-form-buttons>
-        </form>
-    </div>
-</div>
+    <mat-form-buttons>
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+        <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>
+        @if (!Model.IsNew)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete the authentication @Model.Name? This cannot be undone." data-confirm-ok="Delete">
+                @Ui.Icon("trash")<span>Delete</span>
+            </button>
+        }
+    </mat-form-buttons>
+</form>
 
 @section Scripts {
-    <script>
-        // Live preview of the login page while the branding fields change.
-        (function () {
-            const DEFAULT_COLOR = '#6366f1';
-            const card = document.getElementById('preview-card');
-            if (!card) return;
-            const hex = document.getElementById('BrandColor');
-            const picker = document.getElementById('brand-color-picker');
-            const logoUrl = document.querySelector('[data-preview="logo"]');
-            const logoFile = document.getElementById('LogoFile');
-            const logoImg = document.getElementById('preview-logo');
-            const logoFallback = document.getElementById('preview-logo-fallback');
-            const isHex = v => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.trim());
-
-            function applyColor() {
-                const v = (hex.value || '').trim();
-                if (isHex(v)) {
-                    card.style.setProperty('--accent', v);
-                    card.style.setProperty('--accent-grad', v);
-                    picker.value = v.length === 4 ? '#' + v.slice(1).split('').map(x => x + x).join('') : v;
-                } else {
-                    card.style.removeProperty('--accent');
-                    card.style.removeProperty('--accent-grad');
-                }
-            }
-            function bindText(name, el, fallback) {
-                const src = document.querySelector('[data-preview="' + name + '"]');
-                src.addEventListener('input', () => { el.textContent = src.value.trim() || fallback; });
-            }
-            function applyLogo(src) {
-                if (src) { logoImg.src = src; logoImg.style.display = ''; logoFallback.style.display = 'none'; }
-                else { logoImg.removeAttribute('src'); logoImg.style.display = 'none'; logoFallback.style.display = ''; }
-            }
-
-            bindText('title', document.getElementById('preview-title'), 'Matcad');
-            bindText('text', document.getElementById('preview-text'), 'Protected area - please sign in');
-
-            hex.addEventListener('input', applyColor);
-            picker.addEventListener('input', () => { hex.value = picker.value; applyColor(); });
-            document.getElementById('brand-color-clear').addEventListener('click', () => { hex.value = ''; picker.value = DEFAULT_COLOR; applyColor(); });
-            document.querySelectorAll('input[name="BrandLogoLayout"]').forEach(r =>
-                r.addEventListener('change', () => document.getElementById('preview-brand').classList.toggle('brand-top', r.value === 'top' && r.checked)));
-
-            logoUrl.addEventListener('input', () => applyLogo(logoUrl.value.trim()));
-            logoFile.addEventListener('change', () => {
-                const file = logoFile.files && logoFile.files[0];
-                if (!file) { applyLogo(logoUrl.value.trim()); return; }
-                const reader = new FileReader();
-                reader.onload = e => applyLogo(e.target.result);
-                reader.readAsDataURL(file);
-            });
-
-            applyColor();
-        })();
-    </script>
+    <script src="~/js/authentication-edit.js" asp-append-version="true"></script>
 }

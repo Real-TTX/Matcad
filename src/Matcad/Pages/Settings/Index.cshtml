@@ -2,406 +2,430 @@
 @model Matcad.Pages.Settings.IndexModel
 @{
     ViewData["Title"] = "Settings";
+    ViewData["PageSub"] = "How Matcad and Caddy work together, who may sign in, and your backups.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", null));
+
+    var tabs = new (string Id, string Title, string Icon)[]
+    {
+        ("general", "General", "settings"),
+        ("users", "Users", "users"),
+        ("certificates", "Certificates", "shield"),
+        ("docker", "Docker", "whale"),
+        ("caddy", "Caddy", "route"),
+        ("system", "Import and export", "save"),
+    };
+    string Selected(string id) => id == Model.Tab ? "true" : "false";
 }
-<div data-tab-group>
-    <div class="mat-tabs" role="tablist">
-        <button type="button" class="mat-tabs__tab is-active" data-tab="general"><icon name="settings" /><span>General</span></button>
-        <button type="button" class="mat-tabs__tab" data-tab="users"><icon name="users" /><span>Users</span></button>
-        <button type="button" class="mat-tabs__tab" data-tab="certs"><icon name="shield" /><span>Certificates</span></button>
-        <button type="button" class="mat-tabs__tab" data-tab="docker"><icon name="whale" /><span>Docker</span></button>
-        <button type="button" class="mat-tabs__tab" data-tab="caddy"><icon name="route" /><span>Caddy</span></button>
-        <button type="button" class="mat-tabs__tab" data-tab="system"><icon name="save" /><span>Import / Export</span></button>
+
+<div data-tabs>
+    <div class="mat-tabs" role="tablist" aria-label="Settings">
+        @foreach (var (id, title, icon) in tabs)
+        {
+            <button type="button" class="mat-tab" role="tab" id="tab-@id" aria-controls="panel-@id" aria-selected="@Selected(id)" tabindex="@(id == Model.Tab ? "0" : "-1")">@Ui.Icon(icon)<span>@title</span></button>
+        }
     </div>
 
-    <div class="tab-panel is-active" data-panel="general">
-        <div class="card"><div class="card__body">
-            <form method="post" class="mat-form">
-                <section class="settings-section mat-form">
-                    <h2>Domains &amp; access</h2>
-                    <div class="form-grid">
-                        <mat-field label="Base domain" asp-for="BaseDomain"
-                                   hint="Parent domain shared by protected routes. Enables one Matcad sign-in across all its subdomains (forward_auth cookie).">
+    <div class="mat-tabpanel" role="tabpanel" id="panel-general" aria-labelledby="tab-general" hidden="@(Model.Tab != "general")">
+        <form method="post" class="mat-form" novalidate>
+            <section class="mat-card" aria-labelledby="set-domains-title">
+                <div class="mat-card__head">@Ui.Icon("globe")<h2 class="mat-card__title" id="set-domains-title">Domains and access</h2></div>
+                <div class="mat-card__body mat-stack">
+                    <div class="mat-form__grid">
+                        <mat-field label="Base domain" asp-for="BaseDomain" hint="The parent domain of your protected routes. It lets one Matcad sign-in count on all its subdomains (a forward_auth cookie).">
                             <input asp-for="BaseDomain" class="mat-input" placeholder="example.com" autocapitalize="none" spellcheck="false" />
                         </mat-field>
-                        <mat-field label="Matcad host" asp-for="MatcadHost"
-                                   hint="Exposes the Matcad UI through Caddy under this domain (read-only system route to matcad:4433).">
+                        <mat-field label="Matcad host" asp-for="MatcadHost" hint="Shows this interface through Caddy under this host name, as a system route to matcad:4433.">
                             <input asp-for="MatcadHost" class="mat-input" placeholder="matcad.example.com" autocapitalize="none" spellcheck="false" />
                         </mat-field>
                     </div>
-                    <div>
-                        <label class="mat-switch"><input type="checkbox" asp-for="SystemRouteEnabled" /><span>System route active</span></label>
-                        <div class="mat-hint" style="margin-top:6px">Turn off to keep the UI reachable only on <code>:4433</code>.</div>
+                    <div class="mat-field">
+                        <label class="mat-switch"><input type="checkbox" asp-for="SystemRouteEnabled" /><span class="mat-switch__track"></span><span>System route active</span></label>
+                        <span class="mat-hint">Turn it off to keep the interface reachable on <code>:4433</code> only.</span>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <section class="settings-section mat-form">
-                    <h2>Login &amp; forward-auth</h2>
-                    <div class="form-grid">
-                        <mat-field label="Login behaviour" asp-for="PortalMode"
-                                   hint="How visitors of a Matcad-protected route see the sign-in. Inline keeps them on the requested site, so nobody learns where Matcad runs.">
+            <section class="mat-card" aria-labelledby="set-login-title">
+                <div class="mat-card__head">@Ui.Icon("login")<h2 class="mat-card__title" id="set-login-title">Login and forward auth</h2></div>
+                <div class="mat-card__body">
+                    <div class="mat-form__grid">
+                        <mat-field label="Login behaviour" asp-for="PortalMode" hint="How visitors of a Matcad-protected route see the sign-in. Inline keeps them on the site they asked for, so nobody learns where Matcad runs.">
                             <select asp-for="PortalMode" class="mat-select">
-                                <option value="inline">Inline - login shown on the protected site (hides Matcad)</option>
-                                <option value="redirect">Redirect - send users to the Matcad login host</option>
-                                <option value="unauthorized">Unauthorized - return a plain 401, no login form</option>
+                                <option value="inline">Inline: the login is shown on the protected site</option>
+                                <option value="redirect">Redirect: send visitors to the Matcad host</option>
+                                <option value="unauthorized">Unauthorized: a plain 401, no login form</option>
                             </select>
                         </mat-field>
-                        <mat-field label="Login portal URL (redirect mode only)" asp-for="AuthPortalUrl" hint="If empty, the Matcad host is used.">
-                            <input asp-for="AuthPortalUrl" class="mat-input" placeholder="empty = derived from Matcad host" autocapitalize="none" spellcheck="false" />
+                        <mat-field label="Login portal address" asp-for="AuthPortalUrl" hint="For the redirect mode only. Empty uses the Matcad host.">
+                            <input asp-for="AuthPortalUrl" class="mat-input" autocapitalize="none" spellcheck="false" />
                         </mat-field>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <section class="settings-section mat-form">
-                    <h2>Caddy &amp; TLS</h2>
-                    <div class="form-grid">
-                        <mat-field label="Caddy admin URL" asp-for="CaddyAdminUrl">
+            <section class="mat-card" aria-labelledby="set-tls-title">
+                <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="set-tls-title">Caddy and TLS</h2></div>
+                <div class="mat-card__body">
+                    <div class="mat-form__grid">
+                        <mat-field label="Caddy admin address" asp-for="CaddyAdminUrl">
                             <input asp-for="CaddyAdminUrl" class="mat-input" placeholder="http://caddy:2019" autocapitalize="none" spellcheck="false" />
-                            <span class="mat-hint">Admin API: <span class="pill @(Model.CaddyStatus == "reachable" ? "pill--online" : "pill--offline")">@Model.CaddyStatus</span></span>
+                            <span class="mat-hint">The admin API is <span class="mat-pill @(Model.CaddyStatus == "reachable" ? "mat-pill--ok" : "mat-pill--error")">@Model.CaddyStatus</span></span>
                         </mat-field>
-                        <mat-field label="ACME e-mail (optional)" asp-for="AcmeEmail"
-                                   hint="Let's Encrypt contact for expiry notices. Empty registers anonymously; certificates still work. Can be overridden per domain.">
-                            <input asp-for="AcmeEmail" type="email" class="mat-input" placeholder="empty = anonymous" />
+                        <mat-field label="ACME e-mail address" asp-for="AcmeEmail" hint="Optional. Where Let's Encrypt sends expiry notices. Empty registers anonymously and certificates still work. Each domain can have its own.">
+                            <input asp-for="AcmeEmail" type="email" class="mat-input" autocapitalize="none" />
                         </mat-field>
-                        <mat-field label="DNS propagation delay (s)" asp-for="AcmePropagationDelaySeconds"
-                                   hint="Wait this long after writing the DNS-01 record before validating. 0 = default; for slow providers (netcup) try 120.">
-                            <input asp-for="AcmePropagationDelaySeconds" type="number" min="0" inputmode="numeric" class="mat-input" />
+                        <mat-field label="DNS propagation delay (seconds)" asp-for="AcmePropagationDelaySeconds" hint="How long to wait after writing the DNS-01 record before it is checked. 0 is the default; slow providers such as netcup need about 120.">
+                            <input asp-for="AcmePropagationDelaySeconds" type="number" min="0" inputmode="numeric" class="mat-input mat-mono" />
                         </mat-field>
-                        <mat-field label="DNS propagation timeout (s)" asp-for="AcmePropagationTimeoutSeconds"
-                                   hint="Max wait for the record to appear on the nameservers. 0 = default; -1 skips the check (fixes netcup timeouts).">
-                            <input asp-for="AcmePropagationTimeoutSeconds" type="number" min="-1" inputmode="numeric" class="mat-input" />
+                        <mat-field label="DNS propagation timeout (seconds)" asp-for="AcmePropagationTimeoutSeconds" hint="The longest wait for the record to appear on the name servers. 0 is the default, -1 skips the check (it fixes netcup timeouts).">
+                            <input asp-for="AcmePropagationTimeoutSeconds" type="number" min="-1" inputmode="numeric" class="mat-input mat-mono" />
                         </mat-field>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <section class="settings-section mat-form">
-                    <h2>Logs</h2>
-                    <div class="form-grid">
-                        <mat-field label="Retention (days)" asp-for="LogRetentionDays">
-                            <input asp-for="LogRetentionDays" type="number" min="1" inputmode="numeric" class="mat-input" />
+            <section class="mat-card" aria-labelledby="set-logs-title">
+                <div class="mat-card__head">@Ui.Icon("clock")<h2 class="mat-card__title" id="set-logs-title">Logs</h2></div>
+                <div class="mat-card__body">
+                    <div class="mat-form__grid">
+                        <mat-field label="Keep for (days)" asp-for="LogRetentionDays">
+                            <input asp-for="LogRetentionDays" type="number" min="1" inputmode="numeric" class="mat-input mat-mono" />
                         </mat-field>
-                        <mat-field label="Retention (max rows)" asp-for="LogRetentionMaxRows" hint="Hard cap on stored request-log rows (0 = unlimited).">
-                            <input asp-for="LogRetentionMaxRows" type="number" min="0" inputmode="numeric" class="mat-input" />
+                        <mat-field label="Keep at most (rows)" asp-for="LogRetentionMaxRows" hint="A hard limit for the stored request log. 0 means no limit.">
+                            <input asp-for="LogRetentionMaxRows" type="number" min="0" inputmode="numeric" class="mat-input mat-mono" />
                         </mat-field>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <mat-form-buttons>
-                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
-                    <button type="submit" class="mat-btn" asp-page-handler="Repush"><icon name="refresh" /><span>Re-push config</span></button>
-                    <span class="mat-buttons__spacer"></span>
-                    <button type="submit" class="mat-btn mat-btn--ghost" asp-page-handler="RerunSetup" formnovalidate><icon name="rocket" /><span>Re-run setup wizard</span></button>
-                </mat-form-buttons>
-            </form>
-        </div></div>
+            <mat-form-buttons>
+                <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+                <button type="submit" class="mat-btn mat-btn--secondary" asp-page-handler="Repush">@Ui.Icon("refresh")<span>Push the config again</span></button>
+                <button type="submit" class="mat-btn mat-btn--ghost" asp-page-handler="RerunSetup" formnovalidate>@Ui.Icon("rocket")<span>Run the setup wizard again</span></button>
+            </mat-form-buttons>
+        </form>
     </div>
 
-    <div class="tab-panel" data-panel="users">
-        <div class="mat-table">
-            <div class="mat-table__scroll">
-                <table class="data">
-                    <thead><tr><th>Username</th><th class="hide-sm">E-mail</th><th>Role</th><th class="hide-sm">Created</th><th class="actions"></th></tr></thead>
+    <div class="mat-tabpanel" role="tabpanel" id="panel-users" aria-labelledby="tab-users" hidden="@(Model.Tab != "users")">
+        <div class="mat-list">
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Users</caption>
+                    <thead><tr><th scope="col">Username</th><th scope="col" class="mat-hide-sm">E-mail</th><th scope="col">Role</th><th scope="col" class="mat-hide-sm">Created</th></tr></thead>
                     <tbody>
                         @foreach (var u in Model.Users)
                         {
                             <tr>
-                                <td>@u.Username</td>
-                                <td class="hide-sm text-muted">@(u.Email ?? "-")</td>
-                                <td>
-                                    @if (u.Role == Matcad.Data.UserRole.Admin)
-                                    {
-                                        <span class="mat-badge">Admin</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="mat-badge mat-badge--muted">User</span>
-                                    }
+                                <td data-label="Username"><div class="mat-table__name"><a asp-page="User" asp-route-id="@u.Id">@u.Username</a></div></td>
+                                <td data-label="E-mail" class="mat-hide-sm mat-muted">@(u.Email ?? "-")</td>
+                                <td data-label="Role">
+                                    @if (u.Role == Matcad.Data.UserRole.Admin) { <span class="mat-pill mat-pill--accent">Admin</span> }
+                                    else { <span class="mat-pill mat-pill--plain">User</span> }
                                 </td>
-                                <td class="hide-sm text-muted">@Cell.LocalTime(u.CreateDate, "date")</td>
-                                <td class="actions"><a class="mat-btn mat-btn--icon mat-btn--sm mat-btn--ghost" asp-page="User" asp-route-id="@u.Id" title="Edit" aria-label="Edit @u.Username"><icon name="edit" /></a></td>
+                                <td data-label="Created" class="mat-hide-sm">@Ui.LocalTime(u.CreateDate, "date")</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <div class="mat-table__actions">
-                <a class="mat-btn mat-btn--primary" asp-page="User"><icon name="plus" /><span>New user</span></a>
+            <div class="mat-actions">
+                <a class="mat-btn mat-btn--primary" asp-page="User">@Ui.Icon("plus")<span>New user</span></a>
             </div>
         </div>
     </div>
 
-    <div class="tab-panel" data-panel="certs">
-        <div class="card"><div class="card__body">
-            <p class="text-muted">
-                The certificates Caddy manages for your <strong>enabled</strong> routes. A wildcard route <code>*.domain</code> (with a DNS provider)
-                yields <strong>one</strong> certificate that also covers its subdomains, so most routes need no certificate of their own.
+    <div class="mat-tabpanel" role="tabpanel" id="panel-certificates" aria-labelledby="tab-certificates" hidden="@(Model.Tab != "certificates")">
+        <div class="mat-stack">
+            <p class="mat-muted">
+                The certificates Caddy manages for your <strong>active</strong> routes. A wildcard route <code>*.domain</code> with a DNS provider gives
+                <strong>one</strong> certificate that also covers its subdomains, so most routes need none of their own.
             </p>
-        </div></div>
 
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="shield" /><span>Wildcard certificates</span></div>
-            @if (Model.Certificates.Wildcards.Count == 0)
-            {
-                <div class="empty-state">No wildcard certificates.</div>
-            }
-            else
-            {
-                <div class="mat-table__scroll">
-                    <table class="route-table">
-                        <thead><tr><th>Certificate (subjects)</th><th>DNS provider</th><th>Covers these routes</th></tr></thead>
-                        <tbody class="group">
-                            @foreach (var w in Model.Certificates.Wildcards)
-                            {
-                                <tr class="child">
-                                    <td class="c-name"><span class="mat-badge mat-badge--success"><icon name="shield" /></span> @w.Subjects</td>
-                                    <td>@w.Provider</td>
-                                    <td class="c-meta">
-                                        @if (w.CoveredHosts.Count == 0)
-                                        {
-                                            <span class="text-muted">no subdomain routes yet</span>
-                                        }
-                                        else
-                                        {
-                                            <ul class="cert-hosts">
-                                                @foreach (var h in w.CoveredHosts)
+            <section class="mat-card" aria-labelledby="cert-wild-title">
+                <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="cert-wild-title">Wildcard certificates</h2></div>
+                <div class="mat-card__body">
+                    @if (Model.Certificates.Wildcards.Count == 0)
+                    {
+                        <div class="mat-empty"><span class="mat-empty__icon">@Ui.Icon("shield")</span><div class="mat-empty__title">No wildcard certificates</div><p>Add a wildcard route with a DNS provider to get one.</p></div>
+                    }
+                    else
+                    {
+                        <div class="mat-table-wrap">
+                            <table class="mat-table">
+                                <caption class="mat-sr-only">Wildcard certificates</caption>
+                                <thead><tr><th scope="col">Certificate</th><th scope="col">DNS provider</th><th scope="col">Covers these routes</th></tr></thead>
+                                <tbody>
+                                    @foreach (var w in Model.Certificates.Wildcards)
+                                    {
+                                        <tr>
+                                            <td data-label="Certificate" class="mat-mono mat-text-break">@w.Subjects</td>
+                                            <td data-label="DNS provider">@w.Provider</td>
+                                            <td data-label="Covers these routes">
+                                                @if (w.CoveredHosts.Count == 0)
                                                 {
-                                                    <li>@h</li>
+                                                    <span class="mat-muted">no subdomain routes yet</span>
                                                 }
-                                            </ul>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                                                else
+                                                {
+                                                    <ul class="mc-list">
+                                                        @foreach (var h in w.CoveredHosts)
+                                                        {
+                                                            <li class="mat-mono mat-text-break">@h</li>
+                                                        }
+                                                    </ul>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
-            }
-        </div>
+            </section>
 
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="alert" /><span>Individual certificates</span></div>
-            @if (Model.Certificates.Individual.Count == 0)
-            {
-                <div class="empty-state">None: every route is covered by a wildcard (or internal).</div>
-            }
-            else
-            {
-                <div style="padding:12px 20px 0">
-                    <div class="alert alert--warning">
-                        <icon name="alert" />
-                        <span>These hosts are <strong>not</strong> covered by a wildcard and would each request their <strong>own</strong> certificate. Add a matching <code>*.domain</code> wildcard route to avoid that.</span>
+            <section class="mat-card" aria-labelledby="cert-ind-title">
+                <div class="mat-card__head">@Ui.Icon("alert")<h2 class="mat-card__title" id="cert-ind-title">Individual certificates</h2></div>
+                <div class="mat-card__body mat-stack">
+                    @if (Model.Certificates.Individual.Count == 0)
+                    {
+                        <p class="mat-muted">None: every route is covered by a wildcard or uses the internal CA.</p>
+                    }
+                    else
+                    {
+                        <div class="mat-alert mat-alert--warning">
+                            @Ui.Icon("alert")
+                            <div class="mat-alert__body"><strong>Not covered.</strong> These hosts are not covered by a wildcard, so each requests a certificate of its own. A matching <code>*.domain</code> wildcard route avoids that.</div>
+                        </div>
+                        <div class="mat-table-wrap">
+                            <table class="mat-table">
+                                <caption class="mat-sr-only">Hosts with an individual certificate</caption>
+                                <thead><tr><th scope="col">Host</th><th scope="col">Certificate</th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in Model.Certificates.Individual)
+                                    {
+                                        <tr>
+                                            <td data-label="Host" class="mat-mono mat-text-break">@h</td>
+                                            <td data-label="Certificate"><span class="mat-pill mat-pill--warn">@Ui.Icon("alert")Individual</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="mat-card" aria-labelledby="cert-int-title">
+                <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="cert-int-title">Internal, without a public certificate</h2></div>
+                <div class="mat-card__body mat-stack">
+                    @if (Model.Certificates.Internal.Count == 0)
+                    {
+                        <p class="mat-muted">None: there are no localhost or IP hosts.</p>
+                    }
+                    else
+                    {
+                        <p class="mat-muted">Caddy's internal CA serves localhost and IP hosts; no public certificate is issued for them.</p>
+                        <div class="mat-table-wrap">
+                            <table class="mat-table">
+                                <caption class="mat-sr-only">Hosts with an internal certificate</caption>
+                                <thead><tr><th scope="col">Host</th><th scope="col">Certificate</th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in Model.Certificates.Internal)
+                                    {
+                                        <tr>
+                                            <td data-label="Host" class="mat-mono mat-text-break">@h</td>
+                                            <td data-label="Certificate"><span class="mat-pill mat-pill--plain">internal</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="mat-tabpanel" role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" hidden="@(Model.Tab != "docker")">
+        <div class="mat-stack">
+            <form method="post" asp-page-handler="Docker" class="mat-form" novalidate>
+                <section class="mat-card" aria-labelledby="docker-title">
+                    <div class="mat-card__head">@Ui.Icon("whale")<h2 class="mat-card__title" id="docker-title">Discovery</h2></div>
+                    <div class="mat-card__body mat-stack">
+                        <p class="mat-muted">
+                            Turns running containers into routes automatically (<code>&lt;container&gt;.&lt;base domain&gt;</code> to the container).
+                            They appear in the routes list with a “Docker” tag and cannot be edited there.
+                        </p>
+                        <div class="mat-field">
+                            <label class="mat-switch"><input type="checkbox" asp-for="DockerEnabled" /><span class="mat-switch__track"></span><span>Docker discovery active</span></label>
+                        </div>
+                        <div class="mat-form__grid">
+                            <mat-field label="Docker endpoint" asp-for="DockerEndpoint" hint="The socket must be mounted into the Matcad container, read-only.">
+                                <input asp-for="DockerEndpoint" class="mat-input mat-mono" placeholder="unix:///var/run/docker.sock" autocapitalize="none" spellcheck="false" />
+                            </mat-field>
+                            <mat-field label="Base domain for names" asp-for="DockerBaseDomain" hint="Empty uses the base domain of the general settings.">
+                                <input asp-for="DockerBaseDomain" class="mat-input" autocapitalize="none" spellcheck="false" />
+                            </mat-field>
+                        </div>
+                        <div class="mat-field">
+                            <label class="mat-switch"><input type="checkbox" asp-for="DockerRequireLabel" /><span class="mat-switch__track"></span><span>Only containers with matcad.enable=true</span></label>
+                            <span class="mat-hint">Recommended: nothing is published by accident.</span>
+                        </div>
+                        <p class="mat-muted">
+                            Container labels fine-tune a container: <code>matcad.enable=true</code>, <code>matcad.host</code>, <code>matcad.port</code> and <code>matcad.auth</code> (the name of an authentication;
+                            a container that names one that does not exist is not published).
+                        </p>
                     </div>
-                </div>
-                <div class="mat-table__scroll">
-                    <table class="route-table">
-                        <thead><tr><th>Host</th><th>Certificate</th></tr></thead>
-                        <tbody class="group">
-                            @foreach (var h in Model.Certificates.Individual)
-                            {
-                                <tr class="child">
-                                    <td class="c-name">@h</td>
-                                    <td><span class="mat-badge mat-badge--warning"><icon name="alert" /> Individual</span></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
+                </section>
+                <mat-form-buttons>
+                    <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+                </mat-form-buttons>
+            </form>
 
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="lock" /><span>Internal (no public certificate)</span></div>
-            @if (Model.Certificates.Internal.Count == 0)
-            {
-                <div class="empty-state">None: no localhost or IP hosts.</div>
-            }
-            else
-            {
-                <p class="text-muted" style="padding:4px 20px 0;margin:0">Served by Caddy's internal CA (localhost and IP hosts); no public certificate is issued.</p>
-                <div class="mat-table__scroll">
-                    <table class="route-table">
-                        <thead><tr><th>Host</th><th>Certificate</th></tr></thead>
-                        <tbody class="group">
-                            @foreach (var h in Model.Certificates.Internal)
-                            {
-                                <tr class="child">
-                                    <td class="c-name">@h</td>
-                                    <td><span class="mat-badge mat-badge--muted">internal</span></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+            <section class="mat-card" aria-labelledby="containers-title">
+                <div class="mat-card__head">@Ui.Icon("whale")<h2 class="mat-card__title" id="containers-title">Containers</h2></div>
+                <div class="mat-card__body mat-stack">
+                    @if (Model.DockerError != null)
+                    {
+                        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">Docker is not reachable: @Model.DockerError</div></div>
+                    }
+                    else if (!Model.DockerEnabled)
+                    {
+                        <p class="mat-muted">Turn Docker discovery on above to list the containers of this host.</p>
+                    }
+                    @if (Model.DockerContainers.Count == 0)
+                    {
+                        <div class="mat-empty"><span class="mat-empty__icon">@Ui.Icon("whale")</span><div class="mat-empty__title">No running containers found</div></div>
+                    }
+                    else
+                    {
+                        <p class="mat-muted">All running containers: the bound ones become routes, the others say why they were skipped.</p>
+                        <div class="mat-table-wrap">
+                            <table class="mat-table">
+                                <caption class="mat-sr-only">Running containers</caption>
+                                <thead><tr><th scope="col">Container</th><th scope="col" class="mat-hide-sm">Image</th><th scope="col" class="mat-hide-sm">Ports</th><th scope="col">Host</th><th scope="col" class="mat-hide-sm">Authentication</th><th scope="col">Status</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in Model.DockerContainers)
+                                    {
+                                        <tr class="@(c.Bound ? "" : "mc-off")">
+                                            <td data-label="Container"><div class="mat-table__name"><span class="mat-text-break">@c.Name</span></div></td>
+                                            <td data-label="Image" class="mat-hide-sm mat-mono mat-text-break">@c.Image</td>
+                                            <td data-label="Ports" class="mat-hide-sm mat-mono">@c.Ports</td>
+                                            <td data-label="Host" class="mat-mono mat-text-break">@(c.Host ?? "-")</td>
+                                            <td data-label="Authentication" class="mat-hide-sm">@(string.IsNullOrEmpty(c.AuthName) ? "-" : c.AuthName)</td>
+                                            <td data-label="Status">
+                                                @if (c.Bound) { <span class="mat-pill mat-pill--ok">Bound</span> }
+                                                else { <span class="mat-pill" title="@c.Status">Ignored</span> }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
-            }
+            </section>
         </div>
     </div>
 
-    <div class="tab-panel" data-panel="docker">
-        <div class="card"><div class="card__body">
-            <form method="post" asp-page-handler="Docker" class="mat-form">
-                <section class="settings-section mat-form">
-                    <h2>Discovery</h2>
-                    <p class="text-muted">
-                        Binds running containers as routes automatically (<code>&lt;container&gt;.&lt;base-domain&gt;</code> to the container).
-                        Bound routes appear in the Routes list with a "Docker" badge and are read-only there.
-                    </p>
-                    <label class="mat-switch"><input type="checkbox" asp-for="DockerEnabled" /><span>Docker discovery active</span></label>
-                    <div class="form-grid">
-                        <mat-field label="Docker endpoint" asp-for="DockerEndpoint" hint="The socket must be mounted into the Matcad container (read-only).">
-                            <input asp-for="DockerEndpoint" class="mat-input" placeholder="unix:///var/run/docker.sock" autocapitalize="none" spellcheck="false" />
-                        </mat-field>
-                        <mat-field label="Base domain (auto-naming)" asp-for="DockerBaseDomain">
-                            <input asp-for="DockerBaseDomain" class="mat-input" placeholder="empty = global base domain" autocapitalize="none" spellcheck="false" />
+    <div class="mat-tabpanel" role="tabpanel" id="panel-caddy" aria-labelledby="tab-caddy" hidden="@(Model.Tab != "caddy")">
+        <div class="mat-stack">
+            <p class="mat-muted">
+                The Caddy configuration (JSON) that Matcad generates and pushes to Caddy through the admin API. It is <strong>read-only</strong>: change it through routes,
+                providers and authentications. Matcad deliberately uses the JSON API and not a Caddyfile.
+            </p>
+
+            <div class="mat-accordion">
+                <details class="mat-accordion__item" open>
+                    <summary><span>Live in Caddy</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <pre class="mat-code"><code id="cfg-live">@Model.CaddyLiveJson</code></pre>
+                        <div class="mat-actions"><button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-copy="#cfg-live">@Ui.Icon("copy")<span>Copy</span></button></div>
+                    </div>
+                </details>
+                <details class="mat-accordion__item">
+                    <summary><span>Generated by Matcad</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <pre class="mat-code"><code id="cfg-generated">@Model.CaddyConfigJson</code></pre>
+                        <div class="mat-actions"><button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-copy="#cfg-generated">@Ui.Icon("copy")<span>Copy</span></button></div>
+                    </div>
+                </details>
+            </div>
+
+            <form method="post" asp-page-handler="Raw" class="mat-form" novalidate>
+                <section class="mat-card" aria-labelledby="raw-title">
+                    <div class="mat-card__head">@Ui.Icon("code")<h2 class="mat-card__title" id="raw-title">Extra configuration</h2></div>
+                    <div class="mat-card__body mat-stack">
+                        <p class="mat-muted">
+                            Extra Caddy JSON that is <strong>merged</strong> into the generated configuration: objects are merged, lists such as <code>routes</code> are joined.
+                            Use it for anything Matcad does not model. The Caddyfile import keeps what it cannot map here. Invalid JSON is refused on save.
+                        </p>
+                        <mat-field label="Extra JSON" asp-for="RawCaddyJson">
+                            <textarea asp-for="RawCaddyJson" rows="10" class="mat-textarea mat-mono" spellcheck="false"></textarea>
                         </mat-field>
                     </div>
-                    <label class="mat-switch"><input type="checkbox" asp-for="DockerRequireLabel" /><span>Only containers with matcad.enable=true (recommended)</span></label>
                 </section>
-
-                <section class="settings-section">
-                    <h2>Container labels</h2>
-                    <p class="text-muted" style="margin:0">
-                        Fine-tune per container: <code>matcad.enable=true</code> · <code>matcad.host</code> · <code>matcad.port</code> · <code>matcad.auth</code> (authentication name;
-                        a container that names an authentication that does not exist is not published).
-                    </p>
-                </section>
-
                 <mat-form-buttons>
-                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
+                    <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save and merge</span></button>
                 </mat-form-buttons>
             </form>
-        </div></div>
-
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="whale" /><span>Containers</span></div>
-            @if (Model.DockerError != null)
-            {
-                <div style="padding:12px 20px 0"><div class="alert alert--error"><icon name="x-circle" /><span>Docker not reachable: @Model.DockerError</span></div></div>
-            }
-            else if (!Model.DockerEnabled)
-            {
-                <p class="text-muted" style="padding:4px 20px 12px;margin:0">Enable Docker discovery above to list the containers on this host.</p>
-            }
-            @if (Model.DockerContainers.Count == 0)
-            {
-                <div class="empty-state">No running containers detected.</div>
-            }
-            else
-            {
-                <p class="text-muted" style="padding:4px 20px 0;margin:0">All running containers: bound ones become routes, the rest show why they were skipped.</p>
-                <div class="mat-table__scroll">
-                    <table class="route-table">
-                        <thead><tr><th>Container</th><th class="hide-sm">Image</th><th class="hide-sm">Ports</th><th>Host</th><th class="hide-sm">Auth</th><th>Status</th></tr></thead>
-                        <tbody class="group">
-                            @foreach (var c in Model.DockerContainers)
-                            {
-                                <tr class="child @(c.Bound ? "" : "route-off")">
-                                    <td class="c-name">@c.Name</td>
-                                    <td class="c-meta hide-sm">@c.Image</td>
-                                    <td class="c-meta hide-sm">@c.Ports</td>
-                                    <td class="rtarget">@(c.Host ?? "-")</td>
-                                    <td class="hide-sm">@(string.IsNullOrEmpty(c.AuthName) ? "-" : c.AuthName)</td>
-                                    <td>
-                                        @if (c.Bound)
-                                        {
-                                            <span class="pill pill--online">Bound</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="pill pill--unknown" title="@c.Status">Ignored</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
         </div>
     </div>
 
-    <div class="tab-panel" data-panel="caddy">
-        <div class="card"><div class="card__body">
-            <p class="text-muted">
-                The Caddy configuration (JSON) that Matcad generates and pushes to Caddy through the admin API.
-                <strong>Read-only</strong>: changes are made through Routes, Providers and Authentications. Matcad deliberately uses the JSON API, not a classic Caddyfile.
-            </p>
-            <div data-tab-group>
-                <div class="mat-tabs">
-                    <button type="button" class="mat-tabs__tab is-active" data-tab="live">Live (Caddy)</button>
-                    <button type="button" class="mat-tabs__tab" data-tab="generated">Generated (Matcad)</button>
+    <div class="mat-tabpanel" role="tabpanel" id="panel-system" aria-labelledby="tab-system" hidden="@(Model.Tab != "system")">
+        <div class="mat-stack">
+            <section class="mat-card" aria-labelledby="export-title">
+                <div class="mat-card__head">@Ui.Icon("download")<h2 class="mat-card__title" id="export-title">Export</h2></div>
+                <div class="mat-card__body mat-stack">
+                    <p class="mat-muted">
+                        A full backup in Matcad's own format: settings, providers, routes, authentications and the user accounts with their password hashes.
+                        Sessions, logs and encryption keys are not in it. <strong>Keep it safe</strong>: it contains secrets.
+                    </p>
+                    <div class="mat-actions"><a class="mat-btn mat-btn--primary" asp-page-handler="Export" download>@Ui.Icon("download")<span>Download the backup (.json)</span></a></div>
                 </div>
-                <div class="tab-panel is-active" data-panel="live">
-                    <pre class="code-view"><code id="cfg-live">@Model.CaddyLiveJson</code></pre>
-                    <mat-form-buttons><button type="button" class="mat-btn mat-btn--sm" data-copy-from="#cfg-live"><icon name="copy" /><span>Copy</span></button></mat-form-buttons>
+            </section>
+
+            <form method="post" asp-page-handler="Restore" enctype="multipart/form-data" class="mat-form" novalidate>
+                <section class="mat-card" aria-labelledby="restore-title">
+                    <div class="mat-card__head">@Ui.Icon("restore")<h2 class="mat-card__title" id="restore-title">Restore a backup</h2></div>
+                    <div class="mat-card__body mat-stack">
+                        <div class="mat-alert mat-alert--warning">
+                            @Ui.Icon("alert")
+                            <div class="mat-alert__body"><strong>This replaces everything.</strong> The configuration and the user accounts are replaced by the contents of the backup.</div>
+                        </div>
+                        <mat-field label="Backup file" asp-for="BackupFile">
+                            <input asp-for="BackupFile" type="file" accept="application/json,.json" class="mat-input" />
+                        </mat-field>
+                        <div class="mat-actions">
+                            <button type="submit" class="mat-btn mat-btn--danger" data-confirm="Replace ALL configuration and users with this backup?" data-confirm-ok="Restore">@Ui.Icon("restore")<span>Restore the backup</span></button>
+                        </div>
+                    </div>
+                </section>
+            </form>
+
+            <section class="mat-card" aria-labelledby="import-title">
+                <div class="mat-card__head">@Ui.Icon("upload")<h2 class="mat-card__title" id="import-title">Import a Caddyfile</h2></div>
+                <div class="mat-card__body mat-stack">
+                    <p class="mat-muted">Turns an existing Caddyfile into routes, with a preview before anything is applied.</p>
+                    <div class="mat-actions"><a class="mat-btn mat-btn--secondary" asp-page="Import">@Ui.Icon("upload")<span>Open the Caddyfile import</span></a></div>
                 </div>
-                <div class="tab-panel" data-panel="generated">
-                    <pre class="code-view"><code id="cfg-generated">@Model.CaddyConfigJson</code></pre>
-                    <mat-form-buttons><button type="button" class="mat-btn mat-btn--sm" data-copy-from="#cfg-generated"><icon name="copy" /><span>Copy</span></button></mat-form-buttons>
-                </div>
-            </div>
-        </div></div>
+            </section>
 
-        <div class="card"><div class="card__body">
-            <h2>Raw / extra config (advanced)</h2>
-            <p class="text-muted" style="margin-top:6px">
-                Extra Caddy JSON that is <strong>deep-merged</strong> into the generated config (objects merge, arrays like <code>routes</code> are joined).
-                Use it for anything Matcad does not model directly. The Caddyfile importer stores what it cannot map here. Invalid JSON is rejected on save.
-            </p>
-            <form method="post" asp-page-handler="Raw" class="mat-form">
-                <textarea asp-for="RawCaddyJson" rows="10" class="mat-textarea" spellcheck="false"
-                          placeholder='{ "apps": { "http": { "servers": { "matcad": { "routes": [ ... ] } } } } }'></textarea>
-                <mat-form-buttons>
-                    <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save &amp; merge</span></button>
-                </mat-form-buttons>
+            <form method="post" asp-page-handler="LoadExample" novalidate>
+                <section class="mat-card" aria-labelledby="example-title">
+                    <div class="mat-card__head">@Ui.Icon("sparkles")<h2 class="mat-card__title" id="example-title">Example data</h2></div>
+                    <div class="mat-card__body mat-stack">
+                        <p class="mat-muted">
+                            Loads example providers, routes and authentications (the routes are inactive) so you can look around.
+                            It <strong>overwrites</strong> the current settings with example values.
+                        </p>
+                        <div class="mat-actions">
+                            <button type="submit" class="mat-btn mat-btn--secondary" data-confirm="Load the example data and overwrite the current settings?" data-confirm-ok="Load">@Ui.Icon("sparkles")<span>Load the example data</span></button>
+                        </div>
+                    </div>
+                </section>
             </form>
-        </div></div>
-    </div>
-
-    <div class="tab-panel" data-panel="system">
-        <div class="card"><div class="card__body">
-            <h2>Export</h2>
-            <p class="text-muted" style="margin-top:6px">
-                A full backup in Matcad's own format: settings, providers, routes, authentications and user accounts including password hashes.
-                Sessions, logs and encryption keys are not included. <strong>Keep it safe</strong>, it contains secrets.
-            </p>
-            <mat-form-buttons>
-                <a class="mat-btn mat-btn--primary" asp-page-handler="Export" download><icon name="download" /><span>Download backup (.json)</span></a>
-            </mat-form-buttons>
-        </div></div>
-
-        <div class="card"><div class="card__body">
-            <h2>Restore a backup</h2>
-            <div class="alert alert--warning" style="margin-top:12px">
-                <icon name="alert" />
-                <span>Restoring <strong>replaces</strong> all current configuration and user accounts with the backup's contents.</span>
-            </div>
-            <form method="post" asp-page-handler="Restore" enctype="multipart/form-data" class="mat-form">
-                <input asp-for="BackupFile" type="file" accept="application/json,.json" class="mat-input" aria-label="Backup file" />
-                <mat-form-buttons>
-                    <button type="submit" class="mat-btn mat-btn--danger" data-confirm="Replace ALL config and users with this backup?" data-confirm-ok="Restore">
-                        <icon name="restore" /><span>Restore backup</span>
-                    </button>
-                </mat-form-buttons>
-            </form>
-        </div></div>
-
-        <div class="card"><div class="card__body">
-            <h2>Import a Caddyfile</h2>
-            <p class="text-muted" style="margin-top:6px">Convert an existing Caddyfile into Matcad routes, with a preview before anything is applied.</p>
-            <mat-form-buttons>
-                <a class="mat-btn" asp-page="Import"><icon name="upload" /><span>Open Caddyfile import</span></a>
-            </mat-form-buttons>
-        </div></div>
-
-        <div class="card"><div class="card__body">
-            <h2>Example data</h2>
-            <p class="text-muted" style="margin-top:6px">
-                Load illustrative providers, routes and authentications (routes disabled) to explore Matcad. <strong>Overwrites</strong> the current settings with example values.
-            </p>
-            <form method="post" asp-page-handler="LoadExample">
-                <mat-form-buttons>
-                    <button type="submit" class="mat-btn" data-confirm="Load example data and overwrite current settings?" data-confirm-ok="Load"><icon name="sparkles" /><span>Load example data</span></button>
-                </mat-form-buttons>
-            </form>
-        </div></div>
+        </div>
     </div>
 </div>

@@ -1,77 +1,79 @@
 @page
 @model Matcad.Pages.Settings.ImportModel
 @{
-    ViewData["Title"] = "Import Caddyfile";
+    ViewData["Title"] = "Import a Caddyfile";
+    ViewData["PageSub"] = "Paste a Caddyfile, check what Matcad makes of it, then apply it.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Import and export", "/Settings?tab=system"), ("Import a Caddyfile", null));
+    ViewData["Width"] = "narrow";
 }
-<div class="card">
-    <div class="card__header"><icon name="upload" /><span>Import a Caddyfile</span></div>
-    <div class="card__body">
-        <p class="text-muted">
-            Paste an existing Caddyfile. Matcad adapts it with Caddy's own adapter and maps the recognizable parts (host, <code>reverse_proxy</code>,
-            redirects, <code>basic_auth</code> and ACME DNS providers) to routes, authentications and providers. Anything it cannot model is kept as
-            <strong>raw passthrough</strong>, so nothing is lost. Review the preview before applying.
-        </p>
 
-        @if (Model.Error != null)
-        {
-            <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
-        }
+<form method="post" class="mat-form" novalidate>
+    @if (Model.Error != null)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+    }
 
-        <form method="post" class="mat-form">
-            <textarea asp-for="Caddyfile" rows="12" class="mat-textarea" spellcheck="false" aria-label="Caddyfile"
-                      placeholder="example.com {&#10;    reverse_proxy backend:8080&#10;}"></textarea>
-            <mat-form-buttons style="margin-top:0">
-                <button type="submit" class="mat-btn mat-btn--primary" asp-page-handler="Preview"><icon name="search" /><span>Preview</span></button>
-                <a class="mat-btn mat-btn--ghost" asp-page="/Settings/Index"><icon name="back" /><span>Back</span></a>
-            </mat-form-buttons>
-        </form>
-    </div>
-</div>
+    <section class="mat-card" aria-labelledby="caddyfile-title">
+        <div class="mat-card__head">@Ui.Icon("upload")<h2 class="mat-card__title" id="caddyfile-title">Caddyfile</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p class="mat-muted">
+                Matcad adapts it with Caddy's own adapter and maps what it recognises (hosts, <code>reverse_proxy</code>, redirects, <code>basic_auth</code> and ACME DNS providers)
+                to routes, authentications and providers. Anything it cannot model is kept as <strong>raw passthrough</strong>, so nothing is lost.
+            </p>
+            <mat-field label="Caddyfile" asp-for="Caddyfile">
+                <textarea asp-for="Caddyfile" rows="12" class="mat-textarea mat-mono" spellcheck="false" placeholder="example.com {&#10;    reverse_proxy backend:8080&#10;}"></textarea>
+            </mat-field>
+        </div>
+    </section>
+
+    <mat-form-buttons>
+        <button type="submit" class="mat-btn mat-btn--primary" asp-page-handler="Preview">@Ui.Icon("search")<span>Preview</span></button>
+        <a class="mat-btn mat-btn--secondary" asp-page="/Settings/Index" asp-route-tab="system">@Ui.Icon("back")<span>Back</span></a>
+    </mat-form-buttons>
+</form>
 
 @if (Model.Preview is { } plan)
 {
-    <div class="card">
-        <div class="card__header"><icon name="eye" /><span>Preview</span></div>
-        <div class="card__body">
-            @foreach (var note in plan.Notes)
-            {
-                <div class="alert alert--warning"><icon name="info" /><span>@note</span></div>
-            }
-            @if (Model.Warnings != null)
-            {
-                <p class="text-muted">Adapter warnings: <code>@Model.Warnings</code></p>
-            }
+    <form method="post" class="mat-form" novalidate>
+        <input type="hidden" asp-for="Caddyfile" />
 
-            @if (plan.Routes.Count > 0)
-            {
-                <div class="mat-table">
-                    <div class="mat-table__scroll">
-                        <table class="route-table">
-                            <thead><tr><th>Host</th><th>Target</th><th class="hide-sm">Auth</th><th class="hide-sm">Provider</th></tr></thead>
-                            <tbody class="group">
+        <section class="mat-card" aria-labelledby="preview-title">
+            <div class="mat-card__head">@Ui.Icon("eye")<h2 class="mat-card__title" id="preview-title">Preview</h2></div>
+            <div class="mat-card__body mat-stack">
+                @foreach (var note in plan.Notes)
+                {
+                    <div class="mat-alert mat-alert--warning">@Ui.Icon("info")<div class="mat-alert__body">@note</div></div>
+                }
+                @if (Model.Warnings != null)
+                {
+                    <p class="mat-muted">Warnings of the adapter: <code>@Model.Warnings</code></p>
+                }
+
+                @if (plan.Routes.Count > 0)
+                {
+                    <div class="mat-table-wrap">
+                        <table class="mat-table">
+                            <caption class="mat-sr-only">Routes found in the Caddyfile</caption>
+                            <thead><tr><th scope="col">Host</th><th scope="col">Target</th><th scope="col" class="mat-hide-sm">Authentication</th><th scope="col" class="mat-hide-sm">DNS provider</th></tr></thead>
+                            <tbody>
                                 @foreach (var ir in plan.Routes)
                                 {
-                                    <tr class="child">
-                                        <td class="c-name">@ir.Route.Host @(ir.Route.Wildcard ? "(wildcard)" : "")</td>
-                                        <td class="rtarget">@(ir.Route.Upstream ?? (ir.Route.FallbackUrl is not null ? "↪ " + ir.Route.FallbackUrl : "-"))</td>
-                                        <td class="hide-sm">@(ir.BasicUsers.Count > 0 ? $"Basic ({ir.BasicUsers.Count})" : "-")</td>
-                                        <td class="hide-sm">@(ir.ProviderName ?? "-")</td>
+                                    <tr>
+                                        <td data-label="Host" class="mat-text-break">@ir.Route.Host @(ir.Route.Wildcard ? "(wildcard)" : "")</td>
+                                        <td data-label="Target" class="mat-mono mat-text-break">@(ir.Route.Upstream ?? (ir.Route.FallbackUrl is not null ? "↪ " + ir.Route.FallbackUrl : "-"))</td>
+                                        <td data-label="Authentication" class="mat-hide-sm">@(ir.BasicUsers.Count > 0 ? $"Basic Auth ({ir.BasicUsers.Count})" : "-")</td>
+                                        <td data-label="DNS provider" class="mat-hide-sm">@(ir.ProviderName ?? "-")</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
-                </div>
-            }
+                }
+            </div>
+        </section>
 
-            <form method="post" class="mat-form">
-                <input type="hidden" asp-for="Caddyfile" />
-                <mat-form-buttons>
-                    <button type="submit" class="mat-btn mat-btn--primary" asp-page-handler="Apply" data-confirm="Import these entries now?" data-confirm-ok="Import">
-                        <icon name="save" /><span>Apply import</span>
-                    </button>
-                </mat-form-buttons>
-            </form>
-        </div>
-    </div>
+        <mat-form-buttons>
+            <button type="submit" class="mat-btn mat-btn--primary" asp-page-handler="Apply" data-confirm="Import these entries now?" data-confirm-ok="Import">@Ui.Icon("save")<span>Apply the import</span></button>
+        </mat-form-buttons>
+    </form>
 }

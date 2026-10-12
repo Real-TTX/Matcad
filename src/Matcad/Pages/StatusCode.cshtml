@@ -4,13 +4,11 @@
     ViewData["Title"] = Model.Title;
     Layout = "_PlainLayout";
 }
-<div class="login">
-    <div class="card">
-        <div class="card__body" style="text-align:center">
-            <div style="font-size:2.4rem;color:var(--accent)"><icon name="compass" /></div>
-            <h1>@Model.Title</h1>
-            <p class="text-muted">@Model.Message</p>
-            <a asp-page="/Index" class="mat-btn mat-btn--primary"><icon name="home" /><span>Back to the dashboard</span></a>
-        </div>
+<div class="mat-auth__card">
+    <div class="mat-empty">
+        <span class="mat-empty__icon">@Ui.Icon("compass")</span>
+        <h1 class="mat-empty__title">@Model.Title</h1>
+        <p>@Model.Message</p>
+        <a asp-page="/Index" class="mat-btn mat-btn--primary">@Ui.Icon("home")<span>Back to the dashboard</span></a>
     </div>
 </div>

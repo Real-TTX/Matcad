@@ -255,7 +255,8 @@ the UI port.
 - Caddy writes JSON access logs to a shared volume; Matcad tails them into SQLite
   and streams new entries to the dashboard over **Server-Sent Events**.
 - The interface is server-rendered with a little plain JavaScript - **no build step**.
-  It shares its design system with the sibling project Mattiverse.
+  It is built on **MatUi**, the toolkit of the Mat apps' design system (MatDesign): flat surfaces, light and dark, a drawer menu on
+  phones. The toolkit is copied into `src/Matcad/wwwroot/matui`; `scripts/update-matui.ps1` brings a newer one.
 - Images are **multi-arch** (`linux/amd64` + `linux/arm64`), cross-compiled so both
   build without emulation.
 

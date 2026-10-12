@@ -2,182 +2,158 @@
 @model Matcad.Pages.StatisticsModel
 @{
     ViewData["Title"] = "Statistics";
+    ViewData["PageSub"] = "The request log, filtered: traffic over time, status codes, and the busiest hosts, paths and clients.";
+    ViewData["Crumbs"] = Crumbs.Of(("Statistics", null));
     var maxBar = Model.Series.Count > 0 ? Math.Max(1, Model.Series.Max(b => b.Count)) : 1;
-    var statusClasses = new[] {
-        ("2xx", Model.C2xx, "st-2"), ("3xx", Model.C3xx, "st-3"),
-        ("4xx", Model.C4xx, "st-4"), ("5xx", Model.C5xx, "st-5") };
+    var statusClasses = new[]
+    {
+        ("2xx", Model.C2xx, "ok", "Successful"),
+        ("3xx", Model.C3xx, "", "Redirected"),
+        ("4xx", Model.C4xx, "warn", "Client error"),
+        ("5xx", Model.C5xx, "error", "Server error"),
+    };
     var maxClass = Math.Max(1, statusClasses.Max(c => c.Item2));
+    string StatusTone(int status) => (status / 100) switch { 2 => "ok", 3 => "info", 4 => "warn", _ => "error" };
 }
-<div class="mat-table">
-    <div class="mat-table__toolbar">
-        <form method="get" class="js-autosubmit">
-            <div class="toolbar-field">
-                <label for="stat-range">Time</label>
-                <select id="stat-range" name="Range" class="mat-select">
-                    <option value="1h" selected="@(Model.Range == "1h")">Last hour</option>
-                    <option value="24h" selected="@(Model.Range == "24h")">Last 24 hours</option>
-                    <option value="7d" selected="@(Model.Range == "7d")">Last 7 days</option>
-                    <option value="30d" selected="@(Model.Range == "30d")">Last 30 days</option>
-                    <option value="all" selected="@(Model.Range == "all")">All time</option>
-                </select>
-            </div>
-            <div class="toolbar-field">
-                <label for="stat-host">Host</label>
-                <select id="stat-host" name="Host" class="mat-select">
-                    <option value="">All hosts</option>
-                    @foreach (var h in Model.HostOptions)
-                    {
-                        <option value="@h" selected="@(Model.Host == h)">@h</option>
-                    }
-                </select>
-            </div>
-            <div class="toolbar-field">
-                <label for="stat-status">Status</label>
-                <select id="stat-status" name="Status" class="mat-select">
-                    <option value="" selected="@(Model.Status == "")">Any</option>
-                    <option value="2" selected="@(Model.Status == "2")">2xx</option>
-                    <option value="3" selected="@(Model.Status == "3")">3xx</option>
-                    <option value="4" selected="@(Model.Status == "4")">4xx</option>
-                    <option value="5" selected="@(Model.Status == "5")">5xx</option>
-                </select>
-            </div>
-            <div class="toolbar-field">
-                <label for="stat-method">Method</label>
-                <select id="stat-method" name="Method" class="mat-select">
-                    <option value="">Any</option>
-                    @foreach (var m in Matcad.Pages.StatisticsModel.MethodOptions)
-                    {
-                        <option value="@m" selected="@(Model.Method == m)">@m</option>
-                    }
-                </select>
-            </div>
-            <div class="search">
-                <icon name="search" />
-                <input type="search" name="Q" value="@Model.Q" class="mat-input" placeholder="Path contains..." aria-label="Path contains" enterkeyhint="search" />
-            </div>
-        </form>
-    </div>
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
 </div>
 
 @if (Model.Total == 0)
 {
-    <div class="card"><div class="empty-state"><div><icon name="bar-chart" /></div>No requests match these filters.</div></div>
+    <div class="mat-empty">
+        <span class="mat-empty__icon">@Ui.Icon("bar-chart")</span>
+        <div class="mat-empty__title">No requests match</div>
+        <p>Change the search or the filters, or reset them.</p>
+        <a class="mat-btn mat-btn--primary" asp-page="Statistics">@Ui.Icon("refresh")<span>Reset the tools</span></a>
+    </div>
 }
 else
 {
-    <div class="widgets">
-        <div class="widget"><div class="widget__icon"><icon name="activity" /></div><div><div class="widget__value">@Model.Total.ToString("N0")</div><div class="widget__label">Requests</div></div></div>
-        <div class="widget"><div class="widget__icon widget__icon--warning"><icon name="alert" /></div><div><div class="widget__value">@Model.ErrorRate.ToString("0.0")%</div><div class="widget__label">Error rate (4xx/5xx)</div></div></div>
-        <div class="widget"><div class="widget__icon"><icon name="clock" /></div><div><div class="widget__value">@Model.AvgDurationMs.ToString("0.0") ms</div><div class="widget__label">Avg. duration</div></div></div>
-        <div class="widget"><div class="widget__icon"><icon name="globe" /></div><div><div class="widget__value">@Model.DistinctHosts.ToString("N0")</div><div class="widget__label">Hosts</div></div></div>
-        <div class="widget"><div class="widget__icon"><icon name="users" /></div><div><div class="widget__value">@Model.DistinctClients.ToString("N0")</div><div class="widget__label">Client IPs</div></div></div>
+    <div class="mat-cols">
+        <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests</span><span class="mat-stat__value">@Model.Total.ToString("N0")</span><span class="mat-stat__delta">in the chosen time</span></div></div>
+        <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Error rate</span><span class="mat-stat__value">@Model.ErrorRate.ToString("0.0")&nbsp;%</span><span class="mat-stat__delta">answered with 4xx or 5xx</span></div></div>
+        <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Average duration</span><span class="mat-stat__value">@Model.AvgDurationMs.ToString("0.0")&nbsp;ms</span><span class="mat-stat__delta">per request</span></div></div>
+        <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Clients</span><span class="mat-stat__value">@Model.DistinctClients.ToString("N0")</span><span class="mat-stat__delta">IP addresses on @Model.DistinctHosts.ToString("N0") @(Model.DistinctHosts == 1 ? "host" : "hosts")</span></div></div>
     </div>
 
-    <div class="card">
-        <div class="card__header"><icon name="bar-chart" /><span>Requests over time <span class="text-muted" style="font-weight:400;font-size:.85rem">(per @Model.SeriesUnit)</span></span></div>
-        <div class="card__body">
-            <div class="bars" role="img" aria-label="Requests over time">
+    <section class="mat-card" aria-labelledby="series-title">
+        <div class="mat-card__head">@Ui.Icon("bar-chart")<h2 class="mat-card__title" id="series-title">Requests over time</h2><span class="mat-card__sub">per @Model.SeriesUnit</span></div>
+        <div class="mat-card__body">
+            <div class="mc-bars" role="img" aria-label="Requests per @Model.SeriesUnit, from @Model.Series.FirstOrDefault()?.Label to @Model.Series.LastOrDefault()?.Label, at most @maxBar.ToString("N0")">
                 @foreach (var b in Model.Series)
                 {
-                    var h = (int)Math.Round(b.Count * 100.0 / maxBar);
-                    <div class="bar" title="@b.Label - @b.Count">
-                        <div class="fill" style="height:@(b.Count == 0 ? 0 : Math.Max(2, h))%"></div>
-                    </div>
+                    var h = b.Count == 0 ? 0 : Math.Max(2, (int)Math.Round(b.Count * 100.0 / maxBar));
+                    <div class="mc-bars__bar" title="@b.Label: @b.Count"><div class="mc-bars__fill" data-mc-value="@h"></div></div>
                 }
             </div>
-            <div class="bars-axis">
+            <div class="mc-bars__axis" aria-hidden="true">
                 <span>@(Model.Series.FirstOrDefault()?.Label)</span>
                 <span>@(Model.Series.LastOrDefault()?.Label)</span>
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="card">
-        <div class="card__header"><icon name="activity" /><span>Status codes</span></div>
-        <div class="card__body">
-            <div class="status-bars">
-                @foreach (var (name, count, cls) in statusClasses)
-                {
-                    <div class="status-row">
-                        <span class="status-name @cls">@name</span>
-                        <div class="status-track"><div class="status-fill @cls" style="width:@((int)Math.Round(count * 100.0 / maxClass))%"></div></div>
-                        <span class="status-count">@count.ToString("N0")</span>
+    <section class="mat-card" aria-labelledby="status-title">
+        <div class="mat-card__head">@Ui.Icon("activity")<h2 class="mat-card__title" id="status-title">Status codes</h2></div>
+        <div class="mat-card__body mat-stack mat-stack--sm">
+            @foreach (var (name, count, tone, text) in statusClasses)
+            {
+                var share = (int)Math.Round(count * 100.0 / maxClass);
+                <div class="mc-status">
+                    <span class="mc-status__name">@name<span class="mat-sr-only"> @text</span></span>
+                    <div class="mat-meter" role="progressbar" aria-valuenow="@count" aria-valuemin="0" aria-valuemax="@Model.Total" aria-label="@name: @count.ToString("N0") requests">
+                        <div class="mat-meter__fill" data-value="@share" @(tone.Length == 0 ? null : Html.Raw($"data-tone=\"{tone}\""))></div>
                     </div>
-                }
-            </div>
+                    <span class="mat-mono mc-status__count">@count.ToString("N0")</span>
+                </div>
+            }
         </div>
+    </section>
+
+    <div class="mat-grid mat-grid--3">
+        <section class="mat-card" aria-labelledby="hosts-title">
+            <div class="mat-card__head">@Ui.Icon("globe")<h2 class="mat-card__title" id="hosts-title">Top hosts</h2></div>
+            <div class="mat-card__body">
+                <div class="mat-table-wrap">
+                    <table class="mat-table mat-table--compact">
+                        <caption class="mat-sr-only">Top hosts</caption>
+                        <thead><tr><th scope="col">Host</th><th scope="col" class="mat-num">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopHosts)
+                            {
+                                <tr><td data-label="Host" class="mat-text-break">@c.Key</td><td data-label="Requests" class="mat-num mat-mono">@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <section class="mat-card" aria-labelledby="paths-title">
+            <div class="mat-card__head">@Ui.Icon("link")<h2 class="mat-card__title" id="paths-title">Top paths</h2></div>
+            <div class="mat-card__body">
+                <div class="mat-table-wrap">
+                    <table class="mat-table mat-table--compact">
+                        <caption class="mat-sr-only">Top paths</caption>
+                        <thead><tr><th scope="col">Path</th><th scope="col" class="mat-num">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopPaths)
+                            {
+                                <tr><td data-label="Path" class="mat-mono mat-text-break">@c.Key</td><td data-label="Requests" class="mat-num mat-mono">@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <section class="mat-card" aria-labelledby="clients-title">
+            <div class="mat-card__head">@Ui.Icon("users")<h2 class="mat-card__title" id="clients-title">Top clients</h2></div>
+            <div class="mat-card__body">
+                <div class="mat-table-wrap">
+                    <table class="mat-table mat-table--compact">
+                        <caption class="mat-sr-only">Top clients</caption>
+                        <thead><tr><th scope="col">Client IP</th><th scope="col" class="mat-num">Requests</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in Model.TopClients)
+                            {
+                                <tr><td data-label="Client IP" class="mat-mono mat-text-break">@(string.IsNullOrEmpty(c.Key) ? "(unknown)" : c.Key)</td><td data-label="Requests" class="mat-num mat-mono">@c.Value.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <div class="card-grid">
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="globe" /><span>Top hosts</span></div>
-            <div class="mat-table__scroll">
-                <table class="data">
-                    <thead><tr><th>Host</th><th class="actions">Requests</th></tr></thead>
-                    <tbody>
-                        @foreach (var c in Model.TopHosts)
-                        {
-                            <tr><td>@c.Key</td><td class="actions">@c.Value.ToString("N0")</td></tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="link" /><span>Top paths</span></div>
-            <div class="mat-table__scroll">
-                <table class="data">
-                    <thead><tr><th>Path</th><th class="actions">Requests</th></tr></thead>
-                    <tbody>
-                        @foreach (var c in Model.TopPaths)
-                        {
-                            <tr><td class="rtarget">@c.Key</td><td class="actions">@c.Value.ToString("N0")</td></tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <div class="mat-table">
-            <div class="mat-table__head"><icon name="users" /><span>Top clients</span></div>
-            <div class="mat-table__scroll">
-                <table class="data">
-                    <thead><tr><th>Client IP</th><th class="actions">Requests</th></tr></thead>
-                    <tbody>
-                        @foreach (var c in Model.TopClients)
-                        {
-                            <tr><td class="rtarget">@(string.IsNullOrEmpty(c.Key) ? "(unknown)" : c.Key)</td><td class="actions">@c.Value.ToString("N0")</td></tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div class="mat-table">
-        <div class="mat-table__head"><icon name="clock" /><span>Recent matching requests <span class="text-muted" style="font-weight:400;font-size:.85rem">(latest 100)</span></span></div>
-        <div class="mat-table__scroll" style="margin-top:12px">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Time</th><th>Host</th><th class="hide-sm">Method</th><th>Path</th><th>Status</th>
-                        <th class="hide-sm">Duration</th><th class="hide-sm">Client</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var r in Model.RecentRows)
-                    {
+    <section class="mat-card" aria-labelledby="recent-title">
+        <div class="mat-card__head">@Ui.Icon("clock")<h2 class="mat-card__title" id="recent-title">Recent matching requests</h2><span class="mat-card__sub">the latest 100</span></div>
+        <div class="mat-card__body">
+            <div class="mat-table-wrap">
+                <table class="mat-table mat-table--compact">
+                    <caption class="mat-sr-only">Recent matching requests</caption>
+                    <thead>
                         <tr>
-                            <td class="text-muted nowrap">@Cell.LocalTime(r.At)</td>
-                            <td>@r.Host</td>
-                            <td class="hide-sm">@r.Method</td>
-                            <td class="rtarget">@r.Path</td>
-                            <td><span class="st-@(r.Status / 100)">@r.Status</span></td>
-                            <td class="text-muted hide-sm">@r.DurationMs.ToString("0.0") ms</td>
-                            <td class="text-muted hide-sm">@r.RemoteIp</td>
+                            <th scope="col">Time</th><th scope="col">Host</th><th scope="col" class="mat-hide-sm">Method</th><th scope="col">Path</th><th scope="col">Status</th>
+                            <th scope="col" class="mat-hide-sm mat-num">Duration</th><th scope="col" class="mat-hide-sm">Client</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.RecentRows)
+                        {
+                            <tr>
+                                <td data-label="Time" class="mat-mono">@Ui.LocalTime(r.At)</td>
+                                <td data-label="Host" class="mat-text-break">@r.Host</td>
+                                <td data-label="Method" class="mat-hide-sm mat-mono">@r.Method</td>
+                                <td data-label="Path" class="mat-mono mat-text-break">@r.Path</td>
+                                <td data-label="Status"><span class="mat-pill mat-pill--@StatusTone(r.Status)">@r.Status</span></td>
+                                <td data-label="Duration" class="mat-hide-sm mat-num mat-mono">@r.DurationMs.ToString("0.0") ms</td>
+                                <td data-label="Client" class="mat-hide-sm mat-mono">@r.RemoteIp</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
+    </section>
 }

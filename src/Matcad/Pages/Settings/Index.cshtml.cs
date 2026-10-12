@@ -22,6 +22,9 @@ public class IndexModel : PageModel
         _store = store; _caddy = caddy; _auth = auth; _docker = docker; _dockerRoutes = dockerRoutes; _routes = routes;
     }
 
+    /// <summary>The tab to open: after a save the page shows the tab it was saved from.</summary>
+    [BindProperty(SupportsGet = true)] public string Tab { get; set; } = "general";
+
     [BindProperty] public string BaseDomain { get; set; } = "";
     [BindProperty] public string MatcadHost { get; set; } = "";
     [BindProperty] public bool SystemRouteEnabled { get; set; } = true;
@@ -40,6 +43,8 @@ public class IndexModel : PageModel
     [BindProperty] public string DockerBaseDomain { get; set; } = "";
     [BindProperty] public bool DockerRequireLabel { get; set; } = true;
 
+    private static readonly string[] Tabs = ["general", "users", "certificates", "docker", "caddy", "system"];
+
     private const long MaxBackupBytes = 20 * 1024 * 1024;
 
     [BindProperty] public IFormFile? BackupFile { get; set; }
@@ -56,6 +61,7 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
+        if (!Tabs.Contains(Tab)) Tab = "general";
         Load();
         Users = await _auth.ListUsers();
         Certificates = CertificatePlanner.Plan(_routes.All(), _store.Providers);
@@ -104,7 +110,7 @@ public class IndexModel : PageModel
         if ((baseDomain.Length > 0 && !RouteEditor.IsHostName(baseDomain)) || (matcadHost.Length > 0 && !RouteEditor.IsHostName(matcadHost)))
         {
             TempData["FlashError"] = "Domains must be plain names like example.com (no http://, path or port). Nothing was saved.";
-            return RedirectToPage("Index");
+            return RedirectToPage("Index", new { tab = "general" });
         }
 
         var s = _store.Settings;
@@ -125,7 +131,7 @@ public class IndexModel : PageModel
         TempData[ok ? "Flash" : "FlashError"] = ok
             ? "Settings saved and Caddy configuration updated."
             : $"Settings saved. Caddy push failed: {error}";
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "general" });
     }
 
     public IActionResult OnPostDocker()
@@ -139,7 +145,7 @@ public class IndexModel : PageModel
 
         _docker.RequestRefresh(); // pick up the change immediately
         TempData["Flash"] = "Docker settings saved. Containers are being re-scanned.";
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "docker" });
     }
 
     public async Task<IActionResult> OnPostLoadExampleAsync()
@@ -149,7 +155,7 @@ public class IndexModel : PageModel
         TempData[ok ? "Flash" : "FlashError"] = ok
             ? "Example data loaded (routes are disabled)."
             : $"Example data loaded. Caddy push failed: {error}";
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "system" });
     }
 
     public IActionResult OnPostRerunSetup()
@@ -166,7 +172,7 @@ public class IndexModel : PageModel
         TempData[ok ? "Flash" : "FlashError"] = ok
             ? "Caddy configuration re-pushed."
             : $"Caddy push failed: {error}";
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "general" });
     }
 
     public async Task<IActionResult> OnGetExportAsync()
@@ -194,7 +200,7 @@ public class IndexModel : PageModel
         IActionResult Fail(string message)
         {
             TempData["FlashError"] = message;
-            return RedirectToPage("Index");
+            return RedirectToPage("Index", new { tab = "system" });
         }
 
         if (BackupFile is not { Length: > 0 }) return Fail("Please choose a backup file.");
@@ -228,7 +234,7 @@ public class IndexModel : PageModel
             $"Backup restored ({backup.Providers.Count} providers, {backup.Routes.Count} routes, " +
             $"{backup.Authentications.Count} authentications, {users.Count} users)." +
             (ok ? "" : $" Caddy push failed: {error}");
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "system" });
     }
 
     public async Task<IActionResult> OnPostRawAsync()
@@ -240,7 +246,7 @@ public class IndexModel : PageModel
             catch (Exception ex)
             {
                 TempData["FlashError"] = "Raw Caddy JSON is not valid JSON: " + ex.Message;
-                return RedirectToPage("Index");
+                return RedirectToPage("Index", new { tab = "caddy" });
             }
         }
         var s = _store.Settings;
@@ -251,6 +257,6 @@ public class IndexModel : PageModel
         TempData[ok ? "Flash" : "FlashError"] = ok
             ? "Raw config saved and merged into Caddy."
             : $"Saved, but Caddy rejected the merged config: {error}";
-        return RedirectToPage("Index");
+        return RedirectToPage("Index", new { tab = "caddy" });
     }
 }

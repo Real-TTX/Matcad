@@ -1,23 +1,30 @@
 @page
 @model Matcad.Pages.Providers.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Create provider" : "Edit provider";
+    ViewData["Title"] = Model.IsNew ? "New DNS provider" : "Edit DNS provider";
+    ViewData["PageSub"] = "The credentials Caddy needs to answer the DNS challenge of a wildcard certificate.";
+    ViewData["Crumbs"] = Crumbs.Of(("DNS providers", "/Providers"), (Model.IsNew ? "New DNS provider" : "Edit DNS provider", null));
+    ViewData["Width"] = "narrow";
 }
-<div class="card">
-    <div class="card__body">
-        @if (Model.Error != null)
-        {
-            <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
-        }
-        @if (Model.TestResult is { } test)
-        {
-            var kind = test.Ok == true ? "success" : (test.Ok == false ? "error" : "warning");
-            <div class="alert alert--@kind"><icon name="@(test.Ok == true ? "check-circle" : test.Ok == false ? "x-circle" : "info")" /><span>@test.Message</span></div>
-        }
-        <form method="post" class="mat-form">
-            <input type="hidden" asp-for="Id" />
-            <mat-field label="Name" asp-for="Name">
-                <input asp-for="Name" class="mat-input" placeholder="e.g. Netcup production" autofocus />
+
+<form method="post" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Id" />
+
+    @if (Model.Error != null)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+    }
+    @if (Model.TestResult is { } test)
+    {
+        var tone = test.Ok == true ? "success" : test.Ok == false ? "danger" : "info";
+        <div class="mat-alert mat-alert--@tone" role="status">@Ui.Icon(test.Ok == true ? "check-circle" : test.Ok == false ? "x-circle" : "info")<div class="mat-alert__body">@test.Message</div></div>
+    }
+
+    <section class="mat-card" aria-labelledby="provider-title">
+        <div class="mat-card__head">@Ui.Icon("cloud")<h2 class="mat-card__title" id="provider-title">Provider</h2></div>
+        <div class="mat-card__body mat-stack">
+            <mat-field label="Name" asp-for="Name" required>
+                <input asp-for="Name" class="mat-input" autofocus required data-msg-required="Please give the provider a name." />
             </mat-field>
 
             <partial name="Controls/_ProviderFields" model="@(new ProviderFieldsModel
@@ -25,19 +32,19 @@
                 TypeFieldName = nameof(Model.Type), Type = Model.Type, CustomModule = Model.CustomModule,
                 Values = Model.CredentialValues, CustomCredentials = Model.CustomCredentials
             })" />
+        </div>
+    </section>
 
-            <mat-form-buttons>
-                <button type="submit" class="mat-btn mat-btn--primary"><icon name="save" /><span>Save</span></button>
-                <button type="submit" class="mat-btn" asp-page-handler="Test" formnovalidate><icon name="check-circle" /><span>Test credentials</span></button>
-                <a class="mat-btn mat-btn--ghost" asp-page="Index"><icon name="back" /><span>Back</span></a>
-                @if (!Model.IsNew)
-                {
-                    <span class="mat-buttons__spacer"></span>
-                    <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete this provider?">
-                        <icon name="trash" /><span>Delete</span>
-                    </button>
-                }
-            </mat-form-buttons>
-        </form>
-    </div>
-</div>
+    <mat-form-buttons>
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+        <button type="submit" class="mat-btn mat-btn--secondary" asp-page-handler="Test" formnovalidate>@Ui.Icon("check-circle")<span>Test credentials</span></button>
+        <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>
+        @if (!Model.IsNew)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete the provider @Model.Name? This cannot be undone." data-confirm-ok="Delete">
+                @Ui.Icon("trash")<span>Delete</span>
+            </button>
+        }
+    </mat-form-buttons>
+</form>

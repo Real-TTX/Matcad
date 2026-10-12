@@ -2,157 +2,108 @@
 @model Matcad.Pages.IndexModel
 @{
     ViewData["Title"] = "Dashboard";
+    ViewData["PageSub"] = "Traffic and routes at a glance, and the requests as they arrive.";
 }
 
-<div class="widgets">
-    <div class="widget">
-        <div class="widget__icon"><icon name="activity" /></div>
-        <div><div class="widget__value">@Model.Requests24h.ToString("N0")</div><div class="widget__label">Requests (24 h)</div></div>
-    </div>
-    <div class="widget">
-        <div class="widget__icon"><icon name="database" /></div>
-        <div><div class="widget__value">@Model.TotalRequests.ToString("N0")</div><div class="widget__label">Requests total</div></div>
-    </div>
-    <div class="widget">
-        <div class="widget__icon widget__icon--warning"><icon name="alert" /></div>
-        <div><div class="widget__value">@Model.ClientErrors24h.ToString("N0")</div><div class="widget__label">4xx (24 h)</div></div>
-    </div>
-    <div class="widget">
-        <div class="widget__icon widget__icon--danger"><icon name="x-circle" /></div>
-        <div><div class="widget__value">@Model.ServerErrors24h.ToString("N0")</div><div class="widget__label">5xx (24 h)</div></div>
-    </div>
+<div class="mat-cols">
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests</span><span class="mat-stat__value">@Model.Requests24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests in total</span><span class="mat-stat__value">@Model.TotalRequests.ToString("N0")</span><span class="mat-stat__delta">since the log began</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Client errors (4xx)</span><span class="mat-stat__value">@Model.ClientErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Server errors (5xx)</span><span class="mat-stat__value">@Model.ServerErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
 </div>
 
-<div class="mat-table">
-    <div class="mat-table__head"><icon name="route" /><span>Routes</span></div>
-    @if (Model.Groups.Count == 0)
-    {
-        <div class="empty-state">
-            <div><icon name="route" /></div>
-            No routes yet. <a asp-page="/Routes/Edit">Create the first route</a>.
-        </div>
-    }
-    else
-    {
-        <div class="mat-table__scroll">
-            <table class="route-table">
-                <thead>
-                    <tr>
-                        <th>Host</th>
-                        <th class="hide-sm">Target</th>
-                        <th class="hide-sm">Last access</th>
-                        <th>Status</th>
-                        <th class="c-actions"></th>
-                    </tr>
-                </thead>
-                @foreach (var group in Model.Groups)
-                {
-                    <tbody class="group">
-                        <tr class="parent">
-                            <td colspan="5">
-                                <span class="grp-name"><icon name="network" /> @group.BaseDomain</span>
-                                <span class="grp-count">· @group.Routes.Count</span>
-                            </td>
+<section class="mat-card" aria-labelledby="routes-title">
+    <div class="mat-card__head">@Ui.Icon("route")<h2 class="mat-card__title" id="routes-title">Routes</h2></div>
+    <div class="mat-card__body">
+        @if (Model.Groups.Count == 0)
+        {
+            <div class="mat-empty">
+                <span class="mat-empty__icon">@Ui.Icon("route")</span>
+                <div class="mat-empty__title">No routes yet</div>
+                <p>A route sends the requests for a host name to the service behind it.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="/Routes/Edit">@Ui.Icon("plus")<span>Add your first route</span></a>
+            </div>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table">
+                    <caption class="mat-sr-only">Routes by domain</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Host</th>
+                            <th scope="col" class="mat-hide-sm">Target</th>
+                            <th scope="col" class="mat-hide-sm">Last access</th>
+                            <th scope="col">Status</th>
+                            <th scope="col"><span class="mat-sr-only">Actions</span></th>
                         </tr>
-                        @foreach (var row in group.Routes)
-                        {
-                            var r = row.Route;
-                            var cert = Model.Cert(r);
-                            <tr class="child @(r.Enabled ? "" : "route-off")">
-                                <td class="c-name">
-                                    <span class="branch">↳</span>
-                                    @if (row.Label == "@")
-                                    {
-                                        <span class="apex">(root)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="sub">@row.Label</span><span class="sub-domain">.@group.BaseDomain</span>
-                                    }
-                                    @if (r.Wildcard)
-                                    {
-                                        <span class="mat-badge mat-badge--warning">Wildcard</span>
-                                    }
-                                    @if (r.Source == "system")
-                                    {
-                                        <span class="mat-badge mat-badge--warning" title="Matcad self-exposure">System</span>
-                                    }
-                                    else if (r.Source == "docker")
-                                    {
-                                        <span class="mat-badge">Docker</span>
-                                    }
-                                    @switch (cert.Kind)
-                                    {
-                                        case CertificatePlanner.CertKind.Wildcard:
-                                            <span class="mat-badge mat-badge--success hide-sm" title="Wildcard certificate"><icon name="shield" /> @cert.Subject</span>
-                                            break;
-                                        case CertificatePlanner.CertKind.Covered:
-                                            <span class="mat-badge mat-badge--muted hide-sm" title="Covered by wildcard @cert.Subject"><icon name="shield" /> @cert.Subject</span>
-                                            break;
-                                        case CertificatePlanner.CertKind.Individual:
-                                            <span class="mat-badge mat-badge--danger" title="Would request its own individual certificate"><icon name="alert" /> Individual</span>
-                                            break;
-                                    }
-                                </td>
-                                <td class="rtarget hide-sm">
-                                    @if (!string.IsNullOrEmpty(r.Upstream))
-                                    {
-                                        @r.Upstream
-                                    }
-                                    else if (!string.IsNullOrEmpty(r.FallbackUrl))
-                                    {
-                                        <text>↪ @r.FallbackUrl</text>
-                                    }
-                                    else
-                                    {
-                                        <text>-</text>
-                                    }
-                                </td>
-                                <td class="c-meta hide-sm">
-                                    @if (row.LastAccess is DateTime lastAccess)
-                                    {
-                                        @Cell.LocalTime(lastAccess, "short")
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">no access yet</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (r.Enabled)
-                                    {
-                                        <span class="pill pill--online">Active</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="pill pill--unknown">Inactive</span>
-                                    }
-                                </td>
-                                <td class="c-actions">
-                                    @if (!r.Wildcard && !string.IsNullOrWhiteSpace(r.Host))
-                                    {
-                                        <a class="mat-btn mat-btn--icon mat-btn--sm mat-btn--ghost hide-sm" href="https://@r.Host" target="_blank" rel="noopener" title="Open" aria-label="Open @r.Host"><icon name="external" /></a>
-                                    }
-                                    @if (!r.IsDerived)
-                                    {
-                                        <a class="mat-btn mat-btn--icon mat-btn--sm mat-btn--ghost" asp-page="/Routes/Edit" asp-route-id="@r.Id" title="Edit" aria-label="Edit @r.Host"><icon name="edit" /></a>
-                                    }
-                                </td>
+                    </thead>
+                    @foreach (var group in Model.Groups)
+                    {
+                        <tbody>
+                            <tr class="mc-group">
+                                <td colspan="5"><div class="mc-group__row">@Ui.Icon("network")<strong>@group.BaseDomain</strong><span class="mat-tag">@group.Routes.Count</span></div></td>
                             </tr>
-                        }
-                    </tbody>
-                }
-            </table>
-        </div>
-    }
-</div>
+                            @foreach (var row in group.Routes)
+                            {
+                                var r = row.Route;
+                                var cert = Model.Cert(r);
+                                <tr class="@(r.Enabled ? "" : "mc-off")">
+                                    <td data-label="Host"><partial name="_RouteName" model="new RouteNameModel(r, row.Label, group.BaseDomain, cert)" /></td>
+                                    <td data-label="Target" class="mat-hide-sm mat-mono mat-text-break">
+                                        @if (!string.IsNullOrEmpty(r.Upstream))
+                                        {
+                                            @r.Upstream
+                                        }
+                                        else if (!string.IsNullOrEmpty(r.FallbackUrl))
+                                        {
+                                            <text>↪ @r.FallbackUrl</text>
+                                        }
+                                        else
+                                        {
+                                            <text>-</text>
+                                        }
+                                    </td>
+                                    <td data-label="Last access" class="mat-hide-sm">
+                                        @if (row.LastAccess is DateTime lastAccess)
+                                        {
+                                            @Ui.LocalTime(lastAccess, "short")
+                                        }
+                                        else
+                                        {
+                                            <span class="mat-muted">no access yet</span>
+                                        }
+                                    </td>
+                                    <td data-label="Status">
+                                        @if (r.Enabled) { <span class="mat-pill mat-pill--ok">Active</span> }
+                                        else { <span class="mat-pill">Inactive</span> }
+                                    </td>
+                                    <td class="mat-table__cell-actions">
+                                        <div class="mat-table__actions">
+                                            @if (!r.Wildcard && !string.IsNullOrWhiteSpace(r.Host))
+                                            {
+                                                <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm mat-hide-sm" href="https://@r.Host" target="_blank" rel="noopener" aria-label="Open @r.Host" data-tip="Open">@Ui.Icon("external")</a>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+            </div>
+        }
+    </div>
+</section>
 
-<div class="mat-table">
-    <div class="mat-table__head">
-        <icon name="clock" /><span>Recent requests</span>
-        <span id="log-status" class="pill pill--unknown" style="margin-left:auto">Connecting</span>
+<section class="mat-card" aria-labelledby="log-title">
+    <div class="mat-card__head">
+        @Ui.Icon("clock")<h2 class="mat-card__title" id="log-title">Recent requests</h2>
+        <span class="mat-pill mc-log__status" id="log-status">Connecting</span>
     </div>
-    <div class="log-stream" id="log-stream" style="margin-top:12px">
-        <div class="log-empty">Waiting for requests...</div>
+    <div class="mat-card__body">
+        <div class="mc-log" id="log-stream" role="log" aria-live="off" aria-label="Recent requests">
+            <div class="mat-muted mc-log__empty">Waiting for requests...</div>
+        </div>
     </div>
-</div>
+</section>

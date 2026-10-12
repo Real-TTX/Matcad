@@ -4,29 +4,27 @@
     ViewData["Title"] = "Sign in";
     Layout = "_PlainLayout";
 }
-<div class="login">
-    <div class="login__brand">
-        <img src="~/img/logo.svg" alt="" />
-        <span class="name">Matcad</span>
-        <span class="tagline">Reverse proxy, simply managed</span>
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>@Ui.App.Name</h1>
+        <p class="mat-muted">@Ui.App.Tagline</p>
     </div>
 
-    <div class="card">
-        <div class="card__body">
-            @if (Model.Error != null)
-            {
-                <div class="alert alert--error"><icon name="x-circle" /><span>@Model.Error</span></div>
-            }
-            <form method="post" class="mat-form">
-                <input type="hidden" asp-for="ReturnUrl" />
-                <mat-field label="Username or e-mail address" asp-for="Username">
-                    <input asp-for="Username" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus />
-                </mat-field>
-                <mat-field label="Password" asp-for="Password">
-                    <input asp-for="Password" type="password" class="mat-input" autocomplete="current-password" />
-                </mat-field>
-                <button type="submit" class="mat-btn mat-btn--primary mat-btn--block"><icon name="login" /><span>Sign in</span></button>
-            </form>
+    <form method="post" class="mat-form" novalidate>
+        <input type="hidden" asp-for="ReturnUrl" />
+        @if (Model.Error != null)
+        {
+            <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("alert")<div class="mat-alert__body">@Model.Error</div></div>
+        }
+        <mat-field label="Username or e-mail address" asp-for="Username">
+            <input asp-for="Username" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus required data-msg-required="Please enter your username or e-mail address." />
+        </mat-field>
+        <mat-field label="Password" asp-for="Password">
+            <input asp-for="Password" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your password." />
+        </mat-field>
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Sign in</span></button>
         </div>
-    </div>
+    </form>
 </div>

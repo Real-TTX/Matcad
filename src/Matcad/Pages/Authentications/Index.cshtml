@@ -2,5 +2,65 @@
 @model Matcad.Pages.Authentications.IndexModel
 @{
     ViewData["Title"] = "Authentications";
+    ViewData["PageSub"] = "Who may open a protected route: browser logins or the Matcad login page.";
+    ViewData["Crumbs"] = Crumbs.Of(("Authentications", null));
+    var tools = Model.Toolbar.SearchActive || Model.Toolbar.ActiveFilters > 0;
 }
-<partial name="Controls/_DataTable" model="Model.Table" />
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon">@Ui.Icon(tools ? "search" : "lock")</span>
+            @if (tools)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>Change the search or the filter, or reset them.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Index">@Ui.Icon("refresh")<span>Reset the tools</span></a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No authentications yet</div>
+                <p>An authentication protects a route with a login: the browser's own dialog or the Matcad login page.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Edit">@Ui.Icon("plus")<span>Add your first authentication</span></a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Authentications</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="mat-hide-sm">Details</th>
+                        <th scope="col" class="mat-hide-sm">Used by</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model.Items)
+                    {
+                        var routes = Model.RouteCount(a);
+                        <tr>
+                            <td data-label="Name"><div class="mat-table__name"><a asp-page="Edit" asp-route-id="@a.Id">@a.Name</a></div></td>
+                            <td data-label="Type">
+                                @if (a.Type == Matcad.Config.AuthType.BasicAuth) { <span class="mat-tag">Basic Auth</span> }
+                                else { <span class="mat-tag">Matcad</span> }
+                            </td>
+                            <td data-label="Details" class="mat-hide-sm mat-muted">@(a.Type == Matcad.Config.AuthType.Matcad ? $"{a.Users.Count} users · login page" : $"{a.Users.Count} users")</td>
+                            <td data-label="Used by" class="mat-hide-sm mat-muted">@(routes == 1 ? "1 route" : $"{routes} routes")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" asp-page="Edit">@Ui.Icon("plus")<span>New authentication</span></a>
+    </div>
+</div>

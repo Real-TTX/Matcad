@@ -1,68 +1,31 @@
+@inject Toolkit Toolkit
+@{
+    // The colour of the login page: the accent of its authentication (#rrggbb, checked when it was saved), or the colour of the app.
+    var accent = ViewData["BrandAccent"] as string;
+}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-app="@Ui.App.Id" @(accent is null ? null : Html.Raw($"data-accent=\"custom\" style=\"--mat-custom-accent:{accent};--mat-custom-on-accent:{BrandAccent.OnAccent(accent)}\""))>
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <title>@ViewData["Title"] · Matcad</title>
+    <meta name="robots" content="noindex" />
+    <title>@ViewData["Title"] · @Ui.App.Name</title>
     @*
-        The login portal of a Matcad authentication. In "inline" portal mode it is served through the protected
-        host itself (Caddy proxies only /auth/* to Matcad), where Matcad's static files are not reachable - so this
-        layout carries its own CSS, and no manifest or service worker: a protected site is not a Matcad app.
-        Same look as the app (matcad.css), reduced to what the login needs.
+        The login portal of a Matcad authentication. In "inline" portal mode it is served through the protected host itself (Caddy proxies only /auth/* to
+        Matcad), where the static files of the app are not reachable: the toolkit and the styles of the app are served under /auth/ui/ and /auth/css/ for this page. There is no manifest and no
+        service worker: a protected site is not a Matcad app.
     *@
-    <style>
-        :root {
-            --accent: #6366f1; --accent-grad: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06b6d4 100%);
-            --bg: #f1f2f9; --surface: #fff; --surface-2: #f6f7fd; --border: rgba(24,32,78,.10); --border-strong: rgba(24,32,78,.18);
-            --text: #151a33; --text-muted: #5d6385; --tint-strong: rgba(99,102,241,.18);
-            --danger: #dc2f4a; --danger-bg: rgba(220,47,74,.10); --radius: 14px; --radius-lg: 22px;
-            --shadow-1: 0 1px 2px rgba(24,32,78,.06), 0 4px 14px rgba(24,32,78,.06);
-            --wallpaper: radial-gradient(900px 480px at 8% -8%, rgba(99,102,241,.22), transparent 60%), radial-gradient(760px 420px at 100% 0%, rgba(34,211,238,.18), transparent 60%);
-        }
-        @@media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #0a0e1d; --surface: #121830; --surface-2: #19203c; --border: rgba(255,255,255,.08); --border-strong: rgba(255,255,255,.16);
-                --text: #eaeefc; --text-muted: #9aa3c7; --tint-strong: rgba(129,140,248,.24);
-                --danger: #ff6b81; --danger-bg: rgba(255,107,129,.14);
-                --shadow-1: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.28);
-                --wallpaper: radial-gradient(900px 520px at 6% -10%, rgba(99,102,241,.34), transparent 60%), radial-gradient(760px 460px at 100% 2%, rgba(6,182,212,.22), transparent 60%);
-            }
-        }
-        *, *::before, *::after { box-sizing: border-box; }
-        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-        body {
-            margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
-            padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            font-size: 15px; line-height: 1.5; color: var(--text); background: var(--wallpaper), var(--bg);
-        }
-        a, button, input { touch-action: manipulation; }
-        .login { width: min(420px, 100%); }
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding: 24px; }
-        .login-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; font-size: 1.35rem; font-weight: 750; letter-spacing: -.01em; }
-        .login-brand.brand-top { flex-direction: column; }
-        .brand-logo { color: var(--accent); flex: none; }
-        .text-muted { color: var(--text-muted); text-align: center; margin: 0 0 18px; }
-        .mat-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-        .mat-label { font-size: .84rem; font-weight: 600; color: var(--text-muted); }
-        .mat-input {
-            width: 100%; padding: 10px 14px; min-height: 44px; border-radius: var(--radius); font: inherit; font-size: 16px;
-            border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
-        }
-        .mat-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--tint-strong); }
-        .mat-btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 9px 18px;
-            border-radius: 999px; border: 0; background: var(--accent-grad); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
-        }
-        .mat-btn:active { transform: scale(.98); }
-        .mat-icon { flex: none; vertical-align: -.14em; }
-        .alert { padding: 12px 14px; border-radius: var(--radius); margin-bottom: 16px; font-size: .93rem; background: var(--danger-bg); color: var(--danger); border: 1px solid transparent; }
-    </style>
+    <script src="/auth/ui/matui.boot.js"></script>
+    <link rel="stylesheet" href="/auth/ui/matui.css" />
+    <link rel="stylesheet" href="/auth/css/matcad.css" />
 </head>
 <body>
-    <main class="login">
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+    <main class="mat-auth" id="main">
         @RenderBody()
     </main>
+    <script src="/auth/ui/matui.js"></script>
 </body>
 </html>

@@ -33,9 +33,9 @@ src/Matcad
   Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), certificates, backup
   Data/                 EF Core context, migrations, DatabaseBootstrapper (also upgrades pre-0.6 databases)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest
-  Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal)
-  Controls/             tag helpers (<icon>, <mat-field>, <mat-form-buttons>) and the data-table model
-  wwwroot/              css/matcad.css, js/matcad.js, sw.js, offline.html, manifest.webmanifest, img/
+  Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar
+  Controls/             Ui (icons, logo), tag helpers (<icon>, <mat-field>, <mat-form-buttons>), ToolbarModel, BrandAccent
+  wwwroot/              matui/ (the toolkit, a copy), css/matcad.css, js/*.js, sw.js, offline.html, manifest.webmanifest, img/
 tests/Matcad.Tests
 ```
 
@@ -52,13 +52,23 @@ a Docker container with an unknown `matcad.auth` label is not published). Sign-i
 constraint names PascalCase without underscores. Schema changes are migrations:
 `dotnet ef migrations add <Name> --project src/Matcad --output-dir Data/Migrations` (tool in `dotnet-tools.json`).
 
-**UI:** the design system of Mattiverse (iOS/Material look, `mat-*` classes, theme switch bottom left, hidden scrollbars until
-scrolling, pill buttons in one line: Save, Back, space, Delete). Phone width (390 px) must work: secondary table columns get
-`hide-sm`. The top bar and the area behind the status bar are always dark (`--chrome`), because an installed iOS app has white
-status bar icons. Inputs are 16 px on touch screens (no zoom on focus); do not disable pinch zoom.
+**UI:** the design system of the Mat apps, **MatUi** (the toolkit of the MatDesign project; rules and live examples are on its site,
+the rule ids such as SHELL-08 are in `MatDesign/src/MatDesign.Core/RuleBook.cs`). `wwwroot/matui/` is a *copy* (`matui.css`, `matui.js`,
+`matui.boot.js`, `matui-icons.svg`); `scripts/update-matui.ps1` fetches a newer one from a running MatDesign, then look at every page.
+The only colour Matcad chooses is the accent: `data-app="matcad"` on `<html>` (`#2f6feb`, set in `matui.css`, kept in `Ui.App.Accent`).
+Pages use only toolkit classes (`mat-*`): flat surfaces, a breadcrumb above every page (`ViewData["Crumbs"] = Crumbs.Of(...)`), a title
+and one line (`PageSub`), lists as toolbar / table / actions below (`_Toolbar` partial, `ToolbarModel`), forms as cards with the button
+row under them (Save, Back, space, Delete), confirmations with `data-confirm`, dependent fields with `data-show-if`, every `td` with
+`data-label` (rows become cards on a phone), icons from the sprite (`@Ui.Icon("name")` or `<icon name="..." />`; a test checks the names).
+No inline styles, scripts or event handlers and no colour literals: what is Matcad's own lives in `css/matcad.css` with the prefix `mc-`
+and in small page scripts (`route-edit.js`, `authentication-edit.js`). Phone width (390 px) must work; inputs are 16 px on touch
+screens (no zoom on focus); do not disable pinch zoom. The login portal is served on the protected host, where Caddy proxies only
+`/auth/*`: `_PortalLayout` loads the toolkit from `/auth/ui/` and `matcad.css` from `/auth/css/`, and takes its colour from the
+authentication (`data-accent="custom"`).
 
-**PWA:** `sw.js` caches static files only and serves `offline.html`; it never stores pages or queues requests (signed-in views of a
-live system). It is registered as `/sw.js?v=<app version>`. `/healthz` is the reachability probe for the banner, the offline page
-and the Docker health check. `matcad.js` shows the connection banner, keeps typed input and reloads clean pages after a reconnect.
+**PWA:** `sw.js` caches static files only (the toolkit included) and serves `offline.html`, which uses the toolkit too; it never
+stores pages or queues requests (signed-in views of a live system). It is registered as `/sw.js?v=<app version>`. `/healthz` is the
+reachability probe for the banner, the offline page and the Docker health check. `matcad.js` shows the connection banner, keeps typed
+input, reloads clean pages after a reconnect and keeps the colour of the browser bar (`theme-color`) in step with the theme.
 
 **Git:** commit under the user's name only, no Claude/Anthropic trailer. Branches: `main` release, `dev` development.

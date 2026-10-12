@@ -1,0 +1,26 @@
+@model RouteNameModel
+@*
+    The host cell of a route row: the host (a link to the edit page, rule LIST-09), tags for where the route comes from and, when the page passes the
+    certificate, a warning for a host that would get a certificate of its own.
+*@
+@{
+    var r = Model.Route;
+    var host = Model.Label == "@" ? Model.BaseDomain : Model.Label + "." + Model.BaseDomain;
+}
+<div class="mat-table__name mat-row">
+    @if (r.IsDerived)
+    {
+        <span>@host</span>
+    }
+    else
+    {
+        <a asp-page="/Routes/Edit" asp-route-id="@r.Id">@host</a>
+    }
+    @if (r.Wildcard) { <span class="mat-tag">Wildcard</span> }
+    @if (r.Source == "system") { <span class="mat-tag" title="Matcad self-exposure">System</span> }
+    else if (r.Source == "docker") { <span class="mat-tag" title="From Docker container @r.SourceDetail">Docker</span> }
+    @if (Model.Cert is { Kind: CertificatePlanner.CertKind.Individual })
+    {
+        <span class="mat-pill mat-pill--warn" title="Would request its own individual certificate">@Ui.Icon("alert")Individual certificate</span>
+    }
+</div>

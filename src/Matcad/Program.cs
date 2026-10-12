@@ -1,6 +1,7 @@
 using Matcad.Api;
 using Matcad.Auth;
 using Matcad.Config;
+using Matcad.Controls;
 using Matcad.Data;
 using Matcad.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -40,6 +41,7 @@ builder.Services.AddRazorPages(o =>
 builder.Services.AddDbContext<MatcadDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ConfigStore>();
+builder.Services.AddSingleton<Toolkit>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddHttpClient();
@@ -142,17 +144,27 @@ app.Use(async (context, next) =>
 
 var contentTypes = new FileExtensionContentTypeProvider();
 contentTypes.Mappings[".webmanifest"] = "application/manifest+json";
-app.UseStaticFiles(new StaticFileOptions
+// CSS and JS are linked with ?v=<file hash> (asp-append-version): a changed file has a new address, so the old one may be kept for good.
+// (The service worker script must always be re-checked.)
+void KeepVersioned(StaticFileResponseContext context)
 {
-    ContentTypeProvider = contentTypes,
-    // CSS and JS are linked with ?v=<file hash> (asp-append-version): a changed file has a new address, so the old one may be kept for good.
-    OnPrepareResponse = context =>
+    if (context.Context.Request.Query.ContainsKey("v") && context.File.Name != "sw.js")
+        context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+}
+
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypes, OnPrepareResponse = KeepVersioned });
+
+// The login portal is shown on the protected host, where Caddy proxies only /auth/* to Matcad: the toolkit and the styles it needs are served there as well.
+foreach (var (folder, path) in new[] { ("matui", "/auth/ui"), ("css", "/auth/css") })
+{
+    app.UseStaticFiles(new StaticFileOptions
     {
-        // (The service worker script must always be re-checked.)
-        if (context.Context.Request.Query.ContainsKey("v") && context.File.Name != "sw.js")
-            context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
-    }
-});
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.Combine(app.Environment.WebRootPath, folder)),
+        RequestPath = path,
+        ContentTypeProvider = contentTypes,
+        OnPrepareResponse = KeepVersioned
+    });
+}
 // A 404 or 403 shows a page of the app (with the original status code) instead of an empty response.
 app.UseStatusCodePagesWithReExecute("/StatusCode/{0}");
 app.UseRouting();

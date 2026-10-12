@@ -15,7 +15,11 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true)] public string? Dir { get; set; }
 
-    public DataTable Table { get; private set; } = new();
+    /// <summary>The search, filter and sort of the list (rule LIST-03).</summary>
+    public ToolbarModel Toolbar { get; private set; } = null!;
+    public IReadOnlyList<AuthenticationConfig> Items { get; private set; } = [];
+
+    public int RouteCount(AuthenticationConfig a) => _store.Routes.Count(r => r.AuthenticationId == a.Id);
 
     public void OnGet()
     {
@@ -26,44 +30,31 @@ public class IndexModel : PageModel
         if (Enum.TryParse<AuthType>(Type, out var t))
             items = items.Where(a => a.Type == t);
 
-        var sort = Sort ?? "name";
-        var asc = (Dir ?? "asc") == "asc";
+        var sort = Sort == "type" ? "type" : "name";
+        var descending = string.Equals(Dir, "desc", StringComparison.OrdinalIgnoreCase);
         items = sort switch
         {
-            "type" => asc ? items.OrderBy(a => a.Type) : items.OrderByDescending(a => a.Type),
-            _ => asc ? items.OrderBy(a => a.Name) : items.OrderByDescending(a => a.Name)
+            "type" => descending ? items.OrderByDescending(a => a.Type).ThenBy(a => a.Name) : items.OrderBy(a => a.Type).ThenBy(a => a.Name),
+            _ => descending ? items.OrderByDescending(a => a.Name) : items.OrderBy(a => a.Name)
         };
+        Items = items.ToList();
 
-        Table = new DataTable
+        Toolbar = new ToolbarModel
         {
             Id = "auths",
-            SearchValue = Q,
-            SearchPlaceholder = "Search authentications...",
-            NewUrl = "/Authentications/Edit",
-            NewLabel = "New authentication",
+            Action = "/Authentications",
+            Label = "Authentications",
+            Search = Q,
+            SearchPlaceholder = "Search authentications",
+            SearchField = true,
+            Noun = "authentications",
+            Total = _store.Authentications.Count,
+            Matching = Items.Count,
+            Filters = [new FilterField("type", "Type", [new("BasicAuth", "Basic Auth"), new("Matcad", "Matcad")], Type)],
+            SortOptions = [new("name", "Name"), new("type", "Type")],
+            DefaultSort = "name",
             Sort = sort,
-            Dir = Dir ?? "asc",
-            Filters =
-            {
-                new TableFilter
-                {
-                    Param = "type", Label = "Type", Selected = Type,
-                    Options = { ("", "All"), ("BasicAuth", "Basic Auth"), ("Matcad", "Matcad") }
-                }
-            },
-            Columns =
-            {
-                new DataColumn("Name", "name"),
-                new DataColumn("Type", "type"),
-                new DataColumn("Details") { HideOnSmall = true },
-                new DataColumn("Used by") { HideOnSmall = true }
-            },
-            Rows = items.Select(a => new DataRow(
-                Cell.Text(a.Name),
-                a.Type == AuthType.BasicAuth ? Cell.Badge("Basic Auth") : Cell.Badge("Matcad", "warning"),
-                Cell.Muted(a.Type == AuthType.Matcad ? $"{a.Users.Count} users · portal" : $"{a.Users.Count} users"),
-                Cell.Muted($"{_store.Routes.Count(r => r.AuthenticationId == a.Id)} route(s)")
-            ) { EditUrl = $"/Authentications/Edit?id={a.Id}" }).ToList()
+            Descending = descending,
         };
     }
 }

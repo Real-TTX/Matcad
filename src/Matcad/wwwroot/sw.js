@@ -1,5 +1,5 @@
 /* Matcad service worker.
-   What it does: makes the app installable, keeps its static files (styles, scripts, icons) available, and shows a
+   What it does: makes the app installable, keeps its static files (the toolkit, styles, scripts, icons) available, and shows a
    friendly page with automatic reconnect when Matcad cannot be reached.
    What it deliberately does not do: store pages. They are signed-in views of a live system (routes, certificates,
    credentials), so an old copy would be wrong at best and a leftover on a shared device at worst. Nothing is queued
@@ -10,7 +10,9 @@
 const VERSION = new URL(self.location.href).searchParams.get('v') || '0';
 const CACHE = 'matcad-static-' + VERSION;
 const OFFLINE_URL = '/offline.html';
-const PRECACHE = [OFFLINE_URL, '/manifest.webmanifest', '/img/logo.svg', '/img/favicon.svg', '/img/icon-192.png'];
+// The offline page and everything it needs: the toolkit (styles, icons, boot script) and its own script.
+const PRECACHE = [OFFLINE_URL, '/js/offline.js', '/manifest.webmanifest', '/img/favicon.svg', '/img/icon-192.png',
+  '/matui/matui.css', '/matui/matui.boot.js', '/matui/matui-icons.svg'];
 
 // A reverse proxy in front of Matcad answers with these while Matcad restarts.
 const GATEWAY_ERRORS = [502, 503, 504];
@@ -40,7 +42,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 function isStaticAsset(path) {
-  return path.startsWith('/css/') || path.startsWith('/js/') || path.startsWith('/img/') || path === '/manifest.webmanifest';
+  return path.startsWith('/css/') || path.startsWith('/js/') || path.startsWith('/img/') || path.startsWith('/matui/') || path === '/manifest.webmanifest';
 }
 
 async function navigate(request) {
