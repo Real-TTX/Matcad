@@ -278,7 +278,7 @@ The set of DNS modules compiled into both images lives once in `.env`
 
 | Branch | Purpose |
 |---|---|
-| `main` | Release - a version tag (`v0.7.0`) builds and publishes the images to GHCR |
+| `main` | Release - a version tag (`v0.8.0`) builds and publishes the images to GHCR |
 | `dev` | Development |
 
 `Major`/`Minor`/`build` live in [`version.json`](version.json). Publishing to GHCR
