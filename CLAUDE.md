@@ -57,7 +57,7 @@ the rule ids such as SHELL-08 are in `MatDesign/src/MatDesign.Core/RuleBook.cs`)
 `matui.boot.js`, `matui-icons.svg`); `scripts/update-matui.ps1` fetches a newer one from a running MatDesign, then look at every page.
 The only colour Matcad chooses is the accent: `data-app="matcad"` on `<html>` (`#2f6feb`, set in `matui.css`, kept in `Ui.App.Accent`).
 Pages use only toolkit classes (`mat-*`): flat surfaces, a breadcrumb above every page (`ViewData["Crumbs"] = Crumbs.Of(...)`), a title
-and one line (`PageSub`), lists as toolbar / table / actions below (`_Toolbar` partial, `ToolbarModel`), forms as cards with the button
+and one line (`PageSub`), lists as toolbar / table / actions below (`_Toolbar` partial, `ToolbarModel`), a table with groups (the routes by domain) as `tbody.mat-group` with a folding heading and the add row last (LIST-16), forms as cards with the button
 row under them (Save, Back, space, Delete), confirmations with `data-confirm`, dependent fields with `data-show-if`, every `td` with
 `data-label` (rows become cards on a phone), icons from the sprite (`@Ui.Icon("name")` or `<icon name="..." />`; a test checks the names).
 No inline styles, scripts or event handlers and no colour literals: what is Matcad's own lives in `css/matcad.css` with the prefix `mc-`

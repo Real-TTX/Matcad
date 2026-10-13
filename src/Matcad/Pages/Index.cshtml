@@ -27,11 +27,11 @@
         else
         {
             <div class="mat-table-wrap">
-                <table class="mat-table">
+                <table class="mat-table" id="dashboard-routes" data-groups="dashboard-routes">
                     <caption class="mat-sr-only">Routes by domain</caption>
                     <thead>
                         <tr>
-                            <th scope="col">Host</th>
+                            <th scope="col"><span class="mat-row mat-row--nowrap">Host <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-groups-set="toggle" data-groups-target="#dashboard-routes" aria-label="Open or close all domains" data-tip="Open or close all">@Ui.Icon("chevron-down")</button></span></th>
                             <th scope="col" class="mat-hide-sm">Target</th>
                             <th scope="col" class="mat-hide-sm">Last access</th>
                             <th scope="col">Status</th>
@@ -40,15 +40,19 @@
                     </thead>
                     @foreach (var group in Model.Groups)
                     {
-                        <tbody>
-                            <tr class="mc-group">
-                                <td colspan="5"><div class="mc-group__row">@Ui.Icon("network")<strong>@group.BaseDomain</strong><span class="mat-tag">@group.Routes.Count</span></div></td>
+                        <tbody class="mat-group" data-group="@group.BaseDomain">
+                            <tr class="mat-group__head">
+                                <td class="mat-group__cell" colspan="5">
+                                    <div class="mat-group__bar">
+                                        <button type="button" class="mat-group__toggle" data-group-toggle aria-expanded="true">@Ui.Icon("chevron-down", "mat-group__chev")<span class="mat-group__title">@group.BaseDomain</span><span class="mat-badge mat-badge--soft">@group.Routes.Count<span class="mat-sr-only"> routes</span></span></button>
+                                    </div>
+                                </td>
                             </tr>
                             @foreach (var row in group.Routes)
                             {
                                 var r = row.Route;
                                 var cert = Model.Cert(r);
-                                <tr class="@(r.Enabled ? "" : "mc-off")">
+                                <tr class="mat-group__item @(r.Enabled ? "" : "mc-off")">
                                     <td data-label="Host"><partial name="_RouteName" model="new RouteNameModel(r, row.Label, group.BaseDomain, cert)" /></td>
                                     <td data-label="Target" class="mat-hide-sm mat-mono mat-text-break">
                                         @if (!string.IsNullOrEmpty(r.Upstream))

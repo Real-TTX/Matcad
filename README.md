@@ -29,7 +29,7 @@ lose the YAML-in-your-head part.
 ## At a glance
 
 **Routes**
-- A **hierarchical domain tree** built automatically from your host names
+- A **hierarchical domain tree** built automatically from your host names; every domain folds away, and *Add a subdomain* is the last entry of its group
 - Each route is a **reverse proxy** or a **301/302 redirect** (to any URL, or pick
   an existing domain from a list)
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs

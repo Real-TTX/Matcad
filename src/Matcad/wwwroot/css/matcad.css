@@ -1,11 +1,7 @@
 /* Matcad · the few styles of this app (mc-*), on top of the toolkit (../matui/matui.css).
    Colours, sizes and shapes come from the toolkit's custom properties only; nothing here repairs a component. */
 
-/* ---- A route list grouped by domain: the heading row of a group, and a route that is switched off ---- */
-.mc-group td { background: var(--mat-surface-2); }
-.mc-group__row { display: flex; align-items: center; gap: var(--mat-space-2); width: 100%; text-align: left; }
-.mc-group__row .mat-icon { color: var(--mat-text-muted); }
-.mc-group__add { margin-inline-start: auto; }
+/* ---- A route that is switched off ---- */
 .mc-off td:not(.mat-table__cell-actions) { color: var(--mat-text-muted); }
 .mc-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--mat-space-1); }
 

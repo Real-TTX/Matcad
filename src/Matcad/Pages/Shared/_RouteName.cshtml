@@ -5,17 +5,15 @@
 *@
 @{
     var r = Model.Route;
-    var host = Model.Label == "@" ? Model.BaseDomain : Model.Label + "." + Model.BaseDomain;
+    // Under its domain a host shows what is its own (app) and, muted, what the heading already says (.example.org); the domain itself and a host that
+    // does not fit under a domain show whole.
+    var own = Model.Label == "@" ? Model.BaseDomain : Model.Label;
+    var rest = Model.Label == "@" ? null : "." + Model.BaseDomain;
 }
 <div class="mat-table__name mat-row">
-    @if (r.IsDerived)
-    {
-        <span>@host</span>
-    }
-    else
-    {
-        <a asp-page="/Routes/Edit" asp-route-id="@r.Id">@host</a>
-    }
+    <span>
+        @if (r.IsDerived) {<span>@own</span>} else {<a asp-page="/Routes/Edit" asp-route-id="@r.Id">@own</a>}@if (rest != null) {<span class="mat-muted">@rest</span>}
+    </span>
     @if (r.Wildcard) { <span class="mat-tag">Wildcard</span> }
     @if (r.Source == "system") { <span class="mat-tag" title="Matcad self-exposure">System</span> }
     else if (r.Source == "docker") { <span class="mat-tag" title="From Docker container @r.SourceDetail">Docker</span> }

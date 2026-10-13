@@ -248,6 +248,43 @@ public class MatUiPagesTests : IClassFixture<MatcadFactory>
     }
 
     [Fact]
+    public async Task The_routes_list_is_grouped_by_domain_with_folding_headings_and_the_add_row_last()
+    {
+        SeedSomething();
+        var browser = await SignedInAsync();
+
+        var (_, body) = await browser.GetAsync("/Routes");
+
+        Assert.Matches("<table class=\"mat-table\" id=\"routes-table\" data-groups=\"routes\">", body);
+        Assert.Contains("data-groups-set=\"toggle\" data-groups-target=\"#routes-table\"", body);
+        var group = Regex.Match(body, "(?s)<tbody class=\"mat-group\"[^>]*data-group=\"example.com\"[^>]*>(.*?)</tbody>").Groups[1].Value;
+        Assert.NotEmpty(group);
+        Assert.Contains("class=\"mat-group__toggle\" data-group-toggle aria-expanded=\"true\"", group);
+        var rows = Regex.Matches(group, "<tr class=\"(mat-group__[a-z]+)").Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal("mat-group__head", rows.First());
+        Assert.Equal("mat-group__add", rows.Last());
+        Assert.Contains("mat-group__item", rows);
+        // the action that adds a subdomain is the last row of the group, not part of its heading
+        Assert.Contains("Add a subdomain", group[group.IndexOf("mat-group__add", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain("Add a subdomain", group[..group.IndexOf("mat-group__item", StringComparison.Ordinal)]);
+        // under its domain a host shows what is its own and, muted, the rest
+        Assert.Matches(@"<a href=""/Routes/Edit\?id=\d+"">ui</a><span class=""mat-muted"">\.example\.com</span>", group);
+    }
+
+    [Fact]
+    public async Task A_search_keeps_the_groups_it_found_open_whatever_the_user_closed_before()
+    {
+        SeedSomething();
+        var browser = await SignedInAsync();
+
+        var (_, plain) = await browser.GetAsync("/Routes");
+        var (_, searched) = await browser.GetAsync("/Routes?q=ui");
+
+        Assert.DoesNotContain("data-group-fixed", plain);
+        Assert.Contains("data-group-fixed>", searched);
+    }
+
+    [Fact]
     public async Task A_search_that_finds_nothing_says_so_and_offers_the_way_back()
     {
         SeedSomething();
