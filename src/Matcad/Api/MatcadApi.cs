@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Matcad.Config;
 using Matcad.Services;
 
@@ -21,14 +22,21 @@ public static class MatcadApi
     // Input DTOs (audit fields / ids handled by ConfigStore, never trusted from the wire).
     public record ProviderInput(long? Id, string Name, string Type, Dictionary<string, string>? Credentials);
     public record ProviderTestInput(string Type, Dictionary<string, string>? Credentials);
+    // The last four are the optional access fields. They are JsonElement because they have three states (missing = keep what is
+    // stored, null = remove, a value = replace), see RouteAccessFields; a missing one stays the default element (ValueKind Undefined).
     public record RouteInput(long? Id, string Host, bool Wildcard, string? Target, string? Upstream,
         bool InsecureSkipVerify, string? FallbackUrl, bool RedirectPermanent,
         long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name,
-        bool AllowEmbedding = false, int? ListenPort = null);
+        bool AllowEmbedding = false, int? ListenPort = null,
+        JsonElement UpstreamHost = default, JsonElement UpstreamHeaders = default,
+        JsonElement RequireHeader = default, JsonElement AllowedIps = default);
     public record BasicUserInput(string Username, string? Password);
     public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
         int? AcmePropagationDelaySeconds, int? AcmePropagationTimeoutSeconds);
+
+    /// <summary>"routeGuards": the route fields upstreamHost, upstreamHeaders, requireHeader and allowedIps.</summary>
+    public static readonly string[] Capabilities = ["routeGuards"];
 
     public static void MapMatcadApi(this WebApplication app)
     {
@@ -50,6 +58,9 @@ public static class MatcadApi
         api.MapGet("/status", (ConfigStore s, RouteProvider rp) => Results.Ok(new
         {
             ok = true,
+            // What this Matcad understands beyond the original API. A client that wants a feature must check for it: an older
+            // Matcad ignores fields it does not know, and a guard that was silently ignored leaves the route open.
+            capabilities = Capabilities,
             baseDomain = s.Settings.BaseDomain,
             setupCompleted = s.Settings.SetupCompleted,
             counts = new
@@ -161,6 +172,10 @@ public static class MatcadApi
                     enabled = r.Enabled,
                     allowEmbedding = r.AllowEmbedding,
                     listenPort = r.ListenPort,
+                    upstreamHost = r.UpstreamHost,
+                    upstreamHeaders = HeaderNames(r),
+                    requireHeader = RequiredHeaderName(r),
+                    allowedIps = r.AllowedIps,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
                     editable = r.Source == null,
@@ -171,15 +186,29 @@ public static class MatcadApi
         });
         // Editable (manually-managed) routes only.
         api.MapGet("/routes/manual", (ConfigStore s) => Results.Ok(s.Routes.Select(ToRouteDto)));
+        api.MapGet("/routes/{id:long}", (ConfigStore s, long id) =>
+            s.Routes.FirstOrDefault(r => r.Id == id) is { } r ? Results.Ok(ToRouteDto(r)) : Results.NotFound(new { error = "No such route." }));
         api.MapPost("/routes", async (ConfigStore s, CaddyService caddy, RouteInput inp) =>
         {
             // Edit a copy: a rejected request must not leave half-applied changes in the stored route.
             var route = new RouteConfig { Id = inp.Id is > 0 ? inp.Id.Value : 0 };
-            var error = RouteEditor.Apply(
-                new RouteForm(inp.Host, inp.Wildcard, string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase),
-                    inp.Upstream, inp.InsecureSkipVerify, inp.FallbackUrl, inp.RedirectPermanent, inp.AuthenticationId,
-                    inp.ProviderId, inp.AcmeEmail, inp.Enabled, inp.Name, inp.AllowEmbedding, inp.ListenPort),
-                route);
+            var form = new RouteForm(inp.Host, inp.Wildcard, string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase),
+                inp.Upstream, inp.InsecureSkipVerify, inp.FallbackUrl, inp.RedirectPermanent, inp.AuthenticationId,
+                inp.ProviderId, inp.AcmeEmail, inp.Enabled, inp.Name, inp.AllowEmbedding, inp.ListenPort);
+            var error = RouteEditor.Apply(form, route);
+            if (error != null) return Results.BadRequest(new { error });
+
+            // The access fields are settled against the route this call is going to replace (the one with the id, else the one
+            // with the same host or port): missing keeps what it has, null removes, a value replaces. Everything is then checked
+            // again together with the rest, so an invalid value rejects the call and nothing is saved.
+            var accessError = RouteAccessFields.Resolve(inp, s.FindRouteToReplace(route), out var access);
+            if (accessError != null) return Results.BadRequest(new { error = accessError });
+            route = new RouteConfig { Id = route.Id };
+            error = RouteEditor.Apply(form with
+            {
+                UpstreamHost = access.UpstreamHost, UpstreamHeaders = access.UpstreamHeaders,
+                RequireHeader = access.RequireHeader, AllowedIps = access.AllowedIps
+            }, route);
             if (error != null) return Results.BadRequest(new { error });
 
             // A host (or a port) belongs to one route. Without an id the call means "make sure this route exists",
@@ -273,8 +302,20 @@ public static class MatcadApi
         acmeEmail = r.AcmeEmail,
         enabled = r.Enabled,
         allowEmbedding = r.AllowEmbedding,
-        listenPort = r.ListenPort
+        listenPort = r.ListenPort,
+        // Write-only: the host and the addresses are shown as they are, but a header only says that it has a value. That is
+        // enough for a client to check that a guard was really stored, and keeps the secret from ever coming back out.
+        upstreamHost = r.UpstreamHost,
+        upstreamHeaders = HeaderNames(r),
+        requireHeader = RequiredHeaderName(r),
+        allowedIps = r.AllowedIps
     };
+
+    private static object[] HeaderNames(RouteConfig r) =>
+        r.UpstreamHeaders.Select(h => (object)new { name = h.Name, valueSet = !string.IsNullOrEmpty(h.Value) }).ToArray();
+
+    private static object? RequiredHeaderName(RouteConfig r) =>
+        r.RequireHeader is { } h ? new { name = h.Name, valueSet = !string.IsNullOrEmpty(h.Value) } : null;
 
     private static bool FixedTimeEquals(string a, string b)
     {

@@ -58,6 +58,15 @@ public sealed class Browser
         return await Client.PostAsync(postUrl, new FormUrlEncodedContent(fields));
     }
 
+    /// <summary>Like <see cref="PostFormAsync"/> for a form with fields that repeat (a list of rows), so they are pairs and not a dictionary.</summary>
+    public async Task<HttpResponseMessage> PostFormPairsAsync(string pageUrl, string postUrl, IEnumerable<KeyValuePair<string, string>> fields)
+    {
+        var (_, page) = await GetAsync(pageUrl);
+        var token = Token.Match(page).Groups[1].Value;
+        Assert.NotEmpty(token);
+        return await Client.PostAsync(postUrl, new FormUrlEncodedContent(fields.Append(new("__RequestVerificationToken", token))));
+    }
+
     public Task<HttpResponseMessage> LoginAsync(string login, string password) =>
         PostFormAsync("/Login", "/Login", new() { ["Username"] = login, ["Password"] = password });
 }

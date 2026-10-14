@@ -60,12 +60,23 @@ public class AuthenticationConfig : ConfigEntity
     public string BrandText { get; set; } = "";
 }
 
+/// <summary>A header name and value: sent to the upstream, or demanded from the client. The value is a secret -
+/// it is never logged, never put in an error message and never sent back through the REST API or the pages.</summary>
+public class HeaderPair
+{
+    public string Name { get; set; } = "";
+    public string Value { get; set; } = "";
+}
+
 /// <summary>
 /// A route in the hierarchical domain tree. A route may be a wildcard host and
 /// may have children (e.g. sub.example.com under *.example.com).
 /// </summary>
 public class RouteConfig : ConfigEntity
 {
+    private List<HeaderPair> _upstreamHeaders = new();
+    private List<string> _allowedIps = new();
+
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
     public string Host { get; set; } = "";
@@ -92,6 +103,23 @@ public class RouteConfig : ConfigEntity
     /// which is how matOS's compatibility mode embeds apps when accessed via a bare hostname/IP where
     /// a wildcard domain like *.apps.localhost can't resolve.</summary>
     public int? ListenPort { get; set; }
+
+    // --- Access and upstream (all optional, off by default; see RouteGuards for the rules). Older routes.json files and
+    // --- backups do not have them and read as "off". The lists tolerate a JSON null, so a hand-edited file cannot break the generator.
+    /// <summary>Host header sent to the upstream instead of the visitor's; for an https upstream also the TLS server name
+    /// (SNI and certificate check). Only for reverse-proxy routes.</summary>
+    public string? UpstreamHost { get; set; }
+    /// <summary>Headers SET on the request to the upstream (they replace what the visitor sent). Values are secrets.</summary>
+    public List<HeaderPair> UpstreamHeaders { get => _upstreamHeaders; set => _upstreamHeaders = value ?? new(); }
+    /// <summary>Guard: a request without exactly this header and value is answered 403 before authentication, the
+    /// framing strip and the proxy run. The value is a secret.</summary>
+    public HeaderPair? RequireHeader { get; set; }
+    /// <summary>Guard: a request whose direct peer (the TCP connection, not X-Forwarded-For) is not in this list of
+    /// IP addresses or CIDR ranges is answered 403.</summary>
+    public List<string> AllowedIps { get => _allowedIps; set => _allowedIps = value ?? new(); }
+    /// <summary>True when a guard (required header and/or allowed IPs) is configured.</summary>
+    [JsonIgnore] public bool HasGuards => RequireHeader != null || AllowedIps.Count > 0;
+
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
     /// <summary>Optional per-domain ACME contact email for this route's certificate.

@@ -109,9 +109,7 @@ public class ConfigStore
     {
         lock (_lock)
         {
-            var other = Routes.FirstOrDefault(r => r.Id != route.Id && (route.ListenPort is > 0
-                ? r.ListenPort == route.ListenPort
-                : r.ListenPort is not > 0 && string.Equals(r.Host, route.Host, StringComparison.OrdinalIgnoreCase)));
+            var other = RouteWithSameTarget(route);
             if (other != null)
             {
                 if (!updateSameTarget || route.Id != 0) return false;
@@ -121,6 +119,23 @@ public class ConfigStore
             return true;
         }
     }
+
+    // Another route with the same host (or, for a port binding, the same port).
+    private RouteConfig? RouteWithSameTarget(RouteConfig route) =>
+        Routes.FirstOrDefault(r => r.Id != route.Id && (route.ListenPort is > 0
+            ? r.ListenPort == route.ListenPort
+            : r.ListenPort is not > 0 && string.Equals(r.Host, route.Host, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// The stored route that <see cref="TryUpsertRoute"/> with <c>updateSameTarget</c> would replace: the one with the route's id,
+    /// or - for a route without an id - the one that has its host or port. Null when the save would create a new route.
+    /// </summary>
+    public RouteConfig? FindRouteToReplace(RouteConfig route)
+    {
+        lock (_lock)
+            return route.Id != 0 ? Routes.FirstOrDefault(r => r.Id == route.Id) : RouteWithSameTarget(route);
+    }
+
     public void UpsertAuthentication(AuthenticationConfig a, long? userId) => Upsert("authentications", "authentications.json", ref _authentications, a, userId);
 
     public void DeleteProvider(long id) => Remove("providers.json", ref _providers, id);

@@ -145,6 +145,7 @@
                                     <div class="mat-table__name">
                                         @if (r.IsDerived) { <span class="mat-mono">:@r.ListenPort</span> }
                                         else { <a class="mat-mono" asp-page="Edit" asp-route-id="@r.Id">:@r.ListenPort</a> }
+                                        @if (r.HasGuards) { <span class="mat-pill mat-pill--info" title="Requests that do not pass the guard are refused">@Ui.Icon("shield")Guarded</span> }
                                     </div>
                                 </td>
                                 <td data-label="Target" class="mat-mono mat-text-break">@(string.IsNullOrEmpty(r.Upstream) ? "-" : r.Upstream)</td>

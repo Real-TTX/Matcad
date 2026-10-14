@@ -34,6 +34,9 @@ lose the YAML-in-your-head part.
   an existing domain from a list)
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs
 - Add a subdomain to an existing domain with one click
+- **Guards and upstream headers** (optional, under *Guards and upstream* in the route editor): refuse every request that lacks a
+  secret header or does not come from an allowed IP address, send another `Host` header (and TLS server name) to the upstream and set
+  your own headers on the request to it - the building blocks for a chain of two proxies, see below
 
 **Certificates (automatic HTTPS)**
 - **Wildcard certificates** via the ACME DNS-01 challenge
@@ -90,6 +93,30 @@ its certificate is a wildcard, covered by one, individual, or Caddy-internal.
 Single host or wildcard, reverse proxy or redirect. Pick "Wildcard" and the host
 becomes `*.your-domain`; enter a bare domain that no wildcard covers and Matcad
 warns you it would get its own certificate.
+
+### Guards and upstream headers
+
+A route can be closed to everything but one other proxy, for example an *edge* Matcad that forwards a customer domain to the
+system address of a site on another server, whose Matcad only takes requests from the edge:
+
+| Property | What it does |
+|---|---|
+| Required header (name + value) | A request without exactly this header and value gets **403** before authentication, the framing strip or the proxy run. The value needs at least 16 characters of visible ASCII (no spaces) and must not contain `*`, `{` or `}` (Caddy would read them as a wildcard or a placeholder). The header is removed from the request before it goes to the upstream, so the website behind never sees it (an upstream header cannot have the same name). |
+| Allowed IP addresses | One address or CIDR range per line (IPv4/IPv6). The direct connection must be in the list, otherwise **403**. It is the TCP peer, not `X-Forwarded-For`; behind Docker Desktop or a NAT that can be the gateway address. With both guards, both must pass. |
+| Host header to the upstream | Sent instead of the visitor's host. For an `https://` upstream it is also the TLS server name (SNI and certificate check). |
+| Headers to the upstream | Set on every request to the upstream, replacing a header of the same name the visitor sent. Not `Host` (own field), `Content-Length`, `Transfer-Encoding`, `Connection`. |
+
+The values of the secret headers are never shown again (not by the pages, the REST API, or the config view on the Settings page, and
+Matcad has Caddy leave the required header out of its access log). A guard that cannot be built (for example from a damaged backup)
+answers 503 instead of serving the route open. A backup file contains the values: keep it safe.
+
+REST (`X-Api-Key`): `POST /api/v1/routes` takes the optional fields `upstreamHost` (string), `upstreamHeaders`
+(`[{"name": "...", "value": "..."}]`), `requireHeader` (`{"name": "...", "value": "..."}`) and `allowedIps` (`["10.0.0.0/8", "203.0.113.7"]`).
+On an update a field that is **missing** stays as it is, `null` removes it, a value replaces it (the older fields keep meaning "this is the
+whole route"). Invalid values answer 400 with the field and the reason, and nothing is saved. Responses show `upstreamHost` and `allowedIps`
+as they are and the headers as `{"name": "X-Edge", "valueSet": true}` - never the value. `GET /api/v1/status` lists
+`"capabilities": ["routeGuards"]`; a client that sets a guard has to check for it, because an older Matcad ignores fields it does not
+know and would leave the route open. `GET /api/v1/routes/{id}` returns one editable route.
 
 ### Statistics
 

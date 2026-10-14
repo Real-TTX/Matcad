@@ -65,21 +65,10 @@ public class IndexModel : PageModel
         Load();
         Users = await _auth.ListUsers();
         Certificates = CertificatePlanner.Plan(_routes.All(), _store.Providers);
-        CaddyConfigJson = _caddy.BuildJson();
+        CaddyConfigJson = SecretRedaction.Redact(_caddy.BuildJson());
         var running = await _caddy.GetRunningConfigAsync();
         CaddyStatus = running != null ? "reachable" : "unreachable";
-        CaddyLiveJson = running != null ? Prettify(running) : "// Caddy unreachable";
-    }
-
-    private static string Prettify(string json)
-    {
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            return System.Text.Json.JsonSerializer.Serialize(doc,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch { return json; }
+        CaddyLiveJson = running != null ? SecretRedaction.Redact(running) : "// Caddy unreachable";
     }
 
     private void Load()

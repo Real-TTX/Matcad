@@ -2,11 +2,17 @@ using System.Text.RegularExpressions;
 
 namespace Matcad.Config;
 
-/// <summary>The fields of a route as the edit page and the REST API deliver them.</summary>
+/// <summary>
+/// The fields of a route as the edit page and the REST API deliver them. The last four are the optional access properties
+/// (see <see cref="RouteGuards"/>); a caller with "keep what is saved" semantics resolves them before it gets here, so a
+/// header value must be filled in by now.
+/// </summary>
 public record RouteForm(
     string? Host, bool Wildcard, bool Redirect, string? Upstream, bool InsecureSkipVerify,
     string? FallbackUrl, bool RedirectPermanent, long? AuthenticationId, long? ProviderId,
-    string? AcmeEmail, bool Enabled, string? Name, bool AllowEmbedding, int? ListenPort);
+    string? AcmeEmail, bool Enabled, string? Name, bool AllowEmbedding, int? ListenPort,
+    string? UpstreamHost = null, IReadOnlyList<HeaderPair>? UpstreamHeaders = null,
+    HeaderPair? RequireHeader = null, IReadOnlyList<string>? AllowedIps = null);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -68,6 +74,25 @@ public static partial class RouteEditor
         if (wildcard && !string.IsNullOrEmpty(acmeEmail) && !acmeEmail.Contains('@'))
             return "Please enter a valid ACME e-mail address.";
 
+        // Guards apply to every kind of route (a redirect too); what is said to the upstream only makes sense for a proxy.
+        var proxies = !redirect && !string.IsNullOrEmpty(upstream);
+        var (upstreamHost, hostError) = RouteGuards.NormalizeUpstreamHost(form.UpstreamHost);
+        if (hostError != null) return hostError;
+        var upstreamHeaders = (form.UpstreamHeaders ?? [])
+            .Select(h => new HeaderPair { Name = (h.Name ?? "").Trim(), Value = h.Value ?? "" }).ToList();
+        var headersError = RouteGuards.CheckUpstreamHeaders(upstreamHeaders);
+        if (headersError != null) return headersError;
+        if (!proxies && (upstreamHost != null || upstreamHeaders.Count > 0))
+            return "The Host header and the headers for the upstream only apply to a reverse proxy route that has an upstream.";
+        var requireHeader = form.RequireHeader is null ? null
+            : new HeaderPair { Name = (form.RequireHeader.Name ?? "").Trim(), Value = form.RequireHeader.Value ?? "" };
+        var requireError = RouteGuards.CheckRequireHeader(requireHeader);
+        if (requireError != null) return requireError;
+        var clashError = RouteGuards.CheckNameClash(requireHeader, upstreamHeaders);
+        if (clashError != null) return clashError;
+        var (allowedIps, ipError) = RouteGuards.NormalizeIps(form.AllowedIps);
+        if (ipError != null) return ipError;
+
         route.Name = !string.IsNullOrWhiteSpace(form.Name) ? form.Name.Trim()
                    : host.Length > 0 ? host
                    : $"port {listenPort}";
@@ -85,6 +110,10 @@ public static partial class RouteEditor
         // A per-domain ACME e-mail only applies to wildcard (DNS-01) certificates.
         route.AcmeEmail = wildcard && !string.IsNullOrEmpty(acmeEmail) ? acmeEmail : null;
         route.Enabled = form.Enabled;
+        route.UpstreamHost = upstreamHost;
+        route.UpstreamHeaders = upstreamHeaders;
+        route.RequireHeader = requireHeader;
+        route.AllowedIps = allowedIps;
         return null;
     }
 

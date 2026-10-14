@@ -9,6 +9,12 @@
     // does not fit under a domain show whole.
     var own = Model.Label == "@" ? Model.BaseDomain : Model.Label;
     var rest = Model.Label == "@" ? null : "." + Model.BaseDomain;
+    // What the guard asks for, never the values.
+    var guardTitle = string.Join(" ", new[]
+    {
+        r.RequireHeader != null ? $"Refuses requests without the header {r.RequireHeader.Name}." : null,
+        r.AllowedIps.Count > 0 ? "Only the listed IP addresses may connect." : null
+    }.Where(t => t != null));
 }
 <div class="mat-table__name mat-row">
     <span>
@@ -17,6 +23,10 @@
     @if (r.Wildcard) { <span class="mat-tag">Wildcard</span> }
     @if (r.Source == "system") { <span class="mat-tag" title="Matcad self-exposure">System</span> }
     else if (r.Source == "docker") { <span class="mat-tag" title="From Docker container @r.SourceDetail">Docker</span> }
+    @if (r.HasGuards)
+    {
+        <span class="mat-pill mat-pill--info" title="@guardTitle">@Ui.Icon("shield")Guarded</span>
+    }
     @if (Model.Cert is { Kind: CertificatePlanner.CertKind.Individual })
     {
         <span class="mat-pill mat-pill--warn" title="Would request its own individual certificate">@Ui.Icon("alert")Individual certificate</span>

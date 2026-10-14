@@ -11,7 +11,9 @@ JSON config to Caddy's admin API after every change.
 
 Siblings that depend on it: **Mattiverse** installs Matcad (its catalog shows `admin` / `admin` and generates `Matcad__ApiKey`)
 and **MatOS** calls the REST API (`/api/v1`, header `X-Api-Key`). Keep those contracts: seeded `admin`/`admin` that must change
-its password, the API routes and their JSON shapes, idempotent `POST /api/v1/routes` (same host or port = same route).
+its password, the API routes and their JSON shapes, idempotent `POST /api/v1/routes` (same host or port = same route). New fields are
+only ever ADDED. The **MatCMS Cloud** (another repo) chains two proxies through the route access properties below and reads
+`GET /api/v1/status` -> `capabilities` (`["routeGuards"]`) to know that this Matcad enforces them.
 
 ## Build / run / test
 
@@ -28,9 +30,9 @@ its password, the API routes and their JSON shapes, idempotent `POST /api/v1/rou
 ```
 src/Matcad
   Program.cs            pipeline, auth, health check, SSE log stream
-  Api/                  REST API for matOS / Mattiverse (X-Api-Key)
+  Api/                  REST API for matOS / Mattiverse / the Cloud (X-Api-Key); RouteAccessFields reads the tri-state access fields
   Auth/                 session cookie scheme, account guard (forced password change, first-run wizard)
-  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), certificates, backup
+  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), RouteGuards (rules for the access properties), certificates, backup
   Data/                 EF Core context, migrations, DatabaseBootstrapper (also upgrades pre-0.6 databases)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest
   Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar
@@ -47,6 +49,46 @@ object and save only after validation (a rejected form must not change stored st
 **Security:** fail closed (a route that names a missing authentication or a basic auth without users answers 503, never open;
 a Docker container with an unknown `matcad.auth` label is not published). Sign-in is throttled per account and client
 (`LoginAttemptTracker`). The forward-auth cookie carries a fingerprint of the password hash, so a new password ends old sessions.
+
+**Route access properties** (all optional, off by default; `RouteConfig`, rules in `Config/RouteGuards.cs`, applied by `RouteEditor.Apply` for the
+page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host header to the upstream; for an `https://` upstream also
+`transport.tls.server_name`), `UpstreamHeaders` (set on the upstream request), `RequireHeader` (guard: no exact header + value = 403) and
+`AllowedIps` (guard: direct TCP peer not in the list = 403; IPs or CIDR, IPv4/IPv6). Things to keep true:
+- The guard is the **first handler** of `BuildHandlers` (before auth, framing strip and proxy), a `subroute` of `not`-matcher routes with
+  `static_response` 403 and no body (one refusal per guard, so header missing OR address wrong refuses). `BuildHandlers` is shared by host
+  routes, port-bound routes and Docker routes, so the guard holds wherever the chain is used; the inline login route (`/auth/*`) of a guarded
+  host carries the guard too. It also wins over the 503 of a missing authentication.
+- **Fail closed:** anything configured but invalid (a restored backup or hand-edited `routes.json` can carry what the editor refuses, an IP list
+  that normalises to nothing) answers 503 for the whole route, never serves it open (`BuildGuard` returns null, `RouteGuards.Check`).
+- Caddy traps behind the validation: the header matcher treats `*` as a wildcard and replaces `{...}` placeholders in the value, so a required
+  value with `*`, `{` or `}` is refused, and it needs 16+ visible ASCII characters (0x21-0x7E: no space, tab, NUL, umlaut - HTTP trims the
+  edges of a received value, so a secret with an edge space could never match and would lock every caller out); upstream header values refuse
+  braces too (Caddy would swallow them), control characters and a space at either edge. Names are HTTP tokens that start with a letter/digit;
+  `Host`, `Content-Length`, `Transfer-Encoding`, `Connection` are refused (Host has its own field). Caddy sets a header under exactly the key it
+  is given, so names are written canonical (`RouteGuards.CanonicalName`), otherwise `x-foo` would sit next to the visitor's `X-Foo`.
+- The required header is **removed from the request before it goes upstream** (`headers.request.delete`, merged into the same `headers` object as
+  the Host and the `set` entries): the website behind, its plugins and its logs must never see the secret. Caddy applies `delete` AFTER `set`, so an
+  upstream header with the same name as the required header would vanish again: that clash is refused (`RouteGuards.CheckNameClash`: 400 from
+  the editor and the API, 503 for a stored route that has it).
+- `remote_ip` is the TCP peer, not `X-Forwarded-For`; behind Docker Desktop / userland proxy / NAT that can be the gateway. A mapped IPv4
+  (`::ffff:1.2.3.4`) is stored as IPv4, a range with host bits is stored masked (`10.1.2.3/8` -> `10.0.0.0/8`).
+- **Secrets never come out:** REST responses show `upstreamHost` and `allowedIps` as they are, but `upstreamHeaders` as
+  `[{name, valueSet}]` and `requireHeader` as `{name, valueSet}` (also in `GET /routes`, `/routes/manual`, `/routes/{id}` and the POST answer);
+  the editor sends no value back (password inputs, "Set - leave empty to keep"; a blank value keeps the saved one by header name, an empty
+  required-header name removes the guard); error messages name field and reason, never a value; `SecretRedaction` replaces them in the config
+  shown on Settings -> Caddy; the access-log encoder (`filter`, `delete` on `request>headers>Name`) cuts the required header out of Caddy's
+  `access.log` (Matcad's own ingest stores only host/path/method/status/ip/duration). A backup file does contain them (like provider
+  credentials and password hashes): treat it as a secret.
+- **REST semantics of the four fields** (`Api/RouteAccessFields.cs`): missing = keep what the route being replaced has (so matOS, which does not
+  know them, cannot wipe a guard), `null` = remove, a value = replace. The old fields keep "the call describes the whole route". A header entry
+  without `value` (the shape of the responses) keeps the stored value of that name. A route cannot keep upstream properties while it becomes a
+  redirect (400, send `null`). Invalid input: 400 with field and reason, nothing saved.
+- Downgrading Matcad loses the fields silently (unknown JSON is ignored) and the route would be open; that is why clients must check `capabilities`.
+- Not modelled: the Caddyfile import ignores `header_up` on a reverse_proxy (as before); a Caddyfile guard (`not header`) stays raw passthrough.
+  The header compare in Caddy is not constant-time (a 16+ character secret over a network makes that theoretical).
+- Real-Caddy check (what the unit tests cannot show): `caddy:2` container started with `{"admin":{"listen":"0.0.0.0:2019"}}`, Matcad run against it
+  (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
+  `{http.request.header.X-Up}`), routes created through the REST API, then curl.
 
 **Database:** SQLite for logic, JSON for config. Tables PascalCase and singular, key `Id` (64 bit), audit columns, index and
 constraint names PascalCase without underscores. Schema changes are migrations:

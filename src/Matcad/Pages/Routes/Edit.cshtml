@@ -172,6 +172,66 @@ else
             </div>
         </section>
 
+        <section class="mat-card" aria-labelledby="route-guard-title">
+            <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="route-guard-title">Guards and upstream</h2></div>
+            <div class="mat-card__body mat-stack">
+                <details class="mat-collapse" open="@Model.AccessOpen" id="route-access">
+                    <summary><span>Who may reach this route, and what the service is told</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <mat-field label="Allowed IP addresses" asp-for="AllowedIpsText" hint="Optional. One address or range per line, IPv4 or IPv6, for example 203.0.113.7 or 10.0.0.0/8. Every other address is refused with 403. It is checked against the connection Caddy sees, not X-Forwarded-For: behind Docker Desktop or a NAT that can be the gateway, not the visitor.">
+                            <textarea asp-for="AllowedIpsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="203.0.113.7&#10;10.0.0.0/8"></textarea>
+                        </mat-field>
+
+                        <div class="mat-form__grid">
+                            <mat-field label="Required header" asp-for="RequireName" hint="Optional. A request without exactly this header and value is refused with 403, before anything else runs; the header is removed again before the request goes to the service. Clear the name to remove it.">
+                                <input asp-for="RequireName" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Edge-Secret" />
+                            </mat-field>
+                            <mat-field label="Header value" for-id="RequireValue" hint="At least 16 characters, visible ASCII without spaces, * { or }. It is never shown again; leave it empty to keep the saved one.">
+                                <input type="password" id="RequireValue" name="RequireValue" class="mat-input mat-mono" autocomplete="new-password" placeholder="@(Model.RequireSet ? "Set - leave empty to keep" : "")" />
+                            </mat-field>
+                        </div>
+
+                        <div class="mat-stack" data-show-if="#target-proxy" data-show-value="proxy">
+                            <mat-field label="Host header to the upstream" asp-for="UpstreamHost" hint="Optional. Sent to the service instead of the host the visitor asked for, for example when the service is another Matcad that routes by host. For an https:// upstream it is also the name of the TLS handshake (and the certificate check).">
+                                <input asp-for="UpstreamHost" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="app.example.com" />
+                            </mat-field>
+
+                            <div class="mat-field">
+                                <span class="mat-label">Headers to the upstream</span>
+                                <div class="mat-table-wrap">
+                                    <table class="mat-table" id="upstream-headers">
+                                        <caption class="mat-sr-only">Headers sent to the upstream</caption>
+                                        <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var row in Model.HeaderRows)
+                                            {
+                                                <tr>
+                                                    <td data-label="Name"><input name="HeaderNames" value="@row.Name" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                                    <td data-label="Value"><input name="HeaderValues" type="password" class="mat-input mat-mono" placeholder="@(row.ValueSet ? "Set - leave empty to keep" : "")" aria-label="Header value" autocomplete="new-password" /></td>
+                                                    <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the header @row.Name" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <span class="mat-hint">Set on every request to the service; they replace a header of the same name that the visitor sent. The values are never shown again; leave one empty to keep the saved value, remove the row to delete the header.</span>
+                            </div>
+                            <div class="mat-actions">
+                                <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#upstream-headers tbody" data-template="header-row-template">@Ui.Icon("plus")<span>Add a header</span></button>
+                            </div>
+                            <template id="header-row-template">
+                                <tr>
+                                    <td data-label="Name"><input name="HeaderNames" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Edge-Secret" /></td>
+                                    <td data-label="Value"><input name="HeaderValues" type="password" class="mat-input mat-mono" aria-label="Header value" autocomplete="new-password" /></td>
+                                    <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the header" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                </tr>
+                            </template>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </section>
+
         <mat-form-buttons>
             <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
             <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>
