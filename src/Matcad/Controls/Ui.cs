@@ -26,11 +26,12 @@ public static partial class Ui
         return $"<svg class=\"{cls}\" aria-hidden=\"true\" focusable=\"false\"><use href=\"#mat-i-{name}\"></use></svg>";
     }
 
-    /// <summary>The logo of Matcad in the tile of the toolkit (<c>mat-logo</c>): the flat accent colour with one glyph from the sprite.</summary>
-    public static IHtmlContent Logo(string size = "md")
+    /// <summary>The logo of Matcad in the tile of the toolkit (<c>mat-logo</c>). The picture has its own rounded corners, so the tile is transparent (<c>mc-logo</c>).
+    /// <paramref name="imageBase"/> is where the pictures are served: the login portal is shown on a protected host, where only /auth/* reaches Matcad.</summary>
+    public static IHtmlContent Logo(string size = "md", string imageBase = "/img")
     {
-        var cls = size == "md" ? "mat-logo" : $"mat-logo mat-logo--{size}";
-        return new HtmlString($"<span class=\"{cls}\" role=\"img\" aria-label=\"{App.Name}\">{Svg(App.Glyph, null)}</span>");
+        var cls = size == "md" ? "mat-logo mc-logo" : $"mat-logo mat-logo--{size} mc-logo";
+        return new HtmlString($"<span class=\"{cls}\" role=\"img\" aria-label=\"{App.Name}\"><img src=\"{imageBase}/logo.svg\" alt=\"\" width=\"128\" height=\"128\" /></span>");
     }
 
     /// <summary>The first letters of a name, for an avatar.</summary>
@@ -58,9 +59,6 @@ public static partial class Ui
         public const string Id = "matcad";
         public const string Name = "Matcad";
         public const string Tagline = "Reverse proxy with automatic HTTPS";
-
-        /// <summary>The glyph of the logo, an icon of the sprite.</summary>
-        public const string Glyph = "route";
 
         /// <summary>The accent as the toolkit registry has it; it colours the bar of the browser. A unit test compares it with <c>matui.css</c>.</summary>
         public const string Accent = "#2f6feb";

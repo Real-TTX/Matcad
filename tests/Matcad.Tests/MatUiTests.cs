@@ -61,12 +61,6 @@ public partial class MatUiToolkitTests
     }
 
     [Fact]
-    public void The_logo_glyph_is_in_the_sprite()
-    {
-        Assert.Contains(Ui.App.Glyph, SpriteIcons());
-    }
-
-    [Fact]
     public void No_page_carries_an_inline_script_or_an_event_handler()
     {
         var offenders = Views()

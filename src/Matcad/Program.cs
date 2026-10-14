@@ -154,8 +154,8 @@ void KeepVersioned(StaticFileResponseContext context)
 
 app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypes, OnPrepareResponse = KeepVersioned });
 
-// The login portal is shown on the protected host, where Caddy proxies only /auth/* to Matcad: the toolkit and the styles it needs are served there as well.
-foreach (var (folder, path) in new[] { ("matui", "/auth/ui"), ("css", "/auth/css") })
+// The login portal is shown on the protected host, where Caddy proxies only /auth/* to Matcad: the toolkit, the styles and the logo it needs are served there as well.
+foreach (var (folder, path) in new[] { ("matui", "/auth/ui"), ("css", "/auth/css"), ("img", "/auth/img") })
 {
     app.UseStaticFiles(new StaticFileOptions
     {
