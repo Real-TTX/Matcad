@@ -40,4 +40,6 @@ COPY --from=caddybuild /usr/bin/caddy /usr/local/bin/caddy
 VOLUME ["/data"]
 EXPOSE 4433
 ENV ASPNETCORE_ENVIRONMENT=Production
+# The image has no curl: the app checks its own /healthz.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=30s --retries=3 CMD ["dotnet", "Matcad.dll", "--healthcheck"]
 ENTRYPOINT ["dotnet", "Matcad.dll"]

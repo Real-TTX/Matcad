@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Matcad.Auth;
 using Matcad.Config;
 using Matcad.Services;
@@ -6,8 +7,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Matcad.Pages.Authentications;
 
-public class EditModel : PageModel
+public partial class EditModel : PageModel
 {
+    private const int MaxLogoBytes = 256 * 1024;
+    private static readonly string[] LogoTypes = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"];
+
     private readonly ConfigStore _store;
     private readonly CaddyService _caddy;
     private readonly RouteProvider _routes;
@@ -47,70 +51,73 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            Error = "Name is required.";
-            return Page();
-        }
+        var existing = IsNew ? null : _store.Authentications.FirstOrDefault(x => x.Id == Id);
+        if (!IsNew && existing == null) return RedirectToPage("Index");
 
-        var auth = _store.Authentications.FirstOrDefault(x => x.Id == Id) ?? new AuthenticationConfig();
-        var previous = auth.Users.ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(Name)) return Fail("Name is required.");
 
-        auth.Id = Id ?? 0;
-        auth.Name = Name;
-        auth.Type = Type;
-
-        // Both Basic Auth and Matcad keep their login accounts in Users.
+        // Both Basic Auth and Matcad keep their login accounts in Users. A blank password keeps the existing one.
+        var previous = (existing?.Users ?? new()).ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
         var users = new List<BasicAuthUser>();
         for (var i = 0; i < Usernames.Count; i++)
         {
             var name = Usernames[i]?.Trim();
             if (string.IsNullOrEmpty(name)) continue;
-            var pass = i < Passwords.Count ? Passwords[i] : null;
+            if (users.Any(u => u.Username.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                return Fail($"The username '{name}' is listed twice.");
+
+            var password = i < Passwords.Count ? Passwords[i] : null;
             string hash;
-            if (!string.IsNullOrEmpty(pass))
-                hash = BCrypt.Net.BCrypt.HashPassword(pass);
-            else if (previous.TryGetValue(name, out var old))
-                hash = old; // keep existing password when left blank
-            else
-                continue; // new user without a password -> skip
+            if (!string.IsNullOrEmpty(password)) hash = PasswordHashing.HashOrKeep(password, previous.GetValueOrDefault(name));
+            else if (previous.TryGetValue(name, out var old)) hash = old;
+            else continue; // a new user without a password is skipped
             users.Add(new BasicAuthUser { Username = name, PasswordHash = hash });
         }
-        auth.Users = users;
 
+        // Work on a copy: a rejected form must not leave half-applied changes in the stored authentication.
+        var auth = new AuthenticationConfig { Id = existing?.Id ?? 0, Name = Name.Trim(), Type = Type, Users = users, ManagedBy = existing?.ManagedBy };
         if (Type == AuthType.Matcad)
         {
-            auth.BrandTitle = BrandTitle?.Trim() ?? "";
-            auth.BrandColor = BrandColor?.Trim() ?? "";
-            auth.BrandText = BrandText?.Trim() ?? "";
-            auth.BrandLogoLayout = BrandLogoLayout == "top" ? "top" : "left";
-            if (LogoFile is { Length: > 0 })
-            {
-                if (LogoFile.Length > 256 * 1024)
-                {
-                    Error = "Logo is too large (max 256 KB).";
-                    ExistingUsers = auth.Users;
-                    return Page();
-                }
-                using var ms = new MemoryStream();
-                await LogoFile.CopyToAsync(ms);
-                var b64 = Convert.ToBase64String(ms.ToArray());
-                auth.BrandLogo = $"data:{LogoFile.ContentType};base64,{b64}";
-            }
-            else
-            {
-                auth.BrandLogo = BrandLogo?.Trim() ?? ""; // URL, or keep existing (hidden field carries it)
-            }
-        }
-        else
-        {
-            auth.BrandTitle = auth.BrandColor = auth.BrandText = auth.BrandLogo = "";
-            auth.BrandLogoLayout = "left";
+            var brandError = await ApplyBranding(auth);
+            if (brandError != null) return Fail(brandError);
         }
 
         _store.UpsertAuthentication(auth, User.GetUserId());
-        await ApplyAndFlash($"Authentication '{Name}' saved.");
+        await ApplyAndFlash($"Authentication '{auth.Name}' saved.");
         return RedirectToPage("Index");
+    }
+
+    private async Task<string?> ApplyBranding(AuthenticationConfig auth)
+    {
+        var color = BrandColor?.Trim() ?? "";
+        if (color.Length > 0 && !HexColor().IsMatch(color)) return "The accent colour must look like #2f6feb.";
+
+        auth.BrandTitle = BrandTitle?.Trim() ?? "";
+        auth.BrandText = BrandText?.Trim() ?? "";
+        auth.BrandColor = color;
+        auth.BrandLogoLayout = BrandLogoLayout == "top" ? "top" : "left";
+
+        if (LogoFile is not { Length: > 0 })
+        {
+            auth.BrandLogo = BrandLogo?.Trim() ?? ""; // a URL, or the kept data URI (a hidden field carries it)
+            return null;
+        }
+        if (LogoFile.Length > MaxLogoBytes) return "Logo is too large (max 256 KB).";
+        if (!LogoTypes.Contains(LogoFile.ContentType, StringComparer.OrdinalIgnoreCase)) return "The logo must be a PNG, JPEG, GIF, WebP, SVG or ICO image.";
+
+        using var memory = new MemoryStream();
+        await LogoFile.CopyToAsync(memory);
+        auth.BrandLogo = $"data:{LogoFile.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+        return null;
+    }
+
+    /// <summary>Shows the form again with the rows the user had (passwords have to be typed again).</summary>
+    private IActionResult Fail(string message)
+    {
+        Error = message;
+        ExistingUsers = Usernames.Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => new BasicAuthUser { Username = u.Trim() }).ToList();
+        return Page();
     }
 
     public async Task<IActionResult> OnPostDeleteAsync()
@@ -135,4 +142,7 @@ public class EditModel : PageModel
         if (ok) TempData["Flash"] = success + " Caddy configuration updated.";
         else TempData["FlashError"] = success + $" But the Caddy push failed: {error}";
     }
+
+    [GeneratedRegex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")]
+    private static partial Regex HexColor();
 }

@@ -13,8 +13,11 @@ public class UserModel : PageModel
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Username { get; set; } = "";
+    [BindProperty] public string? Email { get; set; }
     [BindProperty] public string? Password { get; set; }
     [BindProperty] public UserRole Role { get; set; } = UserRole.User;
+    /// <summary>An administrator chooses the password, so the user picks their own at the first sign-in.</summary>
+    [BindProperty] public bool MustChangePassword { get; set; } = true;
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
@@ -26,47 +29,39 @@ public class UserModel : PageModel
             var u = await _auth.GetUser(Id!.Value);
             if (u == null) return RedirectToPage("Index");
             Username = u.Username;
+            Email = u.Email;
             Role = u.Role;
+            MustChangePassword = u.MustChangePassword;
         }
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        Username = Username.Trim();
-        if (string.IsNullOrEmpty(Username))
-        {
-            Error = "Username is required.";
-            return Page();
-        }
+        Username = (Username ?? "").Trim();
+        var email = AuthService.NormalizeEmail(Email);
+        var user = IsNew ? null : await _auth.GetUser(Id!.Value);
+        if (!IsNew && user == null) return RedirectToPage("Index");
 
-        if (IsNew)
+        if (!string.IsNullOrEmpty(Password) || IsNew)
+            Error = AuthService.ValidatePassword(Password);
+        Error ??= await _auth.ValidateIdentity(Username, email, user?.Id);
+        // Keep at least one admin.
+        if (Error == null && user is { Role: UserRole.Admin } && Role != UserRole.Admin && await IsLastAdmin())
+            Error = "The last admin cannot be demoted.";
+        if (Error != null) return Page();
+
+        if (user == null)
         {
-            if (string.IsNullOrEmpty(Password))
-            {
-                Error = "A password is required for a new user.";
-                return Page();
-            }
-            if (await _auth.FindUser(Username) != null)
-            {
-                Error = "That username is already taken.";
-                return Page();
-            }
-            await _auth.CreateUser(Username, Password, Role, User.GetUserId());
+            await _auth.CreateUser(Username, email, Password!, Role, User.GetUserId(), MustChangePassword);
         }
         else
         {
-            var u = await _auth.GetUser(Id!.Value);
-            if (u == null) return RedirectToPage("Index");
-            // Guard: keep at least one admin.
-            if (u.Role == UserRole.Admin && Role != UserRole.Admin && await IsLastAdmin(u.Id))
-            {
-                Error = "The last admin cannot be demoted.";
-                return Page();
-            }
-            u.Username = Username;
-            u.Role = Role;
-            await _auth.UpdateUser(u, Password, User.GetUserId());
+            user.Username = Username;
+            user.Email = email;
+            user.Role = Role;
+            await _auth.UpdateUser(user, Password, MustChangePassword, User.GetUserId(),
+                keepSession: user.Id == User.GetUserId() ? Request.GetSessionToken() : null);
         }
 
         TempData["Flash"] = $"User '{Username}' saved.";
@@ -80,7 +75,7 @@ public class UserModel : PageModel
             var u = await _auth.GetUser(Id.Value);
             if (u != null)
             {
-                if (u.Role == UserRole.Admin && await IsLastAdmin(u.Id))
+                if (u.Role == UserRole.Admin && await IsLastAdmin())
                 {
                     TempData["FlashError"] = "The last admin cannot be deleted.";
                     return RedirectToPage("User", new { id = Id });
@@ -92,9 +87,5 @@ public class UserModel : PageModel
         return RedirectToPage("Index");
     }
 
-    private async Task<bool> IsLastAdmin(long userId)
-    {
-        var users = await _auth.ListUsers();
-        return users.Count(x => x.Role == UserRole.Admin) <= 1;
-    }
+    private async Task<bool> IsLastAdmin() => await _auth.CountAdmins() <= 1;
 }

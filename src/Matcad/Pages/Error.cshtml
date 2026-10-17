@@ -1,0 +1,18 @@
+@page
+@model Matcad.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+    Layout = "_PlainLayout";
+}
+<div class="mat-auth__card">
+    <div class="mat-empty">
+        <span class="mat-empty__icon">@Ui.Icon("alert")</span>
+        <h1 class="mat-empty__title">Something went wrong</h1>
+        <p>The request could not be processed.</p>
+        @if (Model.RequestId != null)
+        {
+            <p class="mat-muted mat-mono mat-text-break">Request id: @Model.RequestId</p>
+        }
+        <a asp-page="/Index" class="mat-btn mat-btn--primary">@Ui.Icon("home")<span>Back to the dashboard</span></a>
+    </div>
+</div>

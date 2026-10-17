@@ -1,0 +1,59 @@
+/* Matcad · the few styles of this app (mc-*), on top of the toolkit (../matui/matui.css).
+   Colours, sizes and shapes come from the toolkit's custom properties only; nothing here repairs a component. */
+
+/* ---- The logo is a picture with rounded corners of its own: the tile of the toolkit behind it is clear ---- */
+.mc-logo { background: transparent; }
+
+/* ---- A route that is switched off ---- */
+.mc-off td:not(.mat-table__cell-actions) { color: var(--mat-text-muted); }
+.mc-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--mat-space-1); }
+
+/* ---- The live request log of the dashboard ---- */
+.mc-log { display: flex; flex-direction: column; max-height: 22rem; overflow: auto; font-family: var(--mat-mono); font-size: var(--mat-fs-sm); }
+.mc-log__line { display: grid; grid-template-columns: 5.5rem 3rem 4rem minmax(0, 1fr) auto auto; gap: var(--mat-space-3); align-items: baseline; padding: var(--mat-space-1) 0; border-top: 1px solid var(--mat-border); }
+.mc-log__line:first-child { border-top: 0; }
+.mc-log__line > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-log__muted { color: var(--mat-text-muted); }
+.mc-log__st-2 { color: var(--mat-success-text); }
+.mc-log__st-3 { color: var(--mat-info-text); }
+.mc-log__st-4 { color: var(--mat-warning-text); }
+.mc-log__st-5 { color: var(--mat-danger-text); }
+.mc-log__empty { padding: var(--mat-space-3) 0; font-family: var(--mat-font); }
+.mc-log__status { margin-inline-start: auto; }
+@media (max-width: 600px) {
+  .mc-log__line { grid-template-columns: 4.5rem 2.5rem minmax(0, 1fr); }
+  .mc-log__line > :nth-child(3), .mc-log__line > :nth-child(5), .mc-log__line > :nth-child(6) { display: none; }
+}
+
+/* ---- Statistics: requests over time, and the status codes ---- */
+.mc-bars { display: flex; align-items: flex-end; gap: 2px; height: 11rem; }
+.mc-bars__bar { flex: 1 1 0; min-width: 2px; height: 100%; display: flex; align-items: flex-end; }
+.mc-bars__fill { width: 100%; height: var(--mc-value, 0%); background: var(--mat-accent); border-radius: var(--mat-radius-xs) var(--mat-radius-xs) 0 0; }
+.mc-bars__bar:hover .mc-bars__fill { background: var(--mat-accent-hover); }
+.mc-bars__axis { display: flex; justify-content: space-between; margin-top: var(--mat-space-2); color: var(--mat-text-muted); font-size: var(--mat-fs-xs); font-family: var(--mat-mono); }
+.mc-status { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 5rem; gap: var(--mat-space-3); align-items: center; }
+.mc-status__name { font-weight: 600; }
+.mc-status__count { text-align: right; }
+
+/* ---- The login page of an authentication: its logo and title, and the preview in the editor ---- */
+.mc-brand { display: flex; align-items: center; justify-content: center; gap: var(--mat-space-3); flex-wrap: wrap; }
+.mc-brand--top { flex-direction: column; }
+.mc-brand h1, .mc-brand h3 { margin: 0; font-size: var(--mat-fs-xl); line-height: var(--mat-lh-tight); }
+.mc-brand__img { display: block; max-width: 100%; max-height: 56px; width: auto; height: auto; }
+.mc-brand__img[hidden] { display: none; }
+.mc-preview { padding: var(--mat-space-4); background: var(--mat-bg); border: 1px solid var(--mat-border); border-radius: var(--mat-radius-lg); }
+.mc-preview .mat-auth__card { width: 100%; padding: var(--mat-space-6) var(--mat-space-5); }
+.mat-auth__card.mc-wide { width: min(680px, 100%); }
+
+/* ---- The bar at the bottom while Matcad cannot be reached (matcad.js) ---- */
+.mc-conn { position: fixed; z-index: var(--mat-z-toast); inset-inline: 0; bottom: 0; display: flex; justify-content: center; padding: var(--mat-space-4) var(--mat-space-4) calc(var(--mat-space-4) + var(--mat-safe-bottom)); pointer-events: none; }
+.mc-conn[hidden] { display: none; }
+.mc-conn > .mat-alert { width: min(640px, 100%); align-items: center; background: var(--mat-surface); border: 1px solid var(--mat-border-strong); box-shadow: var(--mat-shadow-2); pointer-events: auto; }
+.mc-conn > .mat-alert--warning { color: var(--mat-warning-text); }
+.mc-conn > .mat-alert--success { color: var(--mat-success-text); }
+
+/* ---- iOS zooms into a field whose type is smaller than 16 px: on a touch screen the fields take that size, so nothing jumps on focus
+   (pinch zoom stays available). The toolkit sets the height of a touch field, not its type. ---- */
+@media (pointer: coarse) {
+  .mat-input, .mat-select, .mat-textarea, .mat-picker__trigger { font-size: max(16px, 1rem); }
+}

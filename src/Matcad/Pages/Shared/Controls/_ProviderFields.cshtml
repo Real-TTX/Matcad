@@ -1,0 +1,62 @@
+@model Matcad.Controls.ProviderFieldsModel
+@using Matcad.Config
+@* The type picker plus the credential fields of the chosen type. A block shows only for its type (data-show-if); the rows of the custom editor come from matcad.js (data-add-row). *@
+<mat-field label="Type" for-id="@Model.TypeFieldName">
+    <select name="@Model.TypeFieldName" id="@Model.TypeFieldName" class="mat-select">
+        @foreach (var t in ProviderTypes.All)
+        {
+            <option value="@t.Id" selected="@(t.Id == Model.Type)">@t.DisplayName</option>
+        }
+        <option value="@ProviderTypes.CustomId" selected="@(Model.Type == ProviderTypes.CustomId)">Custom (any compiled-in module)</option>
+    </select>
+</mat-field>
+
+@foreach (var t in ProviderTypes.All)
+{
+    <div class="mat-stack" data-show-if="#@Model.TypeFieldName" data-show-value="@t.Id">
+        @foreach (var field in t.Fields)
+        {
+            Model.Values.TryGetValue($"{t.Id}:{field.Key}", out var value);
+            <mat-field label="@field.Label" for-id="cred_@(t.Id)_@(field.Key)">
+                <input id="cred_@(t.Id)_@(field.Key)" name="cred_@(t.Id)_@(field.Key)" class="mat-input"
+                       type="@(field.Secret ? "password" : "text")" value="@value" autocomplete="off" spellcheck="false" />
+            </mat-field>
+        }
+    </div>
+}
+
+<div class="mat-stack" data-show-if="#@Model.TypeFieldName" data-show-value="@ProviderTypes.CustomId">
+    <mat-field label="Caddy DNS module" for-id="custom-module" hint="The module must be compiled in (see CADDY_DNS_MODULES in .env), for example cloudflare or route53.">
+        <input id="custom-module" name="CustomModule" value="@Model.CustomModule" class="mat-input mat-mono" autocomplete="off" autocapitalize="none" spellcheck="false" />
+    </mat-field>
+
+    <div class="mat-field">
+        <span class="mat-label">Credentials</span>
+        <div class="mat-table-wrap">
+            <table class="mat-table" id="custom-creds">
+                <caption class="mat-sr-only">Credentials of the module</caption>
+                <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var kv in Model.CustomCredentials)
+                    {
+                        <tr>
+                            <td data-label="Key"><input name="CustomKeys" value="@kv.Key" class="mat-input" aria-label="Key" autocomplete="off" autocapitalize="none" spellcheck="false" /></td>
+                            <td data-label="Value"><input name="CustomValues" value="@kv.Value" class="mat-input" aria-label="Value" autocomplete="off" autocapitalize="none" spellcheck="false" /></td>
+                            <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the credential" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mat-actions">
+            <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#custom-creds tbody" data-template="cred-row-template">@Ui.Icon("plus")<span>Add a credential</span></button>
+        </div>
+    </div>
+    <template id="cred-row-template">
+        <tr>
+            <td data-label="Key"><input name="CustomKeys" class="mat-input" aria-label="Key" autocomplete="off" autocapitalize="none" spellcheck="false" /></td>
+            <td data-label="Value"><input name="CustomValues" class="mat-input" aria-label="Value" autocomplete="off" autocapitalize="none" spellcheck="false" /></td>
+            <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the credential" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+        </tr>
+    </template>
+</div>

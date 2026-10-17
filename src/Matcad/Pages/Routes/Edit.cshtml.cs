@@ -28,14 +28,37 @@ public class EditModel : PageModel
     [BindProperty] public bool InsecureSkipVerify { get; set; }
     [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
-    [BindProperty] public bool RedirectPermanent { get; set; }
+    [BindProperty] public bool PermanentRedirect { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
     [BindProperty] public string? AcmeEmail { get; set; }
     [BindProperty] public bool Enabled { get; set; } = true;
 
+    // --- Guards and upstream. The values of the headers are secrets: they are never sent back to the page. A value left empty
+    // --- on the form keeps the saved one (the header is found by its name), as an empty password does on a user.
+    [BindProperty] public string? UpstreamHost { get; set; }
+    [BindProperty] public List<string> HeaderNames { get; set; } = new();
+    [BindProperty] public List<string> HeaderValues { get; set; } = new();
+    [BindProperty] public string? RequireName { get; set; }
+    [BindProperty] public string? RequireValue { get; set; }
+    /// <summary>One address or range per line.</summary>
+    [BindProperty] public string? AllowedIpsText { get; set; }
+
+    /// <summary>A row of the upstream headers on the page: the name, and whether a value is saved for it.</summary>
+    public record HeaderRow(string Name, bool ValueSet);
+
+    public List<HeaderRow> HeaderRows { get; private set; } = new();
+    /// <summary>Whether the required header has a saved value (the field then says "set" instead of staying blank).</summary>
+    public bool RequireSet { get; private set; }
+    /// <summary>The section is folded away unless something in it is set, or the last save was refused.</summary>
+    public bool AccessOpen => Error != null
+        || !string.IsNullOrWhiteSpace(UpstreamHost) || HeaderRows.Count > 0
+        || !string.IsNullOrWhiteSpace(RequireName) || !string.IsNullOrWhiteSpace(AllowedIpsText);
+
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
+    /// <summary>The port of a port-bound route. Those are managed through the API; here they can only be deleted.</summary>
+    public int? PortBinding { get; private set; }
 
     public List<(string Value, string Text)> AuthOptions { get; private set; } = new();
     public List<(string Value, string Text)> ProviderOptions { get; private set; } = new();
@@ -54,14 +77,19 @@ public class EditModel : PageModel
             var r = _store.Routes.FirstOrDefault(x => x.Id == Id);
             if (r == null) return RedirectToPage("Index");
             Name = r.Name; Host = r.Host;
+            PortBinding = r.ListenPort > 0 ? r.ListenPort : null;
             RouteType = r.Wildcard ? "wildcard" : "single";
             Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
-            FallbackUrl = r.FallbackUrl; RedirectPermanent = r.RedirectPermanent;
+            FallbackUrl = r.FallbackUrl; PermanentRedirect = r.RedirectPermanent;
             // A route with a redirect target and no upstream is a redirect.
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
             AuthenticationId = r.AuthenticationId; ProviderId = r.ProviderId; Enabled = r.Enabled;
             AcmeEmail = r.AcmeEmail;
+            UpstreamHost = r.UpstreamHost;
+            HeaderRows = r.UpstreamHeaders.Select(h => new HeaderRow(h.Name, ValueSet: true)).ToList();
+            RequireName = r.RequireHeader?.Name; RequireSet = r.RequireHeader != null;
+            AllowedIpsText = string.Join('\n', r.AllowedIps);
         }
         else if (!string.IsNullOrWhiteSpace(Sub))
         {
@@ -74,62 +102,29 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var host = (Host ?? "").Trim().ToLowerInvariant();
-        var wildcard = RouteType == "wildcard";
+        var existing = IsNew ? null : _store.Routes.FirstOrDefault(x => x.Id == Id);
+        if (!IsNew && existing == null) return RedirectToPage("Index");
+        if (existing?.ListenPort > 0) return Fail("Port bindings are managed through the API. Here they can only be deleted.", existing.ListenPort);
 
-        IActionResult Fail(string message)
-        {
-            Error = message;
-            BuildOptions();
-            return Page();
-        }
-
-        if (string.IsNullOrWhiteSpace(host))
-            return Fail("Host is required.");
-
-        if (wildcard)
-        {
-            // Normalize to the *.domain form and enforce a DNS provider (wildcards
-            // can only be validated via DNS-01, so a provider is mandatory).
-            if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
-            if (host.Count(c => c == '.') < 2)
-                return Fail("A wildcard host must include a domain, e.g. *.example.com.");
-            if (ProviderId is not > 0)
-                return Fail("A wildcard route requires a DNS provider (DNS-01 challenge).");
-        }
-        else
-        {
-            if (host.StartsWith("*."))
-                return Fail("A single domain must not start with '*.'. Choose the 'Wildcard' type instead.");
-            ProviderId = null; // not applicable for single domains
-        }
-
-        var redirect = Target == "redirect";
-        if (redirect && string.IsNullOrWhiteSpace(FallbackUrl))
-            return Fail("A redirect route needs a target URL.");
-
-        var route = _store.Routes.FirstOrDefault(x => x.Id == Id) ?? new RouteConfig();
-        route.Id = Id ?? 0;
-        route.Name = string.IsNullOrWhiteSpace(Name) ? host : Name.Trim();
-        route.Host = host;
-        route.Wildcard = wildcard;
-        // Proxy and redirect are mutually exclusive.
-        route.Upstream = redirect || string.IsNullOrWhiteSpace(Upstream) ? null : Upstream!.Trim();
-        route.InsecureSkipVerify = !redirect && InsecureSkipVerify;
-        route.AllowEmbedding = AllowEmbedding;
-        route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(FallbackUrl) ? FallbackUrl!.Trim() : null;
-        route.RedirectPermanent = redirect && RedirectPermanent;
-        route.AuthenticationId = AuthenticationId is > 0 ? AuthenticationId : null;
-        route.ProviderId = ProviderId is > 0 ? ProviderId : null;
-        // Per-domain ACME email only applies to wildcard (DNS-01) certificates.
-        route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(AcmeEmail) ? AcmeEmail.Trim() : null;
-        route.Enabled = Enabled;
-        _store.UpsertRoute(route, User.GetUserId());
+        // Work on a copy: a rejected form must not leave half-applied changes in the stored route.
+        // A route that another tool (Mattiverse) writes keeps its mark when it is edited by hand.
+        var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy };
+        var (access, accessError) = ReadAccess(existing);
+        if (accessError != null) return Fail(accessError);
+        var form = new RouteForm(Host, RouteType == "wildcard", Target == "redirect", Upstream, InsecureSkipVerify,
+            FallbackUrl, PermanentRedirect, AuthenticationId, ProviderId, AcmeEmail, Enabled, Name, AllowEmbedding, ListenPort: null,
+            // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
+            UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
+            RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText));
+        var error = RouteEditor.Apply(form, route);
+        if (error != null) return Fail(error);
+        if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))
+            return Fail($"A route for '{route.Host}' already exists.");
 
         var warnings = new List<string>();
 
         // Non-blocking heads-up when a single host isn't covered by any wildcard.
-        if (!wildcard)
+        if (!route.Wildcard)
         {
             var coverage = CertificatePlanner.ForRoute(route, _routes.All());
             if (coverage.Kind == CertificatePlanner.CertKind.Individual)
@@ -151,6 +146,59 @@ public class EditModel : PageModel
 
         await ApplyAndFlash($"Route '{route.Host}' saved.");
         return RedirectToPage("Index");
+    }
+
+    private IActionResult Fail(string message, int? portBinding = null)
+    {
+        Error = message;
+        PortBinding = portBinding;
+        ShowPostedAccess();
+        BuildOptions();
+        return Page();
+    }
+
+    /// <summary>The header rows and the required header the form posted. A row without a value keeps the saved one (matched by name);
+    /// an entirely empty row is dropped, and so is the required header when its name is empty (that is how it is removed).</summary>
+    private (PostedAccess Access, string? Error) ReadAccess(RouteConfig? existing)
+    {
+        var headers = new List<HeaderPair>();
+        for (var i = 0; i < HeaderNames.Count; i++)
+        {
+            var name = HeaderNames[i]?.Trim() ?? "";
+            var value = i < HeaderValues.Count ? HeaderValues[i] ?? "" : "";
+            if (name.Length == 0 && value.Length == 0) continue;
+            headers.Add(new HeaderPair { Name = name, Value = value });
+        }
+        var keep = RouteGuards.KeepStoredValues(headers.Where(h => h.Name.Length > 0), existing?.UpstreamHeaders, "Upstream header");
+        if (keep != null) return (new PostedAccess(headers, null), keep);
+
+        HeaderPair? require = null;
+        var requireName = RequireName?.Trim() ?? "";
+        if (requireName.Length > 0 || !string.IsNullOrEmpty(RequireValue))
+        {
+            require = new HeaderPair { Name = requireName, Value = RequireValue ?? "" };
+            // Without a value the saved one stays, if the header is the one that is saved. (A value without a name is left for Apply to refuse.)
+            var kept = requireName.Length == 0 ? null
+                : RouteGuards.KeepStoredValues([require], existing?.RequireHeader is { } saved ? new[] { saved } : null, "Required header");
+            if (kept != null) return (new PostedAccess(headers, require), kept);
+        }
+        return (new PostedAccess(headers, require), null);
+    }
+
+    private record PostedAccess(List<HeaderPair> UpstreamHeaders, HeaderPair? RequireHeader);
+
+    /// <summary>Shows the rows the user had after a refused save. The values are not sent back: a header whose name is saved
+    /// shows "set" (and stays as it is when the value is left empty), a new one has to be typed again.</summary>
+    private void ShowPostedAccess()
+    {
+        var existing = IsNew ? null : _store.Routes.FirstOrDefault(x => x.Id == Id);
+        HeaderRows = HeaderNames.Select((n, i) => (Name: n?.Trim() ?? "", Value: i < HeaderValues.Count ? HeaderValues[i] : null))
+            .Where(r => r.Name.Length > 0 || !string.IsNullOrEmpty(r.Value))
+            .Select(r => new HeaderRow(r.Name, existing?.UpstreamHeaders.Any(h => h.Name.Equals(r.Name, StringComparison.OrdinalIgnoreCase)) == true))
+            .ToList();
+        RequireSet = existing?.RequireHeader is { } h && h.Name.Equals(RequireName?.Trim(), StringComparison.OrdinalIgnoreCase);
+        HeaderValues = new();
+        RequireValue = null;
     }
 
     private static string ParentOf(string host) =>

@@ -8,7 +8,7 @@
 
 Routes, wildcard HTTPS via DNS providers, a built-in login portal, request
 statistics, Docker discovery and Caddyfile import. Two containers, no cloud,
-no config files to hand-edit.
+no config files to hand-edit. Installable as an app on your phone and desktop.
 
 </div>
 
@@ -29,11 +29,14 @@ lose the YAML-in-your-head part.
 ## At a glance
 
 **Routes**
-- A **hierarchical domain tree** built automatically from your host names
+- A **hierarchical domain tree** built automatically from your host names; every domain folds away, and *Add a subdomain* is the last entry of its group
 - Each route is a **reverse proxy** or a **301/302 redirect** (to any URL, or pick
   an existing domain from a list)
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs
 - Add a subdomain to an existing domain with one click
+- **Guards and upstream headers** (optional, under *Guards and upstream* in the route editor): refuse every request that lacks a
+  secret header or does not come from an allowed IP address, send another `Host` header (and TLS server name) to the upstream and set
+  your own headers on the request to it - the building blocks for a chain of two proxies, see below
 
 **Certificates (automatic HTTPS)**
 - **Wildcard certificates** via the ACME DNS-01 challenge
@@ -44,10 +47,19 @@ lose the YAML-in-your-head part.
 
 **Authentication**
 - **Basic Auth** (browser dialog), managed user list with bcrypt hashes
+- **Accounts** sign in with a username or an e-mail address; administrators manage
+  everything, users work with routes and authentications (not settings, users or
+  DNS provider credentials)
 - A **Matcad login portal** (Caddy `forward_auth`) with its own users and
   **per-domain branding** (title, colour, logo, welcome text, logo position)
 - Choose how unauthenticated visitors see it: **inline** on the site, a **redirect**
   to a login host, or a plain **401**
+
+**On your phone**
+- **Installable app (PWA)** with the Matcad icon, safe-area and notch handling for iOS and
+  Android, and no accidental zooming
+- When the server cannot be reached you get a clear **offline page and banner** that
+  reconnect on their own, and nothing you typed is thrown away
 
 **Insight**
 - A **live dashboard** with the route tree, last access and a real-time request log
@@ -82,6 +94,30 @@ Single host or wildcard, reverse proxy or redirect. Pick "Wildcard" and the host
 becomes `*.your-domain`; enter a bare domain that no wildcard covers and Matcad
 warns you it would get its own certificate.
 
+### Guards and upstream headers
+
+A route can be closed to everything but one other proxy, for example an *edge* Matcad that forwards a customer domain to the
+system address of a site on another server, whose Matcad only takes requests from the edge:
+
+| Property | What it does |
+|---|---|
+| Required header (name + value) | A request without exactly this header and value gets **403** before authentication, the framing strip or the proxy run. The value needs at least 16 characters of visible ASCII (no spaces) and must not contain `*`, `{` or `}` (Caddy would read them as a wildcard or a placeholder). The header is removed from the request before it goes to the upstream, so the website behind never sees it (an upstream header cannot have the same name). |
+| Allowed IP addresses | One address or CIDR range per line (IPv4/IPv6). The direct connection must be in the list, otherwise **403**. It is the TCP peer, not `X-Forwarded-For`; behind Docker Desktop or a NAT that can be the gateway address. With both guards, both must pass. |
+| Host header to the upstream | Sent instead of the visitor's host. For an `https://` upstream it is also the TLS server name (SNI and certificate check). |
+| Headers to the upstream | Set on every request to the upstream, replacing a header of the same name the visitor sent. Not `Host` (own field), `Content-Length`, `Transfer-Encoding`, `Connection`. |
+
+The values of the secret headers are never shown again (not by the pages, the REST API, or the config view on the Settings page, and
+Matcad has Caddy leave the required header out of its access log). A guard that cannot be built (for example from a damaged backup)
+answers 503 instead of serving the route open. A backup file contains the values: keep it safe.
+
+REST (`X-Api-Key`): `POST /api/v1/routes` takes the optional fields `upstreamHost` (string), `upstreamHeaders`
+(`[{"name": "...", "value": "..."}]`), `requireHeader` (`{"name": "...", "value": "..."}`) and `allowedIps` (`["10.0.0.0/8", "203.0.113.7"]`).
+On an update a field that is **missing** stays as it is, `null` removes it, a value replaces it (the older fields keep meaning "this is the
+whole route"). Invalid values answer 400 with the field and the reason, and nothing is saved. Responses show `upstreamHost` and `allowedIps`
+as they are and the headers as `{"name": "X-Edge", "valueSet": true}` - never the value. `GET /api/v1/status` lists
+`"capabilities": ["routeGuards"]`; a client that sets a guard has to check for it, because an older Matcad ignores fields it does not
+know and would leave the route open. `GET /api/v1/routes/{id}` returns one editable route.
+
 ### Statistics
 
 ![The statistics page with filters, charts and top lists](docs/images/statistics.png)
@@ -104,6 +140,15 @@ accent colour, logo, welcome text and logo placement, with a live preview.
 
 A fresh install starts empty and walks you through account, domains, an optional
 DNS provider and done. You can skip it and set things up later.
+
+### On your phone
+
+| Dashboard | Menu | Editing a route |
+|---|---|---|
+| ![The dashboard on a phone](docs/images/mobile-dashboard.png) | ![The menu on a phone](docs/images/mobile-menu.png) | ![The route editor on a phone](docs/images/mobile-route-edit.png) |
+
+The same interface scales down to a phone: a drawer menu, secondary table columns
+fold away, and the app respects the notch and the home indicator once installed.
 
 ## Quick start
 
@@ -157,12 +202,26 @@ docker compose up -d
 ```
 
 Caddy serves ports **80/443**; the Matcad UI is on **4433**. Open
-**http://localhost:4433** and sign in with **`admin` / `admin`** - the setup
-wizard makes you change that right away. Updating is just
-`docker compose pull && docker compose up -d`.
+**http://localhost:4433** and sign in with **`admin` / `admin`** - Matcad makes you
+choose your own password (and, if you like, an e-mail address you can sign in with)
+before anything else. Updating is just `docker compose pull && docker compose up -d`.
 
 > Keep the UI (port 4433) off the public internet - put it behind Caddy with a
-> Matcad login, or on your VPN.
+> Matcad login, or on your VPN. Repeated wrong passwords block a login for a few
+> minutes (per account and per client address).
+
+### Install it as an app
+
+Matcad is a Progressive Web App. Open the UI over **HTTPS** (for example through
+Caddy: set *Matcad host* under *Settings*) or on `localhost`, then:
+
+- **iOS (Safari):** Share, *Add to Home Screen*
+- **Android / desktop (Chrome, Edge):** the install button in the address bar or menu
+
+Installed, Matcad opens full screen with its own status bar colour. Because it
+controls a live system, pages are **not** stored for offline use and nothing is
+queued for later: if Matcad cannot be reached you see an offline page (or, on an
+open page, a banner) that reconnects automatically and refreshes the page afterwards.
 
 ### DNS providers and wildcard certificates
 
@@ -191,14 +250,17 @@ Docker socket read-only into the `matcad` service:
 | | |
 |---|---|
 | `80`, `443`, `443/udp` | Caddy - HTTP, HTTPS, HTTP/3 |
-| `4433` | Matcad UI |
+| `4433` | Matcad UI (`/healthz` answers `ok`; the image has a Docker health check) |
 | `matcad-data` -> `/data` | SQLite database, JSON config, DataProtection keys |
 | `caddy-data` -> `/data` | TLS certificates |
 | `caddy-logs` (shared) | access logs Caddy writes and Matcad reads |
 
 The images carry sensible defaults, so no environment variables are required.
 Everything else is configured in the UI under *Settings* and stored on the data
-volume; an update keeps all of it.
+volume; an update keeps all of it, including databases from older versions: the
+schema is upgraded on start (an old `admin` / `admin` account has to pick a new
+password then). `Matcad__ApiKey` enables the REST API, `Matcad__Port` changes
+the UI port.
 
 ## The `/data` volume
 
@@ -219,7 +281,7 @@ without these variables Matcad behaves exactly as described above.
 | Environment variable | Effect |
 |---|---|
 | `Matcad__ApiKey` | Turns on the REST API (`/api/v1`, header `X-Api-Key`). Without a key the API answers `503`. |
-| `MATCAD_ADMIN_PASSWORD` | On the first start (no user yet) the `admin` login gets this password, the forced password change is skipped and the setup wizard counts as done, so a headless install is usable right away. It needs at least 6 characters and must not be `admin`; otherwise it is ignored with a warning and `admin` / `admin` applies as usual. It has no effect once a user exists. |
+| `MATCAD_ADMIN_PASSWORD` | On the first start (no user yet) the `admin` login gets this password, the forced password change is skipped and the setup wizard counts as done, so a headless install is usable right away. It needs at least 8 characters (the rule of every Matcad password) and must not be `admin`; otherwise it is ignored with a warning and `admin` / `admin` applies as usual. It has no effect once a user exists. |
 
 ```bash
 docker run -d -p 4433:4433 -v matcad-data:/data \
@@ -243,14 +305,16 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
 ## How it is built
 
 - **matcad**: ASP.NET Core 10 (Razor Pages), UI on port 4433. Configuration is
-  stored as **JSON**, its own state (users, sessions, request logs) in **SQLite** -
-  both on the data volume.
+  stored as **JSON**, its own state (users, sessions, request logs) in **SQLite**
+  (EF Core migrations, PascalCase names) - both on the data volume.
 - **caddy**: a custom build (via `xcaddy`) with the DNS modules compiled in. Matcad
   generates the full Caddy JSON config and pushes it through the **admin API** on
   every change and at startup, so Caddy always reflects the UI.
 - Caddy writes JSON access logs to a shared volume; Matcad tails them into SQLite
   and streams new entries to the dashboard over **Server-Sent Events**.
 - The interface is server-rendered with a little plain JavaScript - **no build step**.
+  It is built on **MatUi**, the toolkit of the Mat apps' design system (MatDesign): flat surfaces, light and dark, a drawer menu on
+  phones. The toolkit is copied into `src/Matcad/wwwroot/matui`; `scripts/update-matui.ps1` brings a newer one.
 - Images are **multi-arch** (`linux/amd64` + `linux/arm64`), cross-compiled so both
   build without emulation.
 
@@ -263,6 +327,7 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
 
 - UI: <http://localhost:4433>
 - Caddy admin (dev only): <http://localhost:2019/config/>
+- Tests: `dotnet test tests/Matcad.Tests` (unit tests plus the whole app started in memory)
 
 The set of DNS modules compiled into both images lives once in `.env`
 (`CADDY_DNS_MODULES`); add more from <https://github.com/caddy-dns> and rebuild.
@@ -271,7 +336,7 @@ The set of DNS modules compiled into both images lives once in `.env`
 
 | Branch | Purpose |
 |---|---|
-| `main` | Release - a version tag (`v0.5.0`) builds and publishes the images to GHCR |
+| `main` | Release - a version tag (`v0.9.1`) builds and publishes the images to GHCR |
 | `dev` | Development |
 
 `Major`/`Minor`/`build` live in [`version.json`](version.json). Publishing to GHCR

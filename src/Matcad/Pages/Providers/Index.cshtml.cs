@@ -14,7 +14,9 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)] public string? Sort { get; set; }
     [BindProperty(SupportsGet = true)] public string? Dir { get; set; }
 
-    public DataTable Table { get; private set; } = new();
+    /// <summary>The search and sort of the list (rule LIST-03).</summary>
+    public ToolbarModel Toolbar { get; private set; } = null!;
+    public IReadOnlyList<ProviderConfig> Items { get; private set; } = [];
 
     public void OnGet()
     {
@@ -25,32 +27,30 @@ public class IndexModel : PageModel
                 p.Name.Contains(Q, StringComparison.OrdinalIgnoreCase) ||
                 ProviderTypes.DisplayName(p.Type).Contains(Q, StringComparison.OrdinalIgnoreCase));
 
-        var sort = Sort ?? "name";
-        var asc = (Dir ?? "asc") == "asc";
+        var sort = Sort == "type" ? "type" : "name";
+        var descending = string.Equals(Dir, "desc", StringComparison.OrdinalIgnoreCase);
         items = sort switch
         {
-            "type" => asc ? items.OrderBy(p => p.Type) : items.OrderByDescending(p => p.Type),
-            _ => asc ? items.OrderBy(p => p.Name) : items.OrderByDescending(p => p.Name)
+            "type" => descending ? items.OrderByDescending(p => p.Type).ThenBy(p => p.Name) : items.OrderBy(p => p.Type).ThenBy(p => p.Name),
+            _ => descending ? items.OrderByDescending(p => p.Name) : items.OrderBy(p => p.Name)
         };
+        Items = items.ToList();
 
-        Table = new DataTable
+        Toolbar = new ToolbarModel
         {
             Id = "providers",
-            SearchValue = Q,
-            SearchPlaceholder = "Search providers...",
+            Action = "/Providers",
+            Label = "Providers",
+            Search = Q,
+            SearchPlaceholder = "Search providers",
+            SearchField = true,
+            Noun = "providers",
+            Total = _store.Providers.Count,
+            Matching = Items.Count,
+            SortOptions = [new("name", "Name"), new("type", "Type")],
+            DefaultSort = "name",
             Sort = sort,
-            Dir = Dir ?? "asc",
-            Columns =
-            {
-                new DataColumn("Name", "name"),
-                new DataColumn("Type", "type"),
-                new DataColumn("Credentials")
-            },
-            Rows = items.Select(p => new DataRow(
-                Cell.TextManaged(p.Name, p.ManagedBy),
-                Cell.Badge(ProviderTypes.DisplayName(p.Type), "info"),
-                Cell.Muted(string.Join(", ", p.Credentials.Keys))
-            ) { EditUrl = $"/Providers/Edit?id={p.Id}" }).ToList()
+            Descending = descending,
         };
     }
 }

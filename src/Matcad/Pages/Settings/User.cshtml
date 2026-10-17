@@ -1,43 +1,53 @@
 @page
 @model Matcad.Pages.Settings.UserModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Create user" : "Edit user";
+    ViewData["Title"] = Model.IsNew ? "New user" : "Edit user";
+    ViewData["PageSub"] = "An account that can sign in to Matcad.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Users", "/Settings?tab=users"), (Model.IsNew ? "New user" : "Edit user", null));
+    ViewData["Width"] = "narrow";
 }
-<div class="card">
+
+<form method="post" class="mat-form" novalidate>
+    <input type="hidden" asp-for="Id" />
+
     @if (Model.Error != null)
     {
-        <div class="alert alert-error">@Model.Error</div>
+        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
     }
-    <form method="post">
-        <input type="hidden" asp-for="Id" />
-        <div class="form-group">
-            <label asp-for="Username">Username</label>
-            <input asp-for="Username" autofocus autocomplete="off" />
-        </div>
-        <div class="form-group">
-            <label asp-for="Password">Password</label>
-            <input asp-for="Password" type="password" autocomplete="new-password"
-                   placeholder="@(Model.IsNew ? "" : "leave empty = unchanged")" />
-        </div>
-        <div class="form-group" style="max-width:220px">
-            <label asp-for="Role">Role</label>
-            <select asp-for="Role">
-                <option value="User">User</option>
-                <option value="Admin">Admin</option>
-            </select>
-        </div>
 
-        <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
-            @if (!Model.IsNew)
-            {
-                <span class="spacer"></span>
-                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Delete this user?">
-                    <icon name="delete" /> Delete
-                </button>
-            }
+    <section class="mat-card" aria-labelledby="user-title">
+        <div class="mat-card__head">@Ui.Icon("user")<h2 class="mat-card__title" id="user-title">User</h2></div>
+        <div class="mat-card__body mat-stack">
+            <div class="mat-form__grid">
+                <mat-field label="Username" asp-for="Username" hint="Signs the user in, like the e-mail address." required>
+                    <input asp-for="Username" class="mat-input" autofocus autocomplete="off" autocapitalize="none" spellcheck="false" required data-msg-required="Please enter a username." />
+                </mat-field>
+                <mat-field label="E-mail address" asp-for="Email" hint="Optional.">
+                    <input asp-for="Email" type="email" class="mat-input" autocomplete="off" autocapitalize="none" data-msg-type="Please enter an address like name@example.com." />
+                </mat-field>
+                <mat-field label="Password" asp-for="Password" hint="At least 8 characters. @(Model.IsNew ? "" : "Leave it empty to keep the current one.")" required="@Model.IsNew">
+                    <input asp-for="Password" type="password" class="mat-input" autocomplete="new-password" />
+                </mat-field>
+                <mat-field label="Role" asp-for="Role">
+                    <select asp-for="Role" class="mat-select">
+                        <option value="User">User</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </mat-field>
+            </div>
+            <label class="mat-switch"><input type="checkbox" asp-for="MustChangePassword" /><span class="mat-switch__track"></span><span>Must choose a new password at the next sign-in</span></label>
         </div>
-    </form>
-</div>
+    </section>
+
+    <mat-form-buttons>
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+        <a class="mat-btn mat-btn--secondary" asp-page="Index" asp-route-tab="users">@Ui.Icon("back")<span>Back</span></a>
+        @if (!Model.IsNew)
+        {
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete the user @Model.Username? This cannot be undone." data-confirm-ok="Delete">
+                @Ui.Icon("trash")<span>Delete</span>
+            </button>
+        }
+    </mat-form-buttons>
+</form>

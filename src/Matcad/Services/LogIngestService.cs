@@ -21,7 +21,6 @@ public class LogIngestService : BackgroundService
     private readonly string _statePath;
 
     private long _offset;
-    private string _leftover = "";
     private DateTime _lastRetention = DateTime.MinValue;
 
     public LogIngestService(IServiceScopeFactory scopes, LogBroadcaster broadcaster,
@@ -64,51 +63,51 @@ public class LogIngestService : BackgroundService
         }
     }
 
-    private async Task TailOnce(CancellationToken ct)
+    internal async Task TailOnce(CancellationToken ct)
     {
         if (!File.Exists(_logPath)) return;
 
-        var info = new FileInfo(_logPath);
-        if (info.Length < _offset)
+        using var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var length = fs.Length;
+        if (length < _offset)
         {
             // File was rotated/truncated -> start over.
             _offset = 0;
-            _leftover = "";
             SaveOffset();
         }
-        if (info.Length == _offset) return;
+        if (length == _offset) return;
 
-        using var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         fs.Seek(_offset, SeekOrigin.Begin);
-        var buffer = new byte[info.Length - _offset];
-        var read = await fs.ReadAsync(buffer, ct);
-        _offset += read;
+        var buffer = new byte[length - _offset];
+        var read = await fs.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, ct);
 
-        var text = _leftover + Encoding.UTF8.GetString(buffer, 0, read);
-        var lines = text.Split('\n');
-        // Last element is an incomplete line (no trailing newline yet).
-        _leftover = lines[^1];
+        // Only whole lines count: a line Caddy is still writing is read again next time. Working on bytes keeps
+        // the saved offset exact, also when a multi-byte character is cut in half or Matcad restarts mid-line.
+        var complete = read == 0 ? 0 : Array.LastIndexOf(buffer, (byte)'\n', read - 1) + 1;
+        if (complete == 0) return;
 
         var entries = new List<(RequestLog Row, LogEntry Dto)>();
-        for (var i = 0; i < lines.Length - 1; i++)
+        foreach (var line in Encoding.UTF8.GetString(buffer, 0, complete).Split('\n'))
         {
-            var parsed = Parse(lines[i]);
+            var parsed = Parse(line);
             if (parsed != null) entries.Add(parsed.Value);
         }
-        if (entries.Count == 0) { SaveOffset(); return; }
 
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
-        db.RequestLogs.AddRange(entries.Select(e => e.Row));
-        await db.SaveChangesAsync(ct);
-        // Persist the position only after the rows are committed, so a crash
-        // between read and insert re-reads the batch instead of losing it.
+        if (entries.Count > 0)
+        {
+            using var scope = _scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
+            db.RequestLogs.AddRange(entries.Select(e => e.Row));
+            await db.SaveChangesAsync(ct);
+        }
+
+        // Move on only after the rows are committed, so a failed insert reads the batch again instead of losing it.
+        _offset += complete;
         SaveOffset();
-
         foreach (var e in entries) _broadcaster.Publish(e.Dto);
     }
 
-    private static (RequestLog, LogEntry)? Parse(string line)
+    internal static (RequestLog, LogEntry)? Parse(string line)
     {
         line = line.Trim();
         if (line.Length == 0 || line[0] != '{') return null;
@@ -145,7 +144,7 @@ public class LogIngestService : BackgroundService
     private static string GetString(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
-    private async Task ApplyRetention(CancellationToken ct)
+    internal async Task ApplyRetention(CancellationToken ct)
     {
         if (DateTime.UtcNow - _lastRetention < TimeSpan.FromHours(1)) return;
         _lastRetention = DateTime.UtcNow;

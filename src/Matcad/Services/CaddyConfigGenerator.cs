@@ -10,7 +10,7 @@ namespace Matcad.Services;
 ///   admin        -> keep the admin API reachable on the docker network
 ///   logging      -> JSON access log to the shared volume (Matcad ingests it)
 ///   apps.http    -> one route per enabled Matcad route (host matcher +
-///                   optional auth handler + reverse_proxy / fallback redirect)
+///                   optional guard + auth handler + reverse_proxy / fallback redirect)
 ///   apps.tls     -> ACME DNS-01 automation policy per wildcard route
 /// </summary>
 public class CaddyConfigGenerator
@@ -51,15 +51,15 @@ public class CaddyConfigGenerator
         // (Verify falls back to relative). Without the bypass route that fallback
         // would loop forever, so keep the two in sync.
         var mode = (settings.PortalMode ?? "inline").ToLowerInvariant();
-        var serveAuthLocally = mode == "inline"
-            || (mode == "redirect" && string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
+        var serveAuthLocally = mode != "unauthorized"
+            && (mode != "redirect" || string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
         var httpRoutes = new List<object>();
         foreach (var r in ordered)
         {
             // Serve /auth/* on the protected host itself (proxied to Matcad,
             // unprotected) so the login never leaves the host.
             if (serveAuthLocally && UsesMatcadAuth(r))
-                httpRoutes.Add(BuildAuthPathRoute(r.Host));
+                httpRoutes.Add(BuildAuthPathRoute(r));
             httpRoutes.Add(BuildRoute(r));
         }
 
@@ -106,7 +106,7 @@ public class CaddyConfigGenerator
                             ["roll_size_mb"] = 10,
                             ["roll_keep"] = 5
                         },
-                        ["encoder"] = new Dictionary<string, object?> { ["format"] = "json" },
+                        ["encoder"] = BuildAccessEncoder(enabled),
                         ["include"] = new[] { "http.log.access.matcad" }
                     }
                 }
@@ -137,27 +137,34 @@ public class CaddyConfigGenerator
     /// /auth/* to Matcad, so the login page is served from the protected host
     /// itself and the Matcad host is never revealed. Placed before the protected
     /// route so the login endpoints are not caught by forward-auth.</summary>
-    private Dictionary<string, object?> BuildAuthPathRoute(string host)
+    private Dictionary<string, object?> BuildAuthPathRoute(RouteConfig route)
     {
         var (dial, _) = ParseDial(MatcadUpstream);
+        // A guarded host is closed to everything that does not pass the guard, the login pages included.
+        var handlers = new List<object>();
+        var guard = route.HasGuards ? BuildGuard(route) : null;
+        if (route.HasGuards && guard == null)
+            handlers.Add(Unavailable(GuardInvalid)); // what the guard could not close the login pages must not open
+        else
+        {
+            if (guard != null) handlers.Add(guard);
+            handlers.Add(new Dictionary<string, object?>
+            {
+                ["handler"] = "reverse_proxy",
+                ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
+            });
+        }
         return new Dictionary<string, object?>
         {
             ["match"] = new[]
             {
                 new Dictionary<string, object?>
                 {
-                    ["host"] = new[] { host },
+                    ["host"] = new[] { route.Host },
                     ["path"] = new[] { "/auth/*" }
                 }
             },
-            ["handle"] = new object[]
-            {
-                new Dictionary<string, object?>
-                {
-                    ["handler"] = "reverse_proxy",
-                    ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
-                }
-            },
+            ["handle"] = handlers,
             ["terminal"] = true
         };
     }
@@ -169,11 +176,100 @@ public class CaddyConfigGenerator
         ["terminal"] = true
     };
 
-    /// <summary>The handler chain for a route (framing-header strip → auth → reverse_proxy/redirect).
-    /// Shared by host-matched routes and port-bound listener servers.</summary>
+    private const string GuardInvalid = "Matcad: the access guard of this route is invalid, so the route is not served.";
+
+    private static Dictionary<string, object?> Unavailable(string message) => new()
+    {
+        ["handler"] = "static_response",
+        ["status_code"] = 503,
+        ["body"] = message
+    };
+
+    /// <summary>
+    /// The guard of a route as a Caddy handler, or null when it cannot be built. A request is refused with 403 (and no body:
+    /// nothing about what was expected) when its direct peer is not in the allowed addresses, or when it lacks the required
+    /// header. Each refusal is a route of its own in a subroute, so a request has to get past both, and one that passes
+    /// falls through to the rest of the chain.
+    ///
+    /// Caddy's <c>not</c> matcher matches when none of its matcher sets match; <c>remote_ip</c> looks at the TCP peer
+    /// (X-Forwarded-For plays no part), and the header matcher compares the exact value (the validation keeps <c>*</c>
+    /// and placeholders out of it).
+    /// </summary>
+    private static object? BuildGuard(RouteConfig route)
+    {
+        try
+        {
+            var refusals = new List<object>();
+            if (route.AllowedIps.Count > 0)
+            {
+                var (ips, error) = RouteGuards.NormalizeIps(route.AllowedIps);
+                // An unusable list must not turn into "no list": that would leave the route open.
+                if (error != null || ips.Count == 0) return null;
+                refusals.Add(Refusal(new Dictionary<string, object?> { ["remote_ip"] = new Dictionary<string, object?> { ["ranges"] = ips } }));
+            }
+            if (route.RequireHeader != null)
+            {
+                if (RouteGuards.CheckRequireHeader(route.RequireHeader) != null) return null;
+                refusals.Add(Refusal(new Dictionary<string, object?>
+                {
+                    ["header"] = new Dictionary<string, object?>
+                    {
+                        [RouteGuards.CanonicalName(route.RequireHeader.Name)] = new[] { route.RequireHeader.Value }
+                    }
+                }));
+            }
+            return refusals.Count == 0 ? null : new Dictionary<string, object?> { ["handler"] = "subroute", ["routes"] = refusals };
+        }
+        catch
+        {
+            return null; // fail closed, see the caller
+        }
+    }
+
+    private static Dictionary<string, object?> Refusal(Dictionary<string, object?> matcher) => new()
+    {
+        ["match"] = new[] { new Dictionary<string, object?> { ["not"] = new[] { matcher } } },
+        ["handle"] = new object[] { new Dictionary<string, object?> { ["handler"] = "static_response", ["status_code"] = 403 } },
+        ["terminal"] = true
+    };
+
+    /// <summary>The encoder of the access log. The log is a file on a shared volume, and Caddy writes the request headers
+    /// into it: the value of a required header is a secret, so it is cut out (Matcad's own ingest only reads host, path,
+    /// method, status, client address and duration into its database).</summary>
+    private static Dictionary<string, object?> BuildAccessEncoder(IEnumerable<RouteConfig> enabled)
+    {
+        var json = new Dictionary<string, object?> { ["format"] = "json" };
+        var names = enabled.Where(r => r.RequireHeader is { Name.Length: > 0 })
+            .Select(r => RouteGuards.CanonicalName(r.RequireHeader!.Name)).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+        if (names.Count == 0) return json;
+        return new Dictionary<string, object?>
+        {
+            ["format"] = "filter",
+            ["wrap"] = json,
+            ["fields"] = names.ToDictionary(
+                n => $"request>headers>{n}",
+                n => (object?)new Dictionary<string, object?> { ["filter"] = "delete" })
+        };
+    }
+
+    /// <summary>The handler chain for a route (guard → framing-header strip → auth → reverse_proxy/redirect).
+    /// Shared by host-matched routes and port-bound listener servers, so a guard holds wherever the chain is used.</summary>
     private List<object> BuildHandlers(RouteConfig route)
     {
-        var handlers = new List<object>();
+        // The guard comes first, before authentication, the framing strip or the proxy: a refused request gets nothing else to look at.
+        var guarded = new List<object>();
+        if (route.HasGuards)
+        {
+            // Fail closed: a route that asks for a guard is never served open, whatever is wrong with it.
+            var guard = BuildGuard(route);
+            if (guard == null) return [Unavailable(GuardInvalid)];
+            guarded.Add(guard);
+        }
+        // The same for the rest of the access settings (a restored backup or a hand-edited file can carry values the editor would refuse).
+        if (RouteGuards.Check(route) != null)
+            return [.. guarded, Unavailable("Matcad: the access settings of this route are invalid, so the route is not served.")];
+
+        var handlers = new List<object>(guarded);
 
         // Optional: strip framing headers so the site can be embedded in an iframe (e.g. matOS).
         // Deferred so it runs after the upstream sets them; placed first so it wraps the response.
@@ -195,11 +291,15 @@ public class CaddyConfigGenerator
                 }
             });
 
-        var auth = route.AuthenticationId is > 0
-            ? _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId)
-            : null;
-        if (auth != null)
+        if (route.AuthenticationId is > 0)
+        {
+            var auth = _store.Authentications.FirstOrDefault(a => a.Id == route.AuthenticationId);
+            // Fail closed: a route that asks for a login must never be served without one, whatever went wrong
+            // with the authentication (deleted, restored from a backup without it, no users).
+            if (auth == null || (auth.Type == AuthType.BasicAuth && auth.Users.Count == 0))
+                return [.. guarded, Unavailable("Matcad: the authentication of this route is missing or has no users, so the route is not served.")];
             handlers.AddRange(BuildAuthHandlers(auth));
+        }
 
         handlers.Add(BuildTerminalHandler(route));
         return handlers;
@@ -216,15 +316,36 @@ public class CaddyConfigGenerator
                 ["handler"] = "reverse_proxy",
                 ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
             };
+            var host = RouteGuards.NormalizeUpstreamHost(route.UpstreamHost).Host;
             if (isHttps)
             {
                 var tls = new Dictionary<string, object?>();
                 if (route.InsecureSkipVerify) tls["insecure_skip_verify"] = true;
+                // The name asked for is also the name the certificate has to carry (and the one the upstream picks its certificate by).
+                if (host != null) tls["server_name"] = RouteGuards.TlsServerName(host);
                 proxy["transport"] = new Dictionary<string, object?>
                 {
                     ["protocol"] = "http",
                     ["tls"] = tls
                 };
+            }
+
+            // Headers to the upstream. Caddy sets a header under exactly the key it is given, so the names are written the way
+            // the HTTP stack writes them - otherwise "x-foo" would sit next to the "X-Foo" the visitor sent instead of replacing it.
+            var set = new Dictionary<string, object?>();
+            if (host != null) set["Host"] = new[] { host };
+            foreach (var h in route.UpstreamHeaders) set[RouteGuards.CanonicalName(h.Name)] = new[] { h.Value };
+            // The secret of a required header was for this proxy: the website behind it (and any plugin or log there) must not see it.
+            // Caddy deletes after it sets, so the validation keeps an upstream header of the same name out (RouteGuards.CheckNameClash).
+            var delete = new List<string>();
+            if (route.RequireHeader is { Name.Length: > 0 } required)
+                delete.Add(RouteGuards.CanonicalName(required.Name));
+            if (set.Count > 0 || delete.Count > 0)
+            {
+                var request = new Dictionary<string, object?>();
+                if (set.Count > 0) request["set"] = set;
+                if (delete.Count > 0) request["delete"] = delete;
+                proxy["headers"] = new Dictionary<string, object?> { ["request"] = request };
             }
             return proxy;
         }
@@ -300,7 +421,7 @@ public class CaddyConfigGenerator
                         {
                             ["X-Forwarded-Method"] = new[] { "{http.request.method}" },
                             ["X-Forwarded-Uri"] = new[] { "{http.request.uri}" },
-                            ["X-Forwarded-Host"] = new[] { "{http.request.host}" },
+                            ["X-Forwarded-Host"] = new[] { "{http.request.hostport}" }, // with the port, so the login sends the user back to the same address
                             // Tells /auth/verify which authentication (and portal) applies.
                             ["X-Matcad-Auth"] = new[] { auth.Id.ToString() }
                         }

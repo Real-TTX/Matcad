@@ -1,7 +1,8 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Matcad.Config;
+using Matcad.Controls;
 using Matcad.Services;
 
 namespace Matcad.Api;
@@ -23,23 +24,26 @@ public static class MatcadApi
     public const int ApiVersion = 1;
 
     // Input DTOs (audit fields / ids handled by ConfigStore, never trusted from the wire).
-    // ManagedBy: null = leave the stored value alone, "" = clear it, otherwise set it (e.g. "mattiverse").
+    // ManagedBy: null (missing) = keep the stored value, "" = clear it, otherwise set it (e.g. "mattiverse").
     public record ProviderInput(long? Id, string Name, string Type, Dictionary<string, string>? Credentials,
         string? ManagedBy = null);
     public record ProviderTestInput(string Type, Dictionary<string, string>? Credentials);
+    // The last four are the optional access fields. They are JsonElement because they have three states (missing = keep what is
+    // stored, null = remove, a value = replace), see RouteAccessFields; a missing one stays the default element (ValueKind Undefined).
     public record RouteInput(long? Id, string Host, bool Wildcard, string? Target, string? Upstream,
         bool InsecureSkipVerify, string? FallbackUrl, bool RedirectPermanent,
         long? AuthenticationId, long? ProviderId, string? AcmeEmail, bool Enabled, string? Name,
-        bool AllowEmbedding = false, int? ListenPort = null, string? ManagedBy = null);
+        bool AllowEmbedding = false, int? ListenPort = null,
+        JsonElement UpstreamHost = default, JsonElement UpstreamHeaders = default,
+        JsonElement RequireHeader = default, JsonElement AllowedIps = default, string? ManagedBy = null);
     public record BasicUserInput(string Username, string? Password);
     public record AuthInput(long? Id, string Name, string Type, List<BasicUserInput>? Users,
         string? ManagedBy = null);
     public record SettingsInput(string? BaseDomain, string? AcmeEmail, string? MatcadHost, string? PortalMode,
         int? AcmePropagationDelaySeconds, int? AcmePropagationTimeoutSeconds, bool? SetupCompleted = null);
 
-    // Same string the sidebar footer shows.
-    private static readonly string AppVersion = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
+    /// <summary>"routeGuards": the route fields upstreamHost, upstreamHeaders, requireHeader and allowedIps.</summary>
+    public static readonly string[] Capabilities = ["routeGuards"];
 
     public static void MapMatcadApi(this WebApplication app)
     {
@@ -61,9 +65,12 @@ public static class MatcadApi
         api.MapGet("/status", (ConfigStore s, RouteProvider rp) => Results.Ok(new
         {
             ok = true,
-            app = "matcad",
-            version = AppVersion,
+            app = Ui.App.Id,
+            version = Ui.Version,
             apiVersion = ApiVersion,
+            // What this Matcad understands beyond the original API. A client that wants a feature must check for it: an older
+            // Matcad ignores fields it does not know, and a guard that was silently ignored leaves the route open.
+            capabilities = Capabilities,
             baseDomain = s.Settings.BaseDomain,
             setupCompleted = s.Settings.SetupCompleted,
             counts = new
@@ -90,12 +97,8 @@ public static class MatcadApi
         {
             if (string.IsNullOrWhiteSpace(inp.Name)) return Results.BadRequest(new { error = "Name is required." });
             if (string.IsNullOrWhiteSpace(inp.Type)) return Results.BadRequest(new { error = "Type (Caddy DNS module, e.g. netcup) is required." });
-            var p = s.Providers.FirstOrDefault(x => x.Id == inp.Id) ?? new ProviderConfig();
-            p.Id = inp.Id ?? 0;
-            p.Name = inp.Name.Trim();
-            p.Type = inp.Type.Trim();
-            p.Credentials = inp.Credentials ?? new();
-            SetManagedBy(p, inp.ManagedBy);
+            var p = new ProviderConfig { Id = inp.Id ?? 0, Name = inp.Name.Trim(), Type = inp.Type.Trim(), Credentials = inp.Credentials ?? new() };
+            p.ManagedBy = ResolveManagedBy(inp.ManagedBy, s.Providers.FirstOrDefault(x => x.Id == p.Id && p.Id != 0));
             s.UpsertProvider(p, null);
             return Results.Ok(ToProviderDto(p));
         });
@@ -125,24 +128,27 @@ public static class MatcadApi
         {
             if (string.IsNullOrWhiteSpace(inp.Name)) return Results.BadRequest(new { error = "Name is required." });
             if (!Enum.TryParse<AuthType>(inp.Type, ignoreCase: true, out var type)) type = AuthType.BasicAuth;
-            var auth = s.Authentications.FirstOrDefault(x => x.Id == inp.Id) ?? new AuthenticationConfig();
-            var previous = auth.Users.ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
-            auth.Id = inp.Id ?? 0;
-            auth.Name = inp.Name.Trim();
-            auth.Type = type;
+            var existing = inp.Id is > 0 ? s.Authentications.FirstOrDefault(x => x.Id == inp.Id) : null;
+            var previous = (existing?.Users ?? new()).ToDictionary(u => u.Username, u => u.PasswordHash, StringComparer.OrdinalIgnoreCase);
             var users = new List<BasicAuthUser>();
             foreach (var u in inp.Users ?? new())
             {
                 var name = (u.Username ?? "").Trim();
-                if (name.Length == 0) continue;
+                if (name.Length == 0 || users.Any(x => x.Username.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
                 string hash;
-                if (!string.IsNullOrEmpty(u.Password)) hash = BCrypt.Net.BCrypt.HashPassword(u.Password);
+                if (!string.IsNullOrEmpty(u.Password)) hash = PasswordHashing.HashOrKeep(u.Password, previous.GetValueOrDefault(name));
                 else if (previous.TryGetValue(name, out var old)) hash = old; // keep existing when blank
                 else continue; // new user without a password
                 users.Add(new BasicAuthUser { Username = name, PasswordHash = hash });
             }
-            auth.Users = users;
-            SetManagedBy(auth, inp.ManagedBy);
+            // The API does not carry the login-page branding; an update keeps what the UI set.
+            var auth = new AuthenticationConfig
+            {
+                Id = inp.Id is > 0 ? inp.Id.Value : 0, Name = inp.Name.Trim(), Type = type, Users = users,
+                BrandTitle = existing?.BrandTitle ?? "", BrandLogo = existing?.BrandLogo ?? "",
+                BrandLogoLayout = existing?.BrandLogoLayout ?? "left", BrandColor = existing?.BrandColor ?? "",
+                BrandText = existing?.BrandText ?? "", ManagedBy = ResolveManagedBy(inp.ManagedBy, existing)
+            };
             s.UpsertAuthentication(auth, null);
             var (ok, error) = await caddy.ApplyAsync();
             return Results.Ok(new { id = auth.Id, name = auth.Name, type = auth.Type.ToString(), managedBy = auth.ManagedBy, applied = new { ok, error } });
@@ -178,6 +184,10 @@ public static class MatcadApi
                     enabled = r.Enabled,
                     allowEmbedding = r.AllowEmbedding,
                     listenPort = r.ListenPort,
+                    upstreamHost = r.UpstreamHost,
+                    upstreamHeaders = HeaderNames(r),
+                    requireHeader = RequiredHeaderName(r),
+                    allowedIps = r.AllowedIps,
                     managedBy = r.ManagedBy,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
@@ -189,60 +199,39 @@ public static class MatcadApi
         });
         // Editable (manually-managed) routes only.
         api.MapGet("/routes/manual", (ConfigStore s) => Results.Ok(s.Routes.Select(ToRouteDto)));
+        api.MapGet("/routes/{id:long}", (ConfigStore s, long id) =>
+            s.Routes.FirstOrDefault(r => r.Id == id) is { } r ? Results.Ok(ToRouteDto(r)) : Results.NotFound(new { error = "No such route." }));
         api.MapPost("/routes", async (ConfigStore s, CaddyService caddy, RouteInput inp) =>
         {
-            var listenPort = inp.ListenPort is > 0 ? inp.ListenPort : null;
-            var host = (inp.Host ?? "").Trim().ToLowerInvariant();
-            // Port-bound route: no host matching, so a host is optional. Otherwise a host is required.
-            if (listenPort is null && string.IsNullOrWhiteSpace(host))
-                return Results.BadRequest(new { error = "Host is required." });
-            var wildcard = listenPort is null && inp.Wildcard;
-            long? providerId = inp.ProviderId;
-            if (listenPort is not null)
-            {
-                if (string.IsNullOrWhiteSpace(inp.Upstream))
-                    return Results.BadRequest(new { error = "A port-bound route requires an upstream." });
-                providerId = null;
-            }
-            else if (wildcard)
-            {
-                if (!host.StartsWith("*.")) host = "*." + host.TrimStart('.');
-                if (host.Count(c => c == '.') < 2)
-                    return Results.BadRequest(new { error = "A wildcard host must include a domain, e.g. *.example.com." });
-                if (!(providerId > 0))
-                    return Results.BadRequest(new { error = "A wildcard route requires a DNS provider (DNS-01 challenge)." });
-            }
-            else
-            {
-                if (host.StartsWith("*."))
-                    return Results.BadRequest(new { error = "A single domain must not start with '*.'. Use the wildcard type instead." });
-                providerId = null;
-            }
-            var redirect = string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase);
-            if (redirect && string.IsNullOrWhiteSpace(inp.FallbackUrl))
-                return Results.BadRequest(new { error = "A redirect route needs a target URL." });
+            // Edit a copy: a rejected request must not leave half-applied changes in the stored route.
+            var route = new RouteConfig { Id = inp.Id is > 0 ? inp.Id.Value : 0 };
+            var form = new RouteForm(inp.Host, inp.Wildcard, string.Equals(inp.Target, "redirect", StringComparison.OrdinalIgnoreCase),
+                inp.Upstream, inp.InsecureSkipVerify, inp.FallbackUrl, inp.RedirectPermanent, inp.AuthenticationId,
+                inp.ProviderId, inp.AcmeEmail, inp.Enabled, inp.Name, inp.AllowEmbedding, inp.ListenPort);
+            var error = RouteEditor.Apply(form, route);
+            if (error != null) return Results.BadRequest(new { error });
 
-            var route = s.Routes.FirstOrDefault(x => x.Id == inp.Id) ?? new RouteConfig();
-            route.Id = inp.Id ?? 0;
-            route.Name = !string.IsNullOrWhiteSpace(inp.Name) ? inp.Name!.Trim()
-                       : !string.IsNullOrWhiteSpace(host) ? host
-                       : $"port {listenPort}";
-            route.Host = host;
-            route.Wildcard = wildcard;
-            route.ListenPort = listenPort;
-            route.Upstream = redirect || string.IsNullOrWhiteSpace(inp.Upstream) ? null : inp.Upstream!.Trim();
-            route.InsecureSkipVerify = !redirect && inp.InsecureSkipVerify;
-            route.AllowEmbedding = inp.AllowEmbedding;
-            route.FallbackUrl = redirect && !string.IsNullOrWhiteSpace(inp.FallbackUrl) ? inp.FallbackUrl!.Trim() : null;
-            route.RedirectPermanent = redirect && inp.RedirectPermanent;
-            route.AuthenticationId = inp.AuthenticationId is > 0 ? inp.AuthenticationId : null;
-            route.ProviderId = providerId is > 0 ? providerId : null;
-            route.AcmeEmail = wildcard && !string.IsNullOrWhiteSpace(inp.AcmeEmail) ? inp.AcmeEmail!.Trim() : null;
-            route.Enabled = inp.Enabled;
-            SetManagedBy(route, inp.ManagedBy);
-            s.UpsertRoute(route, null);
-            var (ok, error) = await caddy.ApplyAsync();
-            return Results.Ok(new { route = ToRouteDto(route), applied = new { ok, error } });
+            // The access fields are settled against the route this call is going to replace (the one with the id, else the one
+            // with the same host or port): missing keeps what it has, null removes, a value replaces. Everything is then checked
+            // again together with the rest, so an invalid value rejects the call and nothing is saved.
+            var replaced = s.FindRouteToReplace(route);
+            var accessError = RouteAccessFields.Resolve(inp, replaced, out var access);
+            if (accessError != null) return Results.BadRequest(new { error = accessError });
+            route = new RouteConfig { Id = route.Id };
+            error = RouteEditor.Apply(form with
+            {
+                UpstreamHost = access.UpstreamHost, UpstreamHeaders = access.UpstreamHeaders,
+                RequireHeader = access.RequireHeader, AllowedIps = access.AllowedIps
+            }, route);
+            if (error != null) return Results.BadRequest(new { error });
+            route.ManagedBy = ResolveManagedBy(inp.ManagedBy, replaced);
+
+            // A host (or a port) belongs to one route. Without an id the call means "make sure this route exists",
+            // so it updates the route that already has the host; with an id it must not take over another host.
+            if (!s.TryUpsertRoute(route, null, updateSameTarget: true))
+                return Results.Conflict(new { error = "Another route already uses this host or port." });
+            var (ok, applyError) = await caddy.ApplyAsync();
+            return Results.Ok(new { route = ToRouteDto(route), applied = new { ok, error = applyError } });
         });
         api.MapDelete("/routes/{id:long}", async (ConfigStore s, CaddyService caddy, long id) =>
         {
@@ -287,12 +276,20 @@ public static class MatcadApi
         api.MapPut("/settings", async (ConfigStore s, CaddyService caddy, SettingsInput inp) =>
         {
             var x = s.Settings;
-            if (inp.BaseDomain != null) x.BaseDomain = inp.BaseDomain.Trim();
+            // Check everything first, so a rejected call changes nothing.
+            foreach (var domain in new[] { inp.BaseDomain, inp.MatcadHost })
+                if (!string.IsNullOrWhiteSpace(domain) && !RouteEditor.IsHostName(domain.Trim()))
+                    return Results.BadRequest(new { error = "Domains must be plain names like example.com (no http://, path or port)." });
+            if (inp.PortalMode != null && inp.PortalMode.Trim().ToLowerInvariant() is not ("inline" or "redirect" or "unauthorized"))
+                return Results.BadRequest(new { error = "PortalMode must be inline, redirect or unauthorized." });
+
+            if (inp.BaseDomain != null) x.BaseDomain = inp.BaseDomain.Trim().ToLowerInvariant();
             if (inp.AcmeEmail != null) x.AcmeEmail = inp.AcmeEmail.Trim();
-            if (inp.MatcadHost != null) x.MatcadHost = inp.MatcadHost.Trim();
-            if (inp.PortalMode != null) x.PortalMode = inp.PortalMode.Trim();
+            if (inp.MatcadHost != null) x.MatcadHost = inp.MatcadHost.Trim().ToLowerInvariant();
+            if (inp.PortalMode != null) x.PortalMode = inp.PortalMode.Trim().ToLowerInvariant();
             if (inp.AcmePropagationDelaySeconds.HasValue) x.AcmePropagationDelaySeconds = inp.AcmePropagationDelaySeconds.Value;
             if (inp.AcmePropagationTimeoutSeconds.HasValue) x.AcmePropagationTimeoutSeconds = inp.AcmePropagationTimeoutSeconds.Value;
+            // A headless install (Mattiverse) has done what the first-run wizard would ask for.
             if (inp.SetupCompleted.HasValue) x.SetupCompleted = inp.SetupCompleted.Value;
             s.SaveSettings(x);
             var (ok, error) = await caddy.ApplyAsync();
@@ -304,11 +301,12 @@ public static class MatcadApi
     private static IResult Problem(string message, int status) =>
         Results.Problem(message, statusCode: status, extensions: new Dictionary<string, object?> { ["error"] = message });
 
-    /// <summary>null = leave as is, blank = clear, otherwise set (trimmed).</summary>
-    private static void SetManagedBy(ConfigEntity e, string? managedBy)
-    {
-        if (managedBy != null) e.ManagedBy = string.IsNullOrWhiteSpace(managedBy) ? null : managedBy.Trim();
-    }
+    /// <summary>The <c>managedBy</c> to store: missing (null) keeps what the object being replaced has, blank clears it,
+    /// anything else is set (trimmed). So a client that does not know the field never removes the mark.</summary>
+    private static string? ResolveManagedBy(string? requested, ConfigEntity? replaced) =>
+        requested == null ? replaced?.ManagedBy
+        : string.IsNullOrWhiteSpace(requested) ? null
+        : requested.Trim();
 
     private static object ToProviderDto(ProviderConfig p) => new
     {
@@ -335,8 +333,20 @@ public static class MatcadApi
         enabled = r.Enabled,
         allowEmbedding = r.AllowEmbedding,
         listenPort = r.ListenPort,
+        // Write-only: the host and the addresses are shown as they are, but a header only says that it has a value. That is
+        // enough for a client to check that a guard was really stored, and keeps the secret from ever coming back out.
+        upstreamHost = r.UpstreamHost,
+        upstreamHeaders = HeaderNames(r),
+        requireHeader = RequiredHeaderName(r),
+        allowedIps = r.AllowedIps,
         managedBy = r.ManagedBy
     };
+
+    private static object[] HeaderNames(RouteConfig r) =>
+        r.UpstreamHeaders.Select(h => (object)new { name = h.Name, valueSet = !string.IsNullOrEmpty(h.Value) }).ToArray();
+
+    private static object? RequiredHeaderName(RouteConfig r) =>
+        r.RequireHeader is { } h ? new { name = h.Name, valueSet = !string.IsNullOrEmpty(h.Value) } : null;
 
     private static bool FixedTimeEquals(string a, string b)
     {

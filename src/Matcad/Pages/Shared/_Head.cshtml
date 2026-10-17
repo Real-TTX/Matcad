@@ -1,0 +1,25 @@
+@model string
+@*
+    The <head> of every page of the app: the toolkit (the boot script applies the saved theme before the first paint, so the page does not flash in the wrong
+    colours), the few styles of this app (mc-*) and the details of an installable app (manifest, icons, colour of the browser bar).
+    The bar takes the colour of the page; matcad.js keeps it in step when the theme changes.
+*@
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" />
+    <title>@Model</title>
+    <link rel="icon" href="~/img/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="~/img/apple-touch-icon.png" />
+    <link rel="manifest" href="~/manifest.webmanifest" />
+    <meta name="application-name" content="@Ui.App.Name" />
+    <meta name="apple-mobile-web-app-title" content="@Ui.App.Name" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script src="~/matui/matui.boot.js" asp-append-version="true"></script>
+    <link rel="stylesheet" href="~/matui/matui.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/matcad.css" asp-append-version="true" />
+</head>

@@ -22,9 +22,17 @@ public enum UserRole
 
 public class User : AuditedEntity
 {
+    /// <summary>Login name. Unique, case-insensitive.</summary>
     public string Username { get; set; } = "";
+
+    /// <summary>Optional e-mail address; can be used to sign in instead of the username. Unique, case-insensitive.</summary>
+    public string? Email { get; set; }
+
     public string PasswordHash { get; set; } = "";
     public UserRole Role { get; set; } = UserRole.User;
+
+    /// <summary>The user has to choose a new password before anything else (default admin, admin-set passwords).</summary>
+    public bool MustChangePassword { get; set; }
 }
 
 /// <summary>

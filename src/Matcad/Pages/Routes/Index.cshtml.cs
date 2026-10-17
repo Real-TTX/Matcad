@@ -1,4 +1,5 @@
 using Matcad.Config;
+using Matcad.Controls;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -12,6 +13,9 @@ public class IndexModel : PageModel
 
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
     [BindProperty(SupportsGet = true)] public string? Status { get; set; }
+
+    /// <summary>The search and the filter of the list (rule LIST-03).</summary>
+    public ToolbarModel Toolbar { get; private set; } = null!;
 
     public List<RouteTree.Group> Groups { get; private set; } = new();
     /// <summary>Port-bound routes (Caddy listens on a host port, no host matching). These don't fit the
@@ -54,6 +58,20 @@ public class IndexModel : PageModel
         if (Status == "enabled") { items = items.Where(r => r.Enabled); PortRoutes = PortRoutes.Where(r => r.Enabled).ToList(); }
         else if (Status == "disabled") { items = items.Where(r => !r.Enabled); PortRoutes = PortRoutes.Where(r => !r.Enabled).ToList(); }
 
-        Groups = RouteTree.Build(items);
+        var shown = items.ToList();
+        Groups = RouteTree.Build(shown);
+        Toolbar = new ToolbarModel
+        {
+            Id = "routes",
+            Action = "/Routes",
+            Label = "Routes",
+            Search = Q,
+            SearchPlaceholder = "Search routes",
+            SearchField = true,
+            Noun = "routes",
+            Total = all.Count,
+            Matching = shown.Count + PortRoutes.Count,
+            Filters = [new FilterField("status", "Status", [new("enabled", "Active"), new("disabled", "Inactive")], Status)],
+        };
     }
 }

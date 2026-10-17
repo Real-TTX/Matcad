@@ -21,7 +21,17 @@ env:
     github.com/caddy-dns/ovh
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Matcad.Tests --configuration Release
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
