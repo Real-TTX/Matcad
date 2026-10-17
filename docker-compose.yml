@@ -24,6 +24,14 @@ services:
       - caddy
     ports:
       - "4433:4433"
+    # None of these is required (see the README, "Platform API and sign-in through MatIdentity").
+    # environment:
+    #   Matcad__ApiKey: ""                 # the engine API /api/v1 (Mattiverse sets it)
+    #   MAT_API_KEY: ""                    # the key of /api/* (default: Matcad__ApiKey)
+    #   MATIDENTITY_AUTHORITY: ""          # https://id.example.com: sign-in through MatIdentity
+    #   MATIDENTITY_CLIENT_ID: "matcad"
+    #   MATIDENTITY_CLIENT_SECRET: ""
+    #   MATIDENTITY_INTERNAL_URL: ""       # http://matidentity:2300 inside Docker
     volumes:
       - matcad-data:/data
       - caddy-logs:/caddy-logs

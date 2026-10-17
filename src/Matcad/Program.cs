@@ -6,6 +6,13 @@ using Matcad.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Matcad.Platform;
+using MatPlatform;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+
+// Docker HEALTHCHECK: the image has no curl, so the app asks its own /api/health and exits with 0 (healthy) or 1.
+if (args.Contains("--healthcheck"))
+    return await HealthCheck.RunAsync();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +50,23 @@ builder.Services.AddSingleton<LogBroadcaster>();
 builder.Services.AddHostedService<LogIngestService>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerService>());
+builder.Services.AddSingleton<ProxyMonitor>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxyMonitor>());
+builder.Services.AddScoped<ProxyStatusService>();
+
+// --- Platform contract of the Mat apps (MatDesign docs/PLATFORM.md) ------------
+// /api, /api/health, /api/state, /api/configure, /api/actions from the package MatPlatform (a copy in MatPlatform/); MatcadPlatform describes
+// Matcad and supplies the values. The engine API /api/v1 (Matcad__ApiKey) stays as it is. Mattiverse is one caller with one key: when
+// MAT_API_KEY is not set, the platform endpoints take the engine key, so an install that only has Matcad__ApiKey needs no second one.
+if (string.IsNullOrWhiteSpace(builder.Configuration[MatPlatformSettings.ApiKeyVariable])
+    && !string.IsNullOrWhiteSpace(builder.Configuration["Matcad:ApiKey"]))
+{
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        [MatPlatformSettings.ApiKeyVariable] = builder.Configuration["Matcad:ApiKey"]
+    });
+}
+var platform = builder.AddMatPlatform<MatcadPlatform>(MatcadPlatform.Describe, o => o.DefaultLanguage = "en");
 
 // Persist Data Protection keys on the volume so antiforgery tokens and any
 // protected payloads stay valid across container restarts.
@@ -55,7 +79,21 @@ builder.Services.AddDataProtection()
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
-        SessionAuthenticationHandler.SchemeName, _ => { });
+        SessionAuthenticationHandler.SchemeName, _ => { })
+    // Sign-in through MatIdentity, only with MATIDENTITY_AUTHORITY (nothing changes without it). /Login?local=1 stays the way in.
+    .AddMatIdentitySignIn<MatcadIdentityUsers>(platform, o =>
+    {
+        o.CookieScheme = SessionAuthenticationHandler.SchemeName;
+        o.LoginPath = "/Login";
+        o.AccessDeniedPath = "/Login?local=1&denied=1";
+    });
+
+if (platform.IdentityEnabled)
+{
+    // Matcad is often the proxy in front of MatIdentity itself: when MatIdentity cannot be reached, the sign-in page
+    // falls back to the local form after a short wait instead of the default minute.
+    builder.Services.Configure<OpenIdConnectOptions>(MatIdentitySignIn.Scheme, o => o.BackchannelTimeout = TimeSpan.FromSeconds(10));
+}
 
 builder.Services.AddAuthorization(o =>
 {
@@ -76,6 +114,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
     db.Database.EnsureCreated();
+    // EnsureCreated leaves an existing database alone: columns added later come from here.
+    DatabaseUpgrader.Upgrade(db);
     // WAL improves concurrent read/write throughput for the high-volume request log.
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
     var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
@@ -120,6 +160,7 @@ _ = Task.Run(async () =>
 
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -129,7 +170,11 @@ app.Use(async (ctx, next) =>
     var path = ctx.Request.Path.Value ?? "";
     bool Exempt(string p) => path.StartsWith(p, StringComparison.OrdinalIgnoreCase);
     var exempt = Exempt("/Setup") || Exempt("/Login") || Exempt("/Logout") || Exempt("/Auth/") || Exempt("/healthz")
-        || Exempt("/css") || Exempt("/js") || Exempt("/lib") || Exempt("/logs") || Exempt("/favicon");
+        || Exempt("/css") || Exempt("/js") || Exempt("/lib") || Exempt("/logs") || Exempt("/favicon")
+        || Exempt(MatIdentitySignIn.CallbackPath) || Exempt(MatIdentitySignIn.SignedOutCallbackPath)
+        // The platform contract (/api, /api/health, ...) answers JSON, never the setup page; /api/v1 keeps its old behaviour.
+        || path.Equals("/api", StringComparison.OrdinalIgnoreCase)
+        || (Exempt("/api/") && !Exempt("/api/v1"));
     if (!exempt && ctx.User.Identity?.IsAuthenticated == true && ctx.User.IsInRole(nameof(UserRole.Admin)))
     {
         var store = ctx.RequestServices.GetRequiredService<ConfigStore>();
@@ -172,4 +217,8 @@ app.MapGet("/logs/stream", async (HttpContext ctx, LogBroadcaster broadcaster, C
 // Machine-to-machine REST API (used by matOS). Guarded by the X-Api-Key header.
 Matcad.Api.MatcadApi.MapMatcadApi(app);
 
+// The platform contract next to it (no route shares a path with /api/v1).
+app.MapMatPlatform();
+
 app.Run();
+return 0;

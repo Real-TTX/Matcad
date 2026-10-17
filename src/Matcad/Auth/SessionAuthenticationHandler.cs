@@ -13,7 +13,7 @@ namespace Matcad.Auth;
 /// role checks (Admin/User). Because sessions live in the database they remain
 /// valid across container restarts.
 /// </summary>
-public class SessionAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+public class SessionAuthenticationHandler : SignOutAuthenticationHandler<AuthenticationSchemeOptions>
 {
     public const string SchemeName = "MatcadSession";
 
@@ -49,6 +49,13 @@ public class SessionAuthenticationHandler : AuthenticationHandler<Authentication
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return AuthenticateResult.Success(ticket);
+    }
+
+    // Ends the session (a sign-out started by MatIdentity through the OpenID Connect handler signs out this scheme).
+    protected override async Task HandleSignOutAsync(AuthenticationProperties? properties)
+    {
+        if (SessionCookie.Token(Context) is { } token) await _auth.InvalidateSession(token);
+        Response.Cookies.Delete(AuthService.CookieName);
     }
 
     // Unauthenticated browser requests are redirected to the login page.

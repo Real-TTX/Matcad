@@ -219,6 +219,11 @@ without these variables Matcad behaves exactly as described above.
 | Environment variable | Effect |
 |---|---|
 | `Matcad__ApiKey` | Turns on the REST API (`/api/v1`, header `X-Api-Key`). Without a key the API answers `503`. |
+| `MAT_API_KEY` | The key of the platform API (`/api/state`, `/api/configure`, `/api/actions`, header `X-Api-Key`). Not set: the platform API takes `Matcad__ApiKey`, so Mattiverse needs one key only. Neither set: only a token of MatIdentity opens it. |
+| `MATIDENTITY_AUTHORITY` | The address of MatIdentity (`https://id.example.com`). Set: sign-in through MatIdentity (see below). Not set: the local sign-in only, as always. |
+| `MATIDENTITY_CLIENT_ID` | The client of Matcad in MatIdentity. Default: `matcad`. |
+| `MATIDENTITY_CLIENT_SECRET` | Its secret. |
+| `MATIDENTITY_INTERNAL_URL` | Optional: where Matcad reaches MatIdentity from inside Docker (`http://matidentity:2300`); the browser keeps using `MATIDENTITY_AUTHORITY`. |
 | `MATCAD_ADMIN_PASSWORD` | On the first start (no user yet) the `admin` login gets this password, the forced password change is skipped and the setup wizard counts as done, so a headless install is usable right away. It needs at least 6 characters and must not be `admin`; otherwise it is ignored with a warning and `admin` / `admin` applies as usual. It has no effect once a user exists. |
 
 ```bash
@@ -239,6 +244,51 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
   ("Created by Mattiverse. Manual changes may be overwritten."). Leave the field out
   of an update to keep the stored value, send `""` to clear it. Editing the object in
   the UI keeps it.
+
+### Platform API and sign-in through MatIdentity
+
+Matcad speaks the platform contract of the Mat apps (MatDesign `docs/PLATFORM.md`,
+shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.2.0), next to the
+engine API above, which does not change:
+
+| Endpoint | Access | What |
+|---|---|---|
+| `GET /api` | anonymous | the description: pages, tiles, settings, buttons, roles (`admin`, `user`) |
+| `GET /api/health` | anonymous | `ok` / `degraded` / `down` with the checks `database`, `caddy`, `administrators`; `503` only for `down` |
+| `GET /api/state[/{key}]` | key or token | the values of the tiles |
+| `GET`/`PUT /api/configure` | key or token | the few settings |
+| `POST /api/actions/{id}` | key or token | the buttons |
+
+- **Tiles:** active routes (with how many are switched off), hosts whose upstream could
+  not be reached in the last hour (Caddy answered `502`/`504`, from the access log),
+  certificates Caddy manages, the next certificate expiry (warning under 14 days,
+  error under 3), certificate errors, DNS providers and Caddy's state (admin API
+  reachable, last config taken). The certificates are checked by a TLS handshake with
+  Caddy for each of them every six hours and on request (`Matcad__Caddy__TlsAddress`,
+  default: the host of the admin API on port 443).
+- **Settings:** base domain, Matcad host, ACME e-mail address, login portal mode (the
+  same values as *Settings -> General*).
+- **Buttons:** open Matcad, Routes, Certificates, *Push the config to Caddy again*,
+  *Check the certificates now*.
+- **Health check:** the image's `HEALTHCHECK` asks `/api/health` (`dotnet Matcad.dll
+  --healthcheck`); an unreachable Caddy is `degraded`, so Matcad is not restarted for
+  it. `/healthz` stays the plain liveness probe.
+
+**Sign-in through MatIdentity** (only with `MATIDENTITY_AUTHORITY`): the sign-in page
+goes straight to MatIdentity and comes back signed in (redirect address
+`/signin-oidc`, signed-out address `/signout-callback-oidc`). A person is matched by
+the claim `sub`; the first sign-in creates a user without a password. An account
+whose user name is the person's e-mail address (or preferred user name) is **not**
+taken over by the name alone: the person signs in once with that account's password
+(`/Login?local=1&link=1`, with a Cancel button) and only then is it connected. When
+MatIdentity gives Matcad's role (claim `role`: `admin` or `user`) the user follows it
+at every sign-in, but the last admin is never demoted. The sign-out ends the session
+at MatIdentity too.
+
+**The local way in stays:** `/Login?local=1` shows the local form at any time. Matcad
+is often the proxy in front of MatIdentity itself; when MatIdentity cannot be reached,
+the sign-in page falls back to the local form after at most ten seconds, so the admin
+always gets in with its password.
 
 ## How it is built
 

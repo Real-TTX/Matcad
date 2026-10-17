@@ -22,8 +22,13 @@ public class AuthService
     private static readonly ConcurrentDictionary<Guid, (User User, DateTime At)> SessionCache = new();
 
     private readonly MatcadDbContext _db;
+    private readonly ILogger<AuthService> _log;
 
-    public AuthService(MatcadDbContext db) => _db = db;
+    public AuthService(MatcadDbContext db, ILogger<AuthService> log)
+    {
+        _db = db;
+        _log = log;
+    }
 
     // --- Users --------------------------------------------------------------
 
@@ -101,19 +106,185 @@ public class AuthService
     public async Task<User?> ValidateCredentials(string username, string password)
     {
         var user = await FindUser(username);
-        if (user == null) return null;
+        // A user created by MatIdentity has no password: it cannot sign in locally until an admin gives it one.
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
         return BCrypt.Net.BCrypt.Verify(password, user.PasswordHash) ? user : null;
     }
 
+    // --- Sign-in through MatIdentity ------------------------------------------
+
+    /// <summary>The roles MatIdentity gives in the claim <c>role</c> (the <c>roles</c> of Matcad's MatApiDefinition).</summary>
+    public const string IdentityAdminRole = "admin";
+    public const string IdentityUserRole = "user";
+
+    /// <summary>
+    /// The local user for a person MatIdentity signed in: (1) the user with its <c>sub</c>; (2) else, when exactly one unlinked account with a
+    /// password has the person's e-mail address as its user name (without a match: the preferred user name), it is NOT linked - a name proves
+    /// nothing, the person signs in once with that account's password (<see cref="LinkExternal"/>) - the answer names it in
+    /// <see cref="ExternalSignIn.LinkUserId"/>; (3) else a new user without a password. Refused: several matches, a match linked to another subject.
+    /// The role follows the claim when MatIdentity decides it (never demoting the last admin).
+    /// </summary>
+    public async Task<ExternalSignIn> SignInExternal(ExternalIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        if (string.IsNullOrWhiteSpace(identity.Subject))
+            return ExternalSignIn.Refused("MatIdentity sent no subject (sub).");
+
+        var subject = identity.Subject.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.ExternalSubject == subject);
+        if (user != null)
+        {
+            await ApplyExternalRole(user, identity.Role, created: false);
+            await _db.SaveChangesAsync();
+            return new ExternalSignIn(user.Id);
+        }
+
+        // Matcad's accounts have a user name only: it is compared with the e-mail address, then with the preferred user name.
+        var matches = await MatchByName(identity.Email);
+        if (matches.Count == 0) matches = await MatchByName(identity.PreferredUserName);
+
+        if (matches.Count > 1)
+        {
+            _log.LogWarning("MatIdentity subject {Subject} matches {Count} accounts; nobody is signed in", subject, matches.Count);
+            return ExternalSignIn.Refused("Several accounts match this person.");
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            if (match.ExternalSubject != null)
+            {
+                _log.LogWarning("MatIdentity subject {Subject} matches user {UserId}, which is linked with another subject", subject, match.Id);
+                return ExternalSignIn.Refused("The matching account is linked with another person.");
+            }
+
+            if (!string.IsNullOrEmpty(match.PasswordHash))
+            {
+                // Not linked by the name alone: the person proves the account with its password first.
+                _log.LogInformation("MatIdentity subject {Subject} matches user {UserId}; the link waits for its password", subject, match.Id);
+                return new ExternalSignIn(null, match.Id);
+            }
+        }
+
+        user = new User
+        {
+            Username = await UniqueUsername(identity.PreferredUserName ?? identity.Email?.Split('@')[0] ?? identity.Name ?? "user"),
+            // No password: the sign-in goes through MatIdentity (an admin can give the user one in Settings -> Users).
+            PasswordHash = "",
+            Role = UserRole.User,
+            ExternalSubject = subject,
+            CreateDate = DateTime.UtcNow
+        };
+        await ApplyExternalRole(user, identity.Role, created: true);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+        _log.LogInformation("User {UserId} ({Username}) was created at the first sign-in through MatIdentity", user.Id, user.Username);
+        return new ExternalSignIn(user.Id);
+    }
+
+    /// <summary>
+    /// Links the user <paramref name="userId"/> with the person of <paramref name="identity"/> after the user proved the account with its password
+    /// (the pending link of <see cref="SignInExternal"/>): sets the subject and follows the role claim like a sign-in through MatIdentity.
+    /// Refused when the account is gone or linked meanwhile, or when another user has the subject by now.
+    /// </summary>
+    public async Task<(User? User, string? Error)> LinkExternal(long userId, ExternalIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        if (string.IsNullOrWhiteSpace(identity.Subject)) return (null, "MatIdentity sent no subject (sub).");
+
+        var subject = identity.Subject.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) return (null, "The account does not exist any more.");
+        if (user.ExternalSubject != null || await _db.Users.AnyAsync(u => u.ExternalSubject == subject))
+        {
+            _log.LogWarning("User {UserId} was not linked with MatIdentity subject {Subject}: one of them is linked already", userId, subject);
+            return (null, "The account is linked with MatIdentity already.");
+        }
+
+        user.ExternalSubject = subject;
+        user.UpdateDate = DateTime.UtcNow;
+        user.UpdateUserId = user.Id;
+        await ApplyExternalRole(user, identity.Role, created: false);
+        await _db.SaveChangesAsync();
+        SessionCache.Clear();
+        _log.LogInformation("User {UserId} ({Username}) linked with MatIdentity subject {Subject} after its password", user.Id, user.Username, subject);
+        return (user, null);
+    }
+
+    /// <summary>The claim <c>admin</c> or <c>user</c> sets the role; the last admin is never demoted; anything else leaves the role alone.</summary>
+    private async Task ApplyExternalRole(User user, string? claim, bool created)
+    {
+        UserRole? wanted = claim?.Trim().ToLowerInvariant() switch
+        {
+            IdentityAdminRole => UserRole.Admin,
+            IdentityUserRole => UserRole.User,
+            _ => null
+        };
+        if (wanted is not { } role || user.Role == role) return;
+
+        if (!created && user.Role == UserRole.Admin && await _db.Users.CountAsync(u => u.Role == UserRole.Admin) <= 1)
+        {
+            _log.LogWarning("MatIdentity asks for role {Role} for user {UserId}, the last admin; the role stays", role, user.Id);
+            return;
+        }
+
+        user.Role = role;
+        if (!created)
+        {
+            user.UpdateDate = DateTime.UtcNow;
+            SessionCache.Clear();
+        }
+    }
+
+    private async Task<List<User>> MatchByName(string? name)
+    {
+        var wanted = name?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(wanted)) return [];
+        return await _db.Users.Where(u => u.Username.ToLower() == wanted).ToListAsync();
+    }
+
+    private async Task<string> UniqueUsername(string wish)
+    {
+        var name = new string(wish.Trim().Where(c => !char.IsControl(c)).ToArray());
+        if (name.Length == 0) name = "user";
+        if (name.Length > 64) name = name[..64];
+        var candidate = name;
+        for (var i = 2; await _db.Users.AnyAsync(u => u.Username.ToLower() == candidate.ToLower()); i++)
+            candidate = $"{name}{i}";
+        return candidate;
+    }
+
+    // --- Health ---------------------------------------------------------------
+
+    /// <summary>True when the database answers (the health check of the platform).</summary>
+    public async Task<bool> CanReadDatabase(CancellationToken ct = default)
+    {
+        try
+        {
+            await _db.Users.AnyAsync(ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "The database cannot be read");
+            return false;
+        }
+    }
+
+    public Task<int> CountAdmins(CancellationToken ct = default) =>
+        _db.Users.CountAsync(u => u.Role == UserRole.Admin, ct);
+
     // --- Sessions -----------------------------------------------------------
 
-    public async Task<UserSession> CreateSession(User user)
+    /// <summary>A new session; <paramref name="idToken"/> is MatIdentity's ID token when the session began there (for the sign-out).</summary>
+    public async Task<UserSession> CreateSession(User user, string? idToken = null)
     {
         var session = new UserSession
         {
             Token = Guid.NewGuid(),
             UserId = user.Id,
             ExpiryDate = DateTime.UtcNow.Add(SessionLifetime),
+            IdToken = string.IsNullOrEmpty(idToken) ? null : idToken,
             CreateDate = DateTime.UtcNow,
             CreateUserId = user.Id
         };
@@ -121,6 +292,10 @@ public class AuthService
         await _db.SaveChangesAsync();
         return session;
     }
+
+    /// <summary>The ID token of MatIdentity kept with the session, or null.</summary>
+    public Task<string?> GetSessionIdToken(Guid token) =>
+        _db.UserSessions.AsNoTracking().Where(s => s.Token == token).Select(s => s.IdToken).FirstOrDefaultAsync();
 
     /// <summary>Resolves the user for a valid, unexpired session token.
     /// Backed by a short-lived in-memory cache to stay cheap under load.</summary>

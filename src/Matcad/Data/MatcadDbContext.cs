@@ -17,6 +17,8 @@ public class MatcadDbContext : DbContext
         {
             e.ToTable("Users");
             e.HasIndex(x => x.Username).IsUnique();
+            // SQLite allows several NULLs in a unique index: only linked users are unique by their subject.
+            e.HasIndex(x => x.ExternalSubject).IsUnique().HasDatabaseName(DatabaseUpgrader.ExternalSubjectIndex);
         });
 
         b.Entity<UserSession>(e =>

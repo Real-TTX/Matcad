@@ -28,7 +28,7 @@ public class CaddyService
         _log = log;
     }
 
-    private string AdminUrl
+    public string AdminUrl
     {
         get
         {
@@ -68,8 +68,34 @@ public class CaddyService
         }
     }
 
+    /// <summary>The outcome of the last push of the config (null = none yet since the start), for the platform status.</summary>
+    public CaddyApplyResult? LastApply { get; private set; }
+
     /// <summary>Regenerates and pushes the config. Returns (success, error?).</summary>
     public async Task<(bool Ok, string? Error)> ApplyAsync(CancellationToken ct = default)
+    {
+        var result = await PushAsync(ct);
+        LastApply = new CaddyApplyResult(DateTimeOffset.Now, result.Ok, result.Error);
+        return result;
+    }
+
+    /// <summary>True when Caddy's admin API answers (a short timeout: the platform's status must not hang).</summary>
+    public async Task<bool> IsReachableAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _http.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(3);
+            using var resp = await client.GetAsync($"{AdminUrl}/config/", HttpCompletionOption.ResponseHeadersRead, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or UriFormatException)
+        {
+            return false;
+        }
+    }
+
+    private async Task<(bool Ok, string? Error)> PushAsync(CancellationToken ct)
     {
         var json = BuildJson();
         try
@@ -109,3 +135,6 @@ public class CaddyService
         }
     }
 }
+
+/// <summary>When Matcad last pushed its config to Caddy and whether Caddy took it.</summary>
+public sealed record CaddyApplyResult(DateTimeOffset At, bool Ok, string? Error);

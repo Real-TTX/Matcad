@@ -24,6 +24,12 @@ services:
       - Matcad__ConfigDir=/data/config
       - Matcad__CaddyLogDir=/caddy-logs
       - Matcad__Caddy__AdminUrl=http://caddy:2019
+      # Optional, see the README ("Platform API and sign-in through MatIdentity"):
+      # - MAT_API_KEY=                   # the key of /api/* (default: Matcad__ApiKey; Mattiverse sets it)
+      # - MATIDENTITY_AUTHORITY=         # https://id.example.com: sign-in through MatIdentity
+      # - MATIDENTITY_CLIENT_ID=matcad
+      # - MATIDENTITY_CLIENT_SECRET=
+      # - MATIDENTITY_INTERNAL_URL=      # http://matidentity:2300 inside Docker
     volumes:
       - matcad-data:/data
       - caddy-logs:/caddy-logs

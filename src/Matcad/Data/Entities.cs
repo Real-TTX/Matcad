@@ -25,6 +25,10 @@ public class User : AuditedEntity
     public string Username { get; set; } = "";
     public string PasswordHash { get; set; } = "";
     public UserRole Role { get; set; } = UserRole.User;
+
+    /// <summary>The claim <c>sub</c> of MatIdentity (null = a local account only). Set at the first sign-in through MatIdentity,
+    /// or after the matching account proved itself with its password (the pending link).</summary>
+    public string? ExternalSubject { get; set; }
 }
 
 /// <summary>
@@ -37,6 +41,9 @@ public class UserSession : AuditedEntity
     public Guid Token { get; set; }
     public long UserId { get; set; }
     public DateTime ExpiryDate { get; set; }
+
+    /// <summary>The ID token of MatIdentity for a session that began there (or was linked there): the sign-out ends it at MatIdentity too.</summary>
+    public string? IdToken { get; set; }
     public User? User { get; set; }
 }
 

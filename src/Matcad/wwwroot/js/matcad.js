@@ -19,6 +19,9 @@ function initTabs(root) {
             tabs.forEach(t => t.classList.toggle('active', t === tab));
             panels.forEach(p => p.classList.toggle('active', p.getAttribute('data-panel') === key));
         }));
+        // A link such as /Settings#certs opens that tab (the "Certificates" button of the platform overview).
+        const wanted = location.hash.slice(1);
+        tabs.forEach(tab => { if (wanted && tab.getAttribute('data-tab') === wanted) tab.click(); });
     });
 }
 
