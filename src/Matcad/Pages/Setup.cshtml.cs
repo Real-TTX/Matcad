@@ -1,12 +1,14 @@
 using Matcad.Auth;
 using Matcad.Config;
+using Matcad.Controls;
 using Matcad.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Matcad.Pages;
 
-/// <summary>First-run setup wizard: account password, domains/login, an optional
+/// <summary>First-run setup wizard: account, domains/login, an optional
 /// DNS provider (only needed for wildcard certificates), then finish.</summary>
 public class SetupModel : PageModel
 {
@@ -22,8 +24,9 @@ public class SetupModel : PageModel
 
     // --- account ---
     [BindProperty] public string NewUsername { get; set; } = "";
-    [BindProperty] public string NewPassword { get; set; } = "";
-    [BindProperty] public string ConfirmPassword { get; set; } = "";
+    [BindProperty] public string? NewEmail { get; set; }
+    [BindProperty] public string? NewPassword { get; set; }
+    [BindProperty] public string? ConfirmPassword { get; set; }
     // --- domains ---
     [BindProperty] public string BaseDomain { get; set; } = "";
     [BindProperty] public string MatcadHost { get; set; } = "";
@@ -39,13 +42,32 @@ public class SetupModel : PageModel
     public string? Error { get; private set; }
     public (bool? Ok, string Message)? TestResult { get; private set; }
     public Dictionary<string, string> CredentialValues { get; } = new();
-    public string CurrentUsername => User.Identity?.Name ?? "admin";
+    public Dictionary<string, string> CustomCredentials { get; } = new();
+    public string CustomModule { get; private set; } = "";
 
-    public void OnGet()
+    /// <summary>The user still has the default or an administrator-set password and has to choose their own first.</summary>
+    public bool MustChange => User.MustChangePassword();
+
+    /// <summary>Whoever has to choose a new password can do nothing else until then.</summary>
+    public override void OnPageHandlerExecuting(PageHandlerExecutingContext context)
     {
-        NewUsername = CurrentUsername;
+        var handler = context.HandlerMethod?.MethodInfo.Name;
+        if (MustChange && handler is not (nameof(OnGetAsync) or nameof(OnPostAccountAsync)))
+            context.Result = RedirectToPage(new { step = "account" });
+        base.OnPageHandlerExecuting(context);
+    }
+
+    public async Task OnGetAsync()
+    {
+        if (MustChange) Step = "account";
         var s = _store.Settings;
-        if (Step == "domains")
+        if (Step == "account")
+        {
+            var user = await CurrentUser();
+            NewUsername = user?.Username ?? "";
+            NewEmail = user?.Email;
+        }
+        else if (Step == "domains")
         {
             BaseDomain = s.BaseDomain; MatcadHost = s.MatcadHost;
             SystemRouteEnabled = s.SystemRouteEnabled;
@@ -54,34 +76,42 @@ public class SetupModel : PageModel
         }
     }
 
+    private Task<Data.User?> CurrentUser() =>
+        User.GetUserId() is { } id ? _auth.GetUser(id) : Task.FromResult<Data.User?>(null);
+
     private IActionResult Stay(string step, string error) { Error = error; Step = step; return Page(); }
 
     public async Task<IActionResult> OnPostAccountAsync()
     {
-        if (string.IsNullOrEmpty(NewPassword) || NewPassword.Length < 6)
-            return Stay("account", "The password must be at least 6 characters.");
-        if (NewPassword != ConfirmPassword)
-            return Stay("account", "The passwords do not match.");
-        if (NewPassword == "admin")
-            return Stay("account", "Please choose a password other than the default.");
-
-        var uid = User.GetUserId();
-        var user = uid is > 0 ? await _auth.GetUser(uid.Value) : await _auth.FindUser("admin");
+        var user = await CurrentUser();
         if (user == null) return Stay("account", "Current user not found.");
 
-        var newName = string.IsNullOrWhiteSpace(NewUsername) ? user.Username : NewUsername.Trim();
-        if (!newName.Equals(user.Username, StringComparison.OrdinalIgnoreCase) && await _auth.FindUser(newName) != null)
-            return Stay("account", "That username is already taken.");
+        var changePassword = MustChange || !string.IsNullOrEmpty(NewPassword);
+        if (changePassword &&
+            AuthService.ValidatePasswordChange(user, requireCurrent: false, null, NewPassword, ConfirmPassword) is { } passwordError)
+            return Stay("account", passwordError);
 
-        await _auth.UpdateAccount(user, newName, NewPassword, uid);
+        var username = string.IsNullOrWhiteSpace(NewUsername) ? user.Username : NewUsername.Trim();
+        var email = AuthService.NormalizeEmail(NewEmail);
+        if (await _auth.ValidateIdentity(username, email, user.Id) is { } identityError)
+            return Stay("account", identityError);
+
+        user.Username = username;
+        user.Email = email;
+        await _auth.UpdateUser(user, changePassword ? NewPassword : null, mustChangePassword: false, user.Id, keepSession: Request.GetSessionToken());
         return RedirectToPage(new { step = "domains" });
     }
 
     public IActionResult OnPostDomains()
     {
+        var baseDomain = BaseDomain?.Trim().ToLowerInvariant() ?? "";
+        var matcadHost = MatcadHost?.Trim().ToLowerInvariant() ?? "";
+        if ((baseDomain.Length > 0 && !RouteEditor.IsHostName(baseDomain)) || (matcadHost.Length > 0 && !RouteEditor.IsHostName(matcadHost)))
+            return Stay("domains", "Domains must be plain names like example.com (no http://, path or port).");
+
         var s = _store.Settings;
-        s.BaseDomain = BaseDomain?.Trim() ?? "";
-        s.MatcadHost = MatcadHost?.Trim() ?? "";
+        s.BaseDomain = baseDomain;
+        s.MatcadHost = matcadHost;
         s.SystemRouteEnabled = SystemRouteEnabled;
         s.PortalMode = PortalMode is "inline" or "redirect" or "unauthorized" ? PortalMode : "inline";
         s.AcmeEmail = AcmeEmail?.Trim() ?? "";
@@ -115,16 +145,31 @@ public class SetupModel : PageModel
         return creds;
     }
 
-    private void PopulateCreds(Dictionary<string, string> creds)
+    /// <summary>Keeps the entered values when the form is shown again.</summary>
+    private void PopulateCreds(string module, Dictionary<string, string> creds)
     {
-        foreach (var kv in creds) CredentialValues[$"{ProviderType}:{kv.Key}"] = kv.Value;
+        if (ProviderType == ProviderTypes.CustomId)
+        {
+            CustomModule = module;
+            foreach (var kv in creds) CustomCredentials[kv.Key] = kv.Value;
+        }
+        else
+        {
+            foreach (var kv in creds) CredentialValues[$"{ProviderType}:{kv.Key}"] = kv.Value;
+        }
     }
+
+    public ProviderFieldsModel ProviderFields => new()
+    {
+        TypeFieldName = nameof(ProviderType), Type = ProviderType, CustomModule = CustomModule,
+        Values = CredentialValues, CustomCredentials = CustomCredentials
+    };
 
     public async Task<IActionResult> OnPostProviderTestAsync()
     {
         Step = "provider";
         var creds = ReadProviderCreds(out var module);
-        PopulateCreds(creds);
+        PopulateCreds(module, creds);
         TestResult = await _tester.TestAsync(module, creds);
         return Page();
     }
@@ -132,7 +177,7 @@ public class SetupModel : PageModel
     public async Task<IActionResult> OnPostProviderSaveAsync()
     {
         var creds = ReadProviderCreds(out var module);
-        PopulateCreds(creds);
+        PopulateCreds(module, creds);
         if (string.IsNullOrWhiteSpace(ProviderName) || string.IsNullOrWhiteSpace(module))
             return Stay("provider", "Please give the provider a name and a type.");
 
@@ -154,8 +199,7 @@ public class SetupModel : PageModel
         return RedirectToPage(new { step = "done" });
     }
 
-    /// <summary>Skip the rest of the wizard entirely (keeps whatever is set so far,
-    /// including the default admin/admin login if the account step was not done).</summary>
+    /// <summary>Skip the rest of the wizard entirely (keeps whatever is set so far).</summary>
     public async Task<IActionResult> OnPostSkipAsync()
     {
         await MarkComplete();

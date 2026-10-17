@@ -13,7 +13,17 @@ namespace Matcad.Tests;
 public sealed class PlatformDefinitionTests
 {
     private static readonly IReadOnlySet<string> Sprite =
-        MatPlatformValidator.ReadSprite(Path.Combine(AppContext.BaseDirectory, "Fixtures", "matui-icons.svg"));
+        MatPlatformValidator.ReadSprite(SpritePath());
+
+    // The sprite Matcad ships (wwwroot/matui, a copy of MatUi): every icon of the definition must be in it.
+    private static string SpritePath()
+    {
+        var folder = new DirectoryInfo(AppContext.BaseDirectory);
+        while (folder != null && !File.Exists(Path.Combine(folder.FullName, "src", "Matcad", "Matcad.csproj")))
+            folder = folder.Parent;
+        return Path.Combine(folder?.FullName ?? throw new InvalidOperationException("The repository was not found."),
+            "src", "Matcad", "wwwroot", "matui", "matui-icons.svg");
+    }
 
     [Theory]
     [InlineData("de")]
@@ -39,7 +49,7 @@ public sealed class PlatformDefinitionTests
 }
 
 /// <summary>The endpoints of the contract: shapes, status codes, the key, nothing secret.</summary>
-public sealed class PlatformApiTests(MatcadFactory site) : IClassFixture<MatcadFactory>
+public sealed class PlatformApiTests(PlatformFactory site) : IClassFixture<PlatformFactory>
 {
     private static readonly string[] StateKeys =
         ["routes", "upstreamErrors", "certificates", "certificateExpiry", "certificateErrors", "providers", "caddy"];
@@ -100,7 +110,7 @@ public sealed class PlatformApiTests(MatcadFactory site) : IClassFixture<MatcadF
     [InlineData("POST", "/api/actions/reloadCaddy")]
     public async Task Without_the_key_it_is_401(string method, string path)
     {
-        foreach (var key in new[] { null, "wrong-key", MatcadFactory.EngineKey })
+        foreach (var key in new[] { null, "wrong-key", PlatformFactory.EngineKey })
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path)
             {
@@ -183,7 +193,7 @@ public sealed class PlatformApiTests(MatcadFactory site) : IClassFixture<MatcadF
         Assert.Equal("redirect", settings.PortalMode);
 
         // The engine API sees the same settings.
-        using var engine = JsonDocument.Parse(await site.Api(MatcadFactory.EngineKey).GetStringAsync("/api/v1/settings"));
+        using var engine = JsonDocument.Parse(await site.Api(PlatformFactory.EngineKey).GetStringAsync("/api/v1/settings"));
         Assert.Equal("example.org", engine.RootElement.GetProperty("baseDomain").GetString());
     }
 
@@ -223,8 +233,8 @@ public sealed class PlatformApiTests(MatcadFactory site) : IClassFixture<MatcadF
         {
             var body = await site.Api().GetStringAsync(path);
             Assert.DoesNotContain("provider-secret-4711", body);
-            Assert.DoesNotContain(MatcadFactory.PlatformKey, body);
-            Assert.DoesNotContain(MatcadFactory.EngineKey, body);
+            Assert.DoesNotContain(PlatformFactory.PlatformKey, body);
+            Assert.DoesNotContain(PlatformFactory.EngineKey, body);
             Assert.DoesNotContain("PasswordHash", body, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -254,7 +264,7 @@ public sealed class PlatformApiTests(MatcadFactory site) : IClassFixture<MatcadF
     {
         // A signed-in browser without the key gets 401 too: the contract ignores the session cookie.
         var browser = site.Browser();
-        Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser, "admin", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser, "admin", PlatformFactory.AdminPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await browser.GetAsync("/api/state")).StatusCode);
     }
 }
@@ -265,9 +275,9 @@ public sealed class EngineKeyFallbackTests(EngineKeyOnlyFactory site) : IClassFi
     [Fact]
     public async Task The_engine_key_opens_the_platform_endpoints()
     {
-        Assert.Equal(HttpStatusCode.OK, (await site.Api(MatcadFactory.EngineKey).GetAsync("/api/state")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await site.Api(MatcadFactory.EngineKey).GetAsync("/api/v1/status")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await site.Api(MatcadFactory.PlatformKey).GetAsync("/api/state")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await site.Api(PlatformFactory.EngineKey).GetAsync("/api/state")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await site.Api(PlatformFactory.EngineKey).GetAsync("/api/v1/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await site.Api(PlatformFactory.PlatformKey).GetAsync("/api/state")).StatusCode);
     }
 }
 

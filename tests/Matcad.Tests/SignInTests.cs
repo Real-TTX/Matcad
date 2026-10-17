@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Matcad.Tests;
 
 /// <summary>Without <c>MATIDENTITY_AUTHORITY</c> nothing changes: the local sign-in form, as before.</summary>
-public sealed class LocalSignInTests(MatcadFactory site) : IClassFixture<MatcadFactory>
+public sealed class LocalSignInTests(PlatformFactory site) : IClassFixture<PlatformFactory>
 {
     [Fact]
     public async Task The_sign_in_page_is_the_local_form()
@@ -25,15 +25,15 @@ public sealed class LocalSignInTests(MatcadFactory site) : IClassFixture<MatcadF
         Assert.Equal(HttpStatusCode.Redirect, first.StatusCode);
         Assert.StartsWith("/Login", first.Headers.Location!.OriginalString);
 
-        var wrong = await MatcadFactory.SignInLocallyAsync(browser, "admin", "nope");
+        var wrong = await PlatformFactory.SignInLocallyAsync(browser, "admin", "nope");
         Assert.Equal(HttpStatusCode.OK, wrong.StatusCode);
         Assert.Contains("Incorrect username or password.", await wrong.Content.ReadAsStringAsync());
 
-        Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser, "admin", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser, "admin", PlatformFactory.AdminPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/Routes")).StatusCode);
 
         // Sign-out goes back to the local form, not anywhere else.
-        var logout = await browser.GetAsync("/Logout");
+        var logout = await PlatformFactory.SignOutAsync(browser);
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
         Assert.Equal("/Login", logout.Headers.Location!.OriginalString);
         Assert.Equal(HttpStatusCode.Redirect, (await browser.GetAsync("/Routes")).StatusCode);
@@ -102,11 +102,11 @@ public sealed class IdentitySignInTests(IdentityFactory site) : IClassFixture<Id
         Assert.Contains("id=\"login-form\"", html);
         Assert.Contains("Sign in with MatIdentity", html);
 
-        Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser, "admin", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser, "admin", PlatformFactory.AdminPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/Settings")).StatusCode);
 
         // A local session ends locally: back to the sign-in page without the automatic sign-in.
-        var logout = await browser.GetAsync("/Logout");
+        var logout = await PlatformFactory.SignOutAsync(browser);
         Assert.Equal("/Login?signedOut=1", logout.Headers.Location!.OriginalString);
     }
 
@@ -136,7 +136,7 @@ public sealed class IdentitySignInTests(IdentityFactory site) : IClassFixture<Id
     [Fact]
     public async Task The_engine_api_does_not_change_with_matidentity()
     {
-        Assert.Equal(HttpStatusCode.OK, (await site.Api(MatcadFactory.EngineKey).GetAsync("/api/v1/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await site.Api(PlatformFactory.EngineKey).GetAsync("/api/v1/status")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await site.Api(null).GetAsync("/api/v1/status")).StatusCode);
     }
 }
@@ -162,7 +162,7 @@ public sealed class UnreachableIdentityTests(UnreachableIdentityFactory site) : 
     {
         var browser = site.Browser();
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/Login?local=1")).StatusCode);
-        Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser, "admin", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser, "admin", PlatformFactory.AdminPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/Settings")).StatusCode);
     }
 }

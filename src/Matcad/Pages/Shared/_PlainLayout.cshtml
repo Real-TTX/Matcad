@@ -1,0 +1,20 @@
+@inject Toolkit Toolkit
+@{
+    // A page without a menu (sign-in, setup, errors): a centred card on the plain page background (rule SHELL-11).
+    var title = ViewData["Title"] as string;
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id" data-app-version="@Ui.Version">
+<partial name="_Head" model="@(string.IsNullOrEmpty(title) ? Ui.App.Name : $"{title} · {Ui.App.Name}")" />
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+    <main class="mat-auth" id="main">
+        @RenderBody()
+    </main>
+    <partial name="_ConnectionBanner" />
+    <script src="~/matui/matui.js" asp-append-version="true"></script>
+    <script src="~/js/matcad.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

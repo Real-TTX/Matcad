@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Matcad.Config;
 using Matcad.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,7 @@ namespace Matcad.Services;
 public class AuthService
 {
     public const string CookieName = "matcad_session";
+    public const int MinPasswordLength = 8;
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
     // Short-lived validated-session cache so high-traffic forward-auth checks
@@ -19,7 +21,11 @@ public class AuthService
     // evicted on logout / user deletion, so the effective staleness is only the
     // TTL for out-of-band invalidation (expiry is measured in days).
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(10);
+    private const int CacheSoftLimit = 1000;
     private static readonly ConcurrentDictionary<Guid, (User User, DateTime At)> SessionCache = new();
+
+    // Verified when the login does not exist, so the response time does not reveal which logins exist.
+    private static readonly Lazy<string> TimingEqualizerHash = new(() => BCrypt.Net.BCrypt.HashPassword("matcad-timing-equalizer"));
 
     private readonly MatcadDbContext _db;
     private readonly ILogger<AuthService> _log;
@@ -30,10 +36,20 @@ public class AuthService
         _log = log;
     }
 
+    /// <summary>Without a logger (unit tests, tools).</summary>
+    public AuthService(MatcadDbContext db)
+        : this(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<AuthService>.Instance)
+    {
+    }
+
     // --- Users --------------------------------------------------------------
 
-    public Task<User?> FindUser(string username) =>
-        _db.Users.FirstOrDefaultAsync(u => u.Username == username);
+    /// <summary>Finds a user by username or e-mail address (case-insensitive).</summary>
+    public Task<User?> FindByLogin(string login)
+    {
+        login = login.Trim();
+        return _db.Users.FirstOrDefaultAsync(u => u.Username == login || u.Email == login);
+    }
 
     public Task<User?> GetUser(long id) =>
         _db.Users.FirstOrDefaultAsync(u => u.Id == id);
@@ -41,13 +57,55 @@ public class AuthService
     public Task<List<User>> ListUsers() =>
         _db.Users.OrderBy(u => u.Username).ToListAsync();
 
-    public async Task<User> CreateUser(string username, string password, UserRole role, long? actorId)
+    public Task<int> CountAdmins(CancellationToken ct = default) =>
+        _db.Users.CountAsync(u => u.Role == UserRole.Admin, ct);
+
+    /// <summary>Checks username, e-mail and uniqueness. Username and e-mail share one namespace because both can be used to sign in.</summary>
+    public async Task<string?> ValidateIdentity(string username, string? email, long? exceptUserId)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return "Username is required.";
+        if (username.Length > 128) return "The username is too long.";
+        if (email is not null)
+        {
+            if (email.Length > 256 || !email.Contains('@') || email.Any(char.IsWhiteSpace))
+                return "Please enter a valid e-mail address.";
+        }
+
+        var taken = await _db.Users.AnyAsync(u => u.Id != exceptUserId &&
+            (u.Username == username || u.Email == username ||
+             (email != null && (u.Username == email || u.Email == email))));
+        return taken ? "That username or e-mail address is already in use." : null;
+    }
+
+    public static string? ValidatePassword(string? password) =>
+        string.IsNullOrEmpty(password) || password.Length < MinPasswordLength
+            ? $"The password must be at least {MinPasswordLength} characters."
+            : password.Equals("admin", StringComparison.OrdinalIgnoreCase)
+                ? "Please choose a password other than the default."
+                : null;
+
+    /// <summary>Checks the fields of a "change my password" form.</summary>
+    public static string? ValidatePasswordChange(User user, bool requireCurrent, string? current, string? newPassword, string? confirm)
+    {
+        if (requireCurrent && !PasswordHashing.Verify(current ?? "", user.PasswordHash))
+            return "The current password is not correct.";
+        if (ValidatePassword(newPassword) is { } error) return error;
+        return newPassword == confirm ? null : "The passwords do not match.";
+    }
+
+    public static string? NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+
+    public async Task<User> CreateUser(string username, string? email, string password, UserRole role,
+        long? actorId, bool mustChangePassword = false)
     {
         var user = new User
         {
-            Username = username,
+            Username = username.Trim(),
+            Email = NormalizeEmail(email),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             Role = role,
+            MustChangePassword = mustChangePassword,
             CreateDate = DateTime.UtcNow,
             CreateUserId = actorId
         };
@@ -56,20 +114,20 @@ public class AuthService
         return user;
     }
 
-    public async Task UpdateUser(User user, string? newPassword, long? actorId)
+    /// <summary>
+    /// Saves a tracked user whose username, e-mail or role the caller has changed. A new password signs the user
+    /// out everywhere else (<paramref name="keepSession"/> is the session that stays).
+    /// <paramref name="mustChangePassword"/> null leaves the flag as it is.
+    /// </summary>
+    public async Task UpdateUser(User user, string? newPassword, bool? mustChangePassword, long? actorId, Guid? keepSession = null)
     {
         if (!string.IsNullOrEmpty(newPassword))
+        {
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
-        user.UpdateDate = DateTime.UtcNow;
-        user.UpdateUserId = actorId;
-        await _db.SaveChangesAsync();
-    }
-
-    /// <summary>Updates username and/or password of an existing (tracked) user.</summary>
-    public async Task UpdateAccount(User user, string? newUsername, string? newPassword, long? actorId)
-    {
-        if (!string.IsNullOrWhiteSpace(newUsername)) user.Username = newUsername.Trim();
-        if (!string.IsNullOrEmpty(newPassword)) user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            var keep = keepSession ?? Guid.Empty;
+            await _db.UserSessions.Where(s => s.UserId == user.Id && s.Token != keep).ExecuteDeleteAsync();
+        }
+        if (mustChangePassword is { } flag) user.MustChangePassword = flag;
         user.UpdateDate = DateTime.UtcNow;
         user.UpdateUserId = actorId;
         await _db.SaveChangesAsync();
@@ -80,35 +138,39 @@ public class AuthService
     {
         var user = await _db.Users.FindAsync(id);
         if (user == null) return;
-        _db.UserSessions.RemoveRange(_db.UserSessions.Where(s => s.UserId == id));
-        _db.Users.Remove(user);
+        _db.Users.Remove(user); // the sessions go with it (cascade)
         await _db.SaveChangesAsync();
         SessionCache.Clear(); // drop any cached sessions of the removed user
     }
 
     /// <summary>Replaces all users (backup restore). Password hashes are taken as-is.</summary>
-    public async Task ReplaceAllUsers(IEnumerable<(string Username, string PasswordHash, UserRole Role)> users, long? actorId)
+    public async Task ReplaceAllUsers(IEnumerable<RestoredUser> users, long? actorId)
     {
-        _db.UserSessions.RemoveRange(_db.UserSessions);
-        _db.Users.RemoveRange(_db.Users);
-        await _db.SaveChangesAsync();
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await _db.UserSessions.ExecuteDeleteAsync();
+        await _db.Users.ExecuteDeleteAsync();
         foreach (var u in users)
             _db.Users.Add(new User
             {
-                Username = u.Username, PasswordHash = u.PasswordHash, Role = u.Role,
-                CreateDate = DateTime.UtcNow, CreateUserId = actorId
+                Username = u.Username, Email = NormalizeEmail(u.Email), PasswordHash = u.PasswordHash, Role = u.Role,
+                MustChangePassword = u.MustChangePassword, ExternalSubject = u.ExternalSubject, CreateDate = DateTime.UtcNow, CreateUserId = actorId
             });
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         SessionCache.Clear();
     }
 
     /// <summary>Returns the user if credentials are valid, otherwise null.</summary>
-    public async Task<User?> ValidateCredentials(string username, string password)
+    public async Task<User?> ValidateCredentials(string login, string password)
     {
-        var user = await FindUser(username);
+        var user = await FindByLogin(login);
         // A user created by MatIdentity has no password: it cannot sign in locally until an admin gives it one.
-        if (user == null || string.IsNullOrEmpty(user.PasswordHash)) return null;
-        return BCrypt.Net.BCrypt.Verify(password, user.PasswordHash) ? user : null;
+        if (user == null || string.IsNullOrEmpty(user.PasswordHash))
+        {
+            PasswordHashing.Verify(password, TimingEqualizerHash.Value);
+            return null;
+        }
+        return PasswordHashing.Verify(password, user.PasswordHash) ? user : null;
     }
 
     // --- Sign-in through MatIdentity ------------------------------------------
@@ -139,7 +201,8 @@ public class AuthService
             return new ExternalSignIn(user.Id);
         }
 
-        // Matcad's accounts have a user name only: it is compared with the e-mail address, then with the preferred user name.
+        // A Matcad account signs in with its user name or its e-mail address: both are compared with the person's e-mail address,
+        // then with the preferred user name.
         var matches = await MatchByName(identity.Email);
         if (matches.Count == 0) matches = await MatchByName(identity.PreferredUserName);
 
@@ -166,9 +229,14 @@ public class AuthService
             }
         }
 
+        // The e-mail address goes with the new account when it is free and well-formed (it is a login too, so it must not clash).
+        var email = NormalizeEmail(identity.Email);
+        if (email != null && (email.Length > 256 || !email.Contains('@') || email.Any(char.IsWhiteSpace) || await LoginTaken(email)))
+            email = null;
         user = new User
         {
             Username = await UniqueUsername(identity.PreferredUserName ?? identity.Email?.Split('@')[0] ?? identity.Name ?? "user"),
+            Email = email,
             // No password: the sign-in goes through MatIdentity (an admin can give the user one in Settings -> Users).
             PasswordHash = "",
             Role = UserRole.User,
@@ -238,10 +306,14 @@ public class AuthService
 
     private async Task<List<User>> MatchByName(string? name)
     {
-        var wanted = name?.Trim().ToLowerInvariant();
+        var wanted = name?.Trim();
         if (string.IsNullOrEmpty(wanted)) return [];
-        return await _db.Users.Where(u => u.Username.ToLower() == wanted).ToListAsync();
+        // Username and Email compare without case (NOCASE columns).
+        return await _db.Users.Where(u => u.Username == wanted || u.Email == wanted).ToListAsync();
     }
+
+    // User name and e-mail address share one namespace, because both sign in.
+    private Task<bool> LoginTaken(string login) => _db.Users.AnyAsync(u => u.Username == login || u.Email == login);
 
     private async Task<string> UniqueUsername(string wish)
     {
@@ -249,7 +321,7 @@ public class AuthService
         if (name.Length == 0) name = "user";
         if (name.Length > 64) name = name[..64];
         var candidate = name;
-        for (var i = 2; await _db.Users.AnyAsync(u => u.Username.ToLower() == candidate.ToLower()); i++)
+        for (var i = 2; await LoginTaken(candidate); i++)
             candidate = $"{name}{i}";
         return candidate;
     }
@@ -271,21 +343,22 @@ public class AuthService
         }
     }
 
-    public Task<int> CountAdmins(CancellationToken ct = default) =>
-        _db.Users.CountAsync(u => u.Role == UserRole.Admin, ct);
-
     // --- Sessions -----------------------------------------------------------
 
     /// <summary>A new session; <paramref name="idToken"/> is MatIdentity's ID token when the session began there (for the sign-out).</summary>
     public async Task<UserSession> CreateSession(User user, string? idToken = null)
     {
+        var now = DateTime.UtcNow;
+        // Expired sessions are only noticed when their cookie shows up again; sweep them on every sign-in.
+        await _db.UserSessions.Where(s => s.ExpiryDate < now).ExecuteDeleteAsync();
+
         var session = new UserSession
         {
             Token = Guid.NewGuid(),
             UserId = user.Id,
-            ExpiryDate = DateTime.UtcNow.Add(SessionLifetime),
+            ExpiryDate = now.Add(SessionLifetime),
             IdToken = string.IsNullOrEmpty(idToken) ? null : idToken,
-            CreateDate = DateTime.UtcNow,
+            CreateDate = now,
             CreateUserId = user.Id
         };
         _db.UserSessions.Add(session);
@@ -317,7 +390,11 @@ public class AuthService
             return null;
         }
 
-        if (session.User != null) SessionCache[token] = (session.User, DateTime.UtcNow);
+        if (session.User != null)
+        {
+            if (SessionCache.Count > CacheSoftLimit) PruneCache();
+            SessionCache[token] = (session.User, DateTime.UtcNow);
+        }
         return session.User;
     }
 
@@ -327,28 +404,36 @@ public class AuthService
         await _db.UserSessions.Where(s => s.Token == token).ExecuteDeleteAsync();
     }
 
-    /// <summary>Creates the default admin on first start if no users exist: with <paramref name="adminPassword"/>
-    /// (env <c>MATCAD_ADMIN_PASSWORD</c>, for a headless install) when that is set and acceptable, otherwise
-    /// admin/admin. Returns true only when the admin was seeded with the given password, so the caller can
-    /// skip the first-run wizard that would otherwise force a password change.</summary>
+    private static void PruneCache()
+    {
+        var cutoff = DateTime.UtcNow - CacheTtl;
+        foreach (var (token, entry) in SessionCache)
+            if (entry.At < cutoff) SessionCache.TryRemove(token, out _);
+    }
+
+    /// <summary>Creates the default admin on first start if no users exist. With <paramref name="adminPassword"/>
+    /// (env <c>MATCAD_ADMIN_PASSWORD</c>, a headless install such as Mattiverse's) that is acceptable, the admin gets that
+    /// password without the forced change; otherwise admin/admin, which has to be changed at the first sign-in.
+    /// Returns true only when the admin was seeded with the given password, so the caller can skip the first-run
+    /// wizard whose first step only exists to replace admin/admin.</summary>
     public async Task<bool> EnsureSeedAdmin(ILogger logger, string? adminPassword = null)
     {
         if (await _db.Users.AnyAsync()) return false;
         if (!string.IsNullOrEmpty(adminPassword))
         {
-            // Same rules as the setup wizard's account step.
-            if (adminPassword.Length < 6 || adminPassword == "admin")
-                logger.LogWarning("MATCAD_ADMIN_PASSWORD is ignored: it must be at least 6 characters and not 'admin'. " +
-                    "Falling back to the default admin login.");
+            // The rules of every other password (wizard, profile, users page), and never the well-known default.
+            if (ValidatePassword(adminPassword) != null || adminPassword == "admin")
+                logger.LogWarning("MATCAD_ADMIN_PASSWORD is ignored: it must be at least {MinLength} characters and not 'admin'. " +
+                    "Falling back to the default admin login.", MinPasswordLength);
             else
             {
-                await CreateUser("admin", adminPassword, UserRole.Admin, actorId: null);
+                await CreateUser("admin", null, adminPassword, UserRole.Admin, actorId: null, mustChangePassword: false);
                 logger.LogInformation("Seeded admin user 'admin' with the password from MATCAD_ADMIN_PASSWORD.");
                 return true;
             }
         }
-        await CreateUser("admin", "admin", UserRole.Admin, actorId: null);
-        logger.LogWarning("Seeded default admin user 'admin' with password 'admin'. Change it immediately.");
+        await CreateUser("admin", null, "admin", UserRole.Admin, actorId: null, mustChangePassword: true);
+        logger.LogWarning("Seeded default admin user 'admin' with password 'admin'. It has to be changed at the first sign-in.");
         return false;
     }
 }

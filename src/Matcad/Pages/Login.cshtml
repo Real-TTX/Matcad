@@ -2,68 +2,74 @@
 @model Matcad.Pages.LoginModel
 @{
     ViewData["Title"] = "Sign in";
-    Layout = "_LoginLayout";
+    Layout = "_PlainLayout";
 }
-<div class="login-card">
-    <h1 class="login-brand"><partial name="_Logo" /> Matcad</h1>
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    @if (Model.IdentityEnabled && Model.SsoError)
-    {
-        <div class="alert alert-error" id="login-sso-error">The sign-in through MatIdentity did not work, or MatIdentity cannot be reached. Sign in with your Matcad account.</div>
-    }
-    @if (Model.Denied)
-    {
-        <div class="alert alert-error" id="login-denied">MatIdentity signed you in, but Matcad cannot tell which account is yours (several accounts match, or the matching one is connected with another person). Ask an administrator.</div>
-    }
-    @if (Model.PendingLink != null)
-    {
-        <div class="alert alert-info" id="login-link">
-            An account named <strong>@(Model.PendingLink.Email ?? Model.PendingLink.PreferredUserName)</strong> exists here.
-            Sign in once with its password to connect it with MatIdentity, or cancel.
-        </div>
-    }
-    else if (Model.LinkExpired)
-    {
-        <div class="alert alert-info" id="login-link-expired">The request to connect an account with MatIdentity has expired. Sign in through MatIdentity again to start over.</div>
-    }
-    @if (Model.ShowLocalForm)
-    {
-        <form method="post" id="login-form" asp-route-local="1">
-            <input type="hidden" asp-for="ReturnUrl" />
-            <div class="form-group">
-                <label asp-for="Username">Username</label>
-                <input asp-for="Username" autocomplete="username" autofocus />
-            </div>
-            <div class="form-group">
-                <label asp-for="Password">Password</label>
-                <input asp-for="Password" type="password" autocomplete="current-password" />
-            </div>
-            <button type="submit" class="btn btn-primary btn-block">
-                <icon name="logout" /> Sign in
-            </button>
-        </form>
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>@Ui.App.Name</h1>
+        <p class="mat-muted">@Ui.App.Tagline</p>
+    </div>
+
+    <div class="mat-stack">
+        @if (Model.IdentityEnabled && Model.SsoError)
+        {
+            <div class="mat-alert mat-alert--warning" role="alert" id="login-sso-error">@Ui.Icon("alert")<div class="mat-alert__body">The sign-in through MatIdentity did not work, or MatIdentity cannot be reached. Sign in with your Matcad account.</div></div>
+        }
+        @if (Model.Denied)
+        {
+            <div class="mat-alert mat-alert--danger" role="alert" id="login-denied">@Ui.Icon("x-circle")<div class="mat-alert__body">MatIdentity signed you in, but Matcad cannot tell which account is yours (several accounts match, or the matching one is connected with another person). Ask an administrator.</div></div>
+        }
         @if (Model.PendingLink != null)
         {
-            <form method="post" asp-page-handler="CancelLink" class="login-alt">
-                <button type="submit" class="btn btn-block">Cancel, do not connect</button>
-            </form>
+            <div class="mat-alert mat-alert--info" role="status" id="login-link">@Ui.Icon("link")<div class="mat-alert__body">An account named <strong>@(Model.PendingLink.Email ?? Model.PendingLink.PreferredUserName)</strong> exists here. Sign in once with its password to connect it with MatIdentity, or cancel.</div></div>
         }
-    }
-    @if (Model.IdentityEnabled)
-    {
-        <p class="login-alt">
+        else if (Model.LinkExpired)
+        {
+            <div class="mat-alert mat-alert--info" role="status" id="login-link-expired">@Ui.Icon("info")<div class="mat-alert__body">The request to connect an account with MatIdentity has expired. Sign in through MatIdentity again to start over.</div></div>
+        }
+        @if (Model.SignedOut)
+        {
+            <div class="mat-alert mat-alert--success" role="status" id="login-signed-out">@Ui.Icon("check-circle")<div class="mat-alert__body">You are signed out.</div></div>
+        }
+
+        @if (Model.ShowLocalForm)
+        {
+            <form method="post" class="mat-form" id="login-form" asp-route-local="1" novalidate>
+                <input type="hidden" asp-for="ReturnUrl" />
+                @if (Model.Error != null)
+                {
+                    <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("alert")<div class="mat-alert__body">@Model.Error</div></div>
+                }
+                <mat-field label="Username or e-mail address" asp-for="Username">
+                    <input asp-for="Username" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus required data-msg-required="Please enter your username or e-mail address." />
+                </mat-field>
+                <mat-field label="Password" asp-for="Password">
+                    <input asp-for="Password" type="password" class="mat-input" autocomplete="current-password" required data-msg-required="Please enter your password." />
+                </mat-field>
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Sign in</span></button>
+                </div>
+            </form>
+            @if (Model.PendingLink != null)
+            {
+                <form method="post" asp-page-handler="CancelLink">
+                    <button type="submit" class="mat-btn mat-btn--secondary mat-btn--block" id="login-link-cancel">@Ui.Icon("x")<span>Cancel, do not connect</span></button>
+                </form>
+            }
+        }
+
+        @if (Model.IdentityEnabled)
+        {
             @if (Model.ShowLocalForm)
             {
-                <a class="btn btn-block" id="login-identity" href="@Model.IdentitySignInUrl">Sign in with MatIdentity</a>
+                <a class="mat-btn mat-btn--secondary mat-btn--block" id="login-identity" href="@Model.IdentitySignInUrl">@Ui.Icon("user-circle")<span>Sign in with MatIdentity</span></a>
             }
             else
             {
-                <a class="btn btn-primary btn-block" id="login-identity" href="@Model.IdentitySignInUrl">Sign in with MatIdentity</a>
-                <a class="text-muted" href="@Model.LocalSignInUrl">Sign in with a Matcad account</a>
+                <a class="mat-btn mat-btn--primary mat-btn--block" id="login-identity" href="@Model.IdentitySignInUrl">@Ui.Icon("user-circle")<span>Sign in with MatIdentity</span></a>
+                <p class="mat-text-center"><a class="mat-muted" id="login-local" href="@Model.LocalSignInUrl">Sign in with a Matcad account</a></p>
             }
-        </p>
-    }
+        }
+    </div>
 </div>

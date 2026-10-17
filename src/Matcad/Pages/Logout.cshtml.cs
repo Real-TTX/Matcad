@@ -7,8 +7,9 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Matcad.Pages;
 
 /// <summary>
-/// The sign-out. A session that began at MatIdentity (or was linked there) ends there too; with MatIdentity the browser then lands on
-/// <c>/Login?signedOut=1</c>, so it is not signed in again right away.
+/// Sign-out is a POST (with antiforgery token), so a foreign page cannot sign the user out with an image or link. A session that began at
+/// MatIdentity (or was linked there) ends there too; with MatIdentity the browser then lands on <c>/Login?signedOut=1</c>, so it is not signed
+/// in again right away.
 /// </summary>
 public class LogoutModel : PageModel
 {
@@ -21,10 +22,12 @@ public class LogoutModel : PageModel
         _platform = platform;
     }
 
-    public async Task<IActionResult> OnGetAsync()
+    public IActionResult OnGet() => RedirectToPage("/Index");
+
+    public async Task<IActionResult> OnPostAsync()
     {
         string? idToken = null;
-        if (SessionCookie.Token(HttpContext) is { } token)
+        if (Request.GetSessionToken() is { } token)
         {
             idToken = await _auth.GetSessionIdToken(token);
             await _auth.InvalidateSession(token);

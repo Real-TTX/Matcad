@@ -27,9 +27,4 @@
     <ProjectReference Include="..\..\src\Matcad\Matcad.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The icon sprite of MatUi (MatDesign src/MatUi/wwwroot/img/matui-icons.svg): the icons of the MatApiDefinition must be in it. -->
-    <None Include="Fixtures\matui-icons.svg" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

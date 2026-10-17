@@ -1,11 +1,59 @@
 @page
 @model Matcad.Pages.Providers.IndexModel
 @{
-    ViewData["Title"] = "Providers";
+    ViewData["Title"] = "DNS providers";
+    ViewData["PageSub"] = "The DNS services Matcad uses to prove a domain is yours for a wildcard certificate.";
+    ViewData["Crumbs"] = Crumbs.Of(("DNS providers", null));
 }
-<div class="card">
-    <partial name="Controls/_DataTable" model="Model.Table" />
-    <div class="list-actions">
-        <a class="btn btn-primary" asp-page="Edit"><icon name="add" /> New provider</a>
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon">@Ui.Icon(Model.Toolbar.SearchActive ? "search" : "cloud")</span>
+            @if (Model.Toolbar.SearchActive)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>Change the search, or reset it.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Index">@Ui.Icon("refresh")<span>Reset the tools</span></a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No DNS provider yet</div>
+                <p>You only need one for wildcard certificates (<code>*.domain</code>). Single hosts get theirs without.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Edit">@Ui.Icon("plus")<span>Add your first provider</span></a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">DNS providers</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="mat-hide-sm">Credentials</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Items)
+                    {
+                        <tr>
+                            <td data-label="Name"><div class="mat-table__name mat-row"><a asp-page="Edit" asp-route-id="@p.Id">@p.Name</a>@Ui.ManagedBy(p.ManagedBy)</div></td>
+                            <td data-label="Type"><span class="mat-tag">@Matcad.Config.ProviderTypes.DisplayName(p.Type)</span></td>
+                            <td data-label="Credentials" class="mat-hide-sm mat-muted mat-mono">@string.Join(", ", p.Credentials.Keys)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" asp-page="Edit">@Ui.Icon("plus")<span>New provider</span></a>
     </div>
 </div>

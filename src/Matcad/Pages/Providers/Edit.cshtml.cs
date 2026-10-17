@@ -93,14 +93,14 @@ public class EditModel : PageModel
         var (moduleName, credentials, error) = ReadForm();
         if (error != null) { Error = error; PopulateDisplay(credentials); return Page(); }
 
-        var provider = _store.Providers.FirstOrDefault(x => x.Id == Id) ?? new ProviderConfig();
-        provider.Id = Id ?? 0;
-        provider.Name = Name;
-        provider.Type = moduleName; // Type is the Caddy DNS module name
-        provider.Credentials = credentials;
+        if (!IsNew && _store.Providers.All(x => x.Id != Id)) return RedirectToPage("Index");
+        // Type is the Caddy DNS module name.
+        // A provider that another tool (Mattiverse) writes keeps its mark when it is edited by hand.
+        var provider = new ProviderConfig { Id = Id ?? 0, Name = Name.Trim(), Type = moduleName, Credentials = credentials,
+            ManagedBy = _store.Providers.FirstOrDefault(x => x.Id == Id)?.ManagedBy };
         _store.UpsertProvider(provider, User.GetUserId());
 
-        TempData["Flash"] = $"Provider '{Name}' saved.";
+        TempData["Flash"] = $"Provider '{provider.Name}' saved.";
         return RedirectToPage("Index");
     }
 

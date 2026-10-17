@@ -1,0 +1,14 @@
+@page "/StatusCode/{code:int?}"
+@model Matcad.Pages.StatusCodeModel
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "_PlainLayout";
+}
+<div class="mat-auth__card">
+    <div class="mat-empty">
+        <span class="mat-empty__icon">@Ui.Icon("compass")</span>
+        <h1 class="mat-empty__title">@Model.Title</h1>
+        <p>@Model.Message</p>
+        <a asp-page="/Index" class="mat-btn mat-btn--primary">@Ui.Icon("home")<span>Back to the dashboard</span></a>
+    </div>
+</div>

@@ -119,25 +119,41 @@ public class DockerService : BackgroundService
                 status = "Ignored · no port to proxy";
             else
             {
-                host = hasHostLabel ? h!.Trim() : $"{Sanitize(name)}.{baseDomain}";
+                host = (hasHostLabel ? h!.Trim() : $"{Sanitize(name)}.{baseDomain}").ToLowerInvariant();
                 if (labels.TryGetValue(DockerLabels.Auth, out var an) && !string.IsNullOrWhiteSpace(an))
                 {
                     authName = an.Trim();
                     authId = _store.Authentications
                         .FirstOrDefault(a => a.Name.Equals(authName, StringComparison.OrdinalIgnoreCase))?.Id;
                 }
-                status = "Bound";
-                routes.Add(new RouteConfig
+
+                if (!RouteEditor.IsHostName(host.StartsWith("*.") ? host[2..] : host))
                 {
-                    Host = host,
-                    Name = name,
-                    Wildcard = host.StartsWith("*."),
-                    Upstream = $"http://{name}:{port}",
-                    AuthenticationId = authId,
-                    Enabled = true,
-                    Source = "docker",
-                    SourceDetail = name
-                });
+                    // A container label is not trusted input: a bad host would make Caddy refuse the whole config.
+                    status = $"Ignored · '{host}' is not a valid host name";
+                    host = null;
+                }
+                else if (authName != null && authId == null)
+                {
+                    // Fail closed: a container that asks for a login is never published without one.
+                    status = $"Ignored · authentication '{authName}' does not exist";
+                    host = null;
+                }
+                else
+                {
+                    status = "Bound";
+                    routes.Add(new RouteConfig
+                    {
+                        Host = host,
+                        Name = name,
+                        Wildcard = host.StartsWith("*."),
+                        Upstream = $"http://{name}:{port}",
+                        AuthenticationId = authId,
+                        Enabled = true,
+                        Source = "docker",
+                        SourceDetail = name
+                    });
+                }
             }
 
             inventory.Add(new DockerContainerInfo(name, image, portsText,
@@ -159,7 +175,7 @@ public class DockerService : BackgroundService
     private static int ResolvePort(IDictionary<string, string> labels, ContainerListResponse c)
     {
         if (labels.TryGetValue(DockerLabels.Port, out var p) && int.TryParse(p, out var explicitPort))
-            return explicitPort;
+            return explicitPort is > 0 and <= 65535 ? explicitPort : 0;
         // Otherwise the lowest private TCP port the container exposes.
         var ports = (c.Ports ?? new List<Port>())
             .Where(x => string.Equals(x.Type, "tcp", StringComparison.OrdinalIgnoreCase) && x.PrivatePort > 0)

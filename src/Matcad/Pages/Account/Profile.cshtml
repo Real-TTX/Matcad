@@ -1,0 +1,61 @@
+@page
+@model Matcad.Pages.Account.ProfileModel
+@{
+    ViewData["Title"] = "Account";
+    ViewData["PageSub"] = "How you sign in, and your password.";
+    ViewData["Crumbs"] = Crumbs.Of(("Account", null));
+    ViewData["Width"] = "narrow";
+}
+
+<form method="post" class="mat-form" novalidate>
+    @if (Model.MustChange)
+    {
+        <div class="mat-alert mat-alert--warning" role="alert">@Ui.Icon("alert")<div class="mat-alert__body"><strong>Choose your own password.</strong> Please set it before you go on.</div></div>
+    }
+    @if (Model.Error != null)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+    }
+
+    <section class="mat-card" aria-labelledby="account-title">
+        <div class="mat-card__head">@Ui.Icon("user")<h2 class="mat-card__title" id="account-title">Your account</h2></div>
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                <mat-field label="Username" asp-for="Username" hint="Signs you in, like your e-mail address." required>
+                    <input asp-for="Username" class="mat-input" autocomplete="username" autocapitalize="none" spellcheck="false" required data-msg-required="Please enter a username." />
+                </mat-field>
+                <mat-field label="E-mail address" asp-for="Email" hint="Optional.">
+                    <input asp-for="Email" type="email" class="mat-input" autocomplete="email" autocapitalize="none" data-msg-type="Please enter an address like name@example.com." />
+                </mat-field>
+            </div>
+        </div>
+    </section>
+
+    <section class="mat-card" aria-labelledby="password-title">
+        <div class="mat-card__head">@Ui.Icon("key")<h2 class="mat-card__title" id="password-title">Password</h2></div>
+        <div class="mat-card__body">
+            <div class="mat-form__grid">
+                @if (!Model.MustChange)
+                {
+                    <mat-field label="Current password" asp-for="CurrentPassword" class="mat-field--full">
+                        <input asp-for="CurrentPassword" type="password" class="mat-input" autocomplete="current-password" />
+                    </mat-field>
+                }
+                <mat-field label="New password" asp-for="NewPassword" hint="At least 8 characters. Leave it empty to keep the current one." required="@Model.MustChange">
+                    <input asp-for="NewPassword" type="password" class="mat-input" autocomplete="new-password" />
+                </mat-field>
+                <mat-field label="New password again" asp-for="ConfirmPassword" required="@Model.MustChange">
+                    <input asp-for="ConfirmPassword" type="password" class="mat-input" autocomplete="new-password" />
+                </mat-field>
+            </div>
+        </div>
+    </section>
+
+    <mat-form-buttons>
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+        @if (!Model.MustChange)
+        {
+            <a class="mat-btn mat-btn--secondary" asp-page="/Index">@Ui.Icon("back")<span>Back</span></a>
+        }
+    </mat-form-buttons>
+</form>

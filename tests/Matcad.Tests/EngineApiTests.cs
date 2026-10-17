@@ -8,17 +8,17 @@ namespace Matcad.Tests;
 /// The engine API that Mattiverse drives (<c>/api/v1</c>, <c>Matcad__ApiKey</c>, Mattiverse docs/ENGINES.md) is unchanged by the platform contract:
 /// the same key, the same status codes, the same fields.
 /// </summary>
-public sealed class EngineApiTests(MatcadFactory site) : IClassFixture<MatcadFactory>
+public sealed class EngineApiTests(PlatformFactory site) : IClassFixture<PlatformFactory>
 {
     private static List<string> Names(JsonElement element) => element.EnumerateObject().Select(p => p.Name).ToList();
 
     [Fact]
     public async Task Status_keeps_its_shape()
     {
-        var response = await site.Api(MatcadFactory.EngineKey).GetAsync("/api/v1/status");
+        var response = await site.Api(PlatformFactory.EngineKey).GetAsync("/api/v1/status");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(["ok", "app", "version", "apiVersion", "baseDomain", "setupCompleted", "counts"], Names(doc.RootElement));
+        Assert.Equal(["ok", "app", "version", "apiVersion", "capabilities", "baseDomain", "setupCompleted", "counts"], Names(doc.RootElement));
         Assert.Equal(["providers", "routes", "authentications", "allRoutes"], Names(doc.RootElement.GetProperty("counts")));
         Assert.Equal("matcad", doc.RootElement.GetProperty("app").GetString());
         Assert.Equal(1, doc.RootElement.GetProperty("apiVersion").GetInt32());
@@ -27,7 +27,7 @@ public sealed class EngineApiTests(MatcadFactory site) : IClassFixture<MatcadFac
     [Fact]
     public async Task Only_the_engine_key_opens_it()
     {
-        foreach (var key in new[] { null, "wrong", MatcadFactory.PlatformKey })
+        foreach (var key in new[] { null, "wrong", PlatformFactory.PlatformKey })
         {
             var response = await site.Api(key).GetAsync("/api/v1/status");
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -39,7 +39,7 @@ public sealed class EngineApiTests(MatcadFactory site) : IClassFixture<MatcadFac
     [Fact]
     public async Task Routes_settings_and_certificates_keep_their_shape()
     {
-        var api = site.Api(MatcadFactory.EngineKey);
+        var api = site.Api(PlatformFactory.EngineKey);
         var post = await api.PostAsJsonAsync("/api/v1/routes", new
         {
             host = "pin.example.com",
@@ -55,7 +55,8 @@ public sealed class EngineApiTests(MatcadFactory site) : IClassFixture<MatcadFac
             Assert.Equal(["route", "applied"], Names(doc.RootElement));
             Assert.Equal(
                 ["id", "name", "host", "wildcard", "upstream", "insecureSkipVerify", "fallbackUrl", "redirectPermanent", "authenticationId",
-                 "providerId", "acmeEmail", "enabled", "allowEmbedding", "listenPort", "managedBy"],
+                 "providerId", "acmeEmail", "enabled", "allowEmbedding", "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps",
+                 "managedBy"],
                 Names(doc.RootElement.GetProperty("route")));
             Assert.Equal(["ok", "error"], Names(doc.RootElement.GetProperty("applied")));
         }
@@ -65,7 +66,7 @@ public sealed class EngineApiTests(MatcadFactory site) : IClassFixture<MatcadFac
             var route = doc.RootElement.EnumerateArray().Single(r => r.GetProperty("host").GetString() == "pin.example.com");
             Assert.Equal(
                 ["id", "name", "host", "wildcard", "upstream", "fallbackUrl", "authenticationId", "providerId", "enabled", "allowEmbedding",
-                 "listenPort", "managedBy", "source", "sourceDetail", "editable", "certKind", "certSubject"],
+                 "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps", "managedBy", "source", "sourceDetail", "editable", "certKind", "certSubject"],
                 Names(route));
         }
 

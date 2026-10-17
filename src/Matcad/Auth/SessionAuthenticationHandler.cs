@@ -16,6 +16,7 @@ namespace Matcad.Auth;
 public class SessionAuthenticationHandler : SignOutAuthenticationHandler<AuthenticationSchemeOptions>
 {
     public const string SchemeName = "MatcadSession";
+    public const string MustChangePasswordClaim = "matcad:must-change-password";
 
     private readonly AuthService _auth;
 
@@ -30,22 +31,20 @@ public class SessionAuthenticationHandler : SignOutAuthenticationHandler<Authent
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Cookies.TryGetValue(AuthService.CookieName, out var raw) ||
-            !Guid.TryParse(raw, out var token))
-        {
+        if (Request.GetSessionToken() is not { } token)
             return AuthenticateResult.NoResult();
-        }
 
         var user = await _auth.GetUserBySession(token);
         if (user == null)
             return AuthenticateResult.NoResult();
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.Role.ToString())
         };
+        if (user.MustChangePassword) claims.Add(new Claim(MustChangePasswordClaim, "true"));
         var identity = new ClaimsIdentity(claims, SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return AuthenticateResult.Success(ticket);
@@ -54,7 +53,7 @@ public class SessionAuthenticationHandler : SignOutAuthenticationHandler<Authent
     // Ends the session (a sign-out started by MatIdentity through the OpenID Connect handler signs out this scheme).
     protected override async Task HandleSignOutAsync(AuthenticationProperties? properties)
     {
-        if (SessionCookie.Token(Context) is { } token) await _auth.InvalidateSession(token);
+        if (Request.GetSessionToken() is { } token) await _auth.InvalidateSession(token);
         Response.Cookies.Delete(AuthService.CookieName);
     }
 
@@ -78,4 +77,11 @@ public static class ClaimsPrincipalExtensions
 
     public static bool IsAdmin(this ClaimsPrincipal principal) =>
         principal.IsInRole(nameof(UserRole.Admin));
+
+    public static bool MustChangePassword(this ClaimsPrincipal principal) =>
+        principal.HasClaim(c => c.Type == SessionAuthenticationHandler.MustChangePasswordClaim);
+
+    public static Guid? GetSessionToken(this HttpRequest request) =>
+        request.Cookies.TryGetValue(AuthService.CookieName, out var raw) && Guid.TryParse(raw, out var token)
+            ? token : null;
 }

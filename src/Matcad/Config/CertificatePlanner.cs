@@ -51,7 +51,7 @@ public static class CertificatePlanner
         ForHost(route.Host, WildcardParents(all));
 
     /// <summary>The certificates Caddy will actually manage for the enabled routes.</summary>
-    public static CertPlan Plan(IEnumerable<RouteConfig> all, List<ProviderConfig> providers)
+    public static CertPlan Plan(IEnumerable<RouteConfig> all, IEnumerable<ProviderConfig> providers)
     {
         var enabled = all.Where(r => r.Enabled && !string.IsNullOrWhiteSpace(r.Host)).ToList();
         var wp = WildcardParents(enabled);

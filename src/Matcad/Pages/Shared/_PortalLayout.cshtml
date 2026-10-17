@@ -1,0 +1,31 @@
+@inject Toolkit Toolkit
+@{
+    // The colour of the login page: the accent of its authentication (#rrggbb, checked when it was saved), or the colour of the app.
+    var accent = ViewData["BrandAccent"] as string;
+}
+<!DOCTYPE html>
+<html lang="en" data-app="@Ui.App.Id" @(accent is null ? null : Html.Raw($"data-accent=\"custom\" style=\"--mat-custom-accent:{accent};--mat-custom-on-accent:{BrandAccent.OnAccent(accent)}\""))>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <title>@ViewData["Title"] · @Ui.App.Name</title>
+    @*
+        The login portal of a Matcad authentication. In "inline" portal mode it is served through the protected host itself (Caddy proxies only /auth/* to
+        Matcad), where the static files of the app are not reachable: the toolkit and the styles of the app are served under /auth/ui/ and /auth/css/ for this page. There is no manifest and no
+        service worker: a protected site is not a Matcad app.
+    *@
+    <script src="/auth/ui/matui.boot.js"></script>
+    <link rel="stylesheet" href="/auth/ui/matui.css" />
+    <link rel="stylesheet" href="/auth/css/matcad.css" />
+</head>
+<body>
+    <a class="mat-skip" href="#main">Skip to the content</a>
+    @Html.Raw(Toolkit.Sprite)
+    <main class="mat-auth" id="main">
+        @RenderBody()
+    </main>
+    <script src="/auth/ui/matui.js"></script>
+</body>
+</html>

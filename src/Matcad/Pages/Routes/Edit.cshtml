@@ -1,278 +1,251 @@
 @page
 @model Matcad.Pages.Routes.EditModel
 @{
-    ViewData["Title"] = Model.IsNew ? "Create route" : "Edit route";
-
-    string Sel(long? current, string value) =>
-        (current?.ToString() ?? "") == value ? "selected" : "";
+    ViewData["Title"] = Model.IsNew ? "New route" : "Edit route";
+    ViewData["PageSub"] = Model.PortBinding is null
+        ? "A host name, where its requests go, and who may see it."
+        : "A port binding forwards a port of the proxy to a service.";
+    ViewData["Crumbs"] = Crumbs.Of(("Routes", "/Routes"), (Model.IsNew ? "New route" : "Edit route", null));
+    ViewData["Width"] = "narrow";
 }
-<div class="card">
-    @if (Model.Error != null)
-    {
-        <div class="alert alert-error">@Model.Error</div>
-    }
-    <form method="post">
+
+@if (Model.PortBinding is { } port)
+{
+    <form method="post" class="mat-form" novalidate>
+        <input type="hidden" asp-for="Id" />
+        @if (Model.Error != null)
+        {
+            <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+        }
+        <div class="mat-alert mat-alert--info">
+            @Ui.Icon("info")
+            <div class="mat-alert__body">This is a port binding (<code>:@port</code>). It is managed through the API: the proxy listens on that port and forwards to <code>@Model.Upstream</code>. Here it can only be deleted.</div>
+        </div>
+        <mat-form-buttons>
+            <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete the port binding :@port?" data-confirm-ok="Delete">
+                @Ui.Icon("trash")<span>Delete</span>
+            </button>
+        </mat-form-buttons>
+    </form>
+}
+else
+{
+    <form method="post" class="mat-form" novalidate data-wildcard-parents="@Model.WildcardParentsJson" id="route-form">
         <input type="hidden" asp-for="Id" />
 
-        <div class="form-group">
-            <label>Type</label>
-            <div class="segmented">
-                <label class="seg-option">
-                    <input type="radio" asp-for="RouteType" value="single" onchange="matcadRouteType('single')" />
-                    <span><icon name="routes" /> Single domain</span>
-                </label>
-                <label class="seg-option">
-                    <input type="radio" asp-for="RouteType" value="wildcard" onchange="matcadRouteType('wildcard')" />
-                    <span><icon name="network" /> Wildcard</span>
-                </label>
-            </div>
-            <div class="hint" id="type-hint"></div>
-        </div>
+        @if (Model.Error != null)
+        {
+            <div class="mat-alert mat-alert--danger" role="alert">@Ui.Icon("x-circle")<div class="mat-alert__body">@Model.Error</div></div>
+        }
 
-        <div class="form-row">
-            <div class="form-group">
-                <label asp-for="Host">Host</label>
-                <input asp-for="Host" id="host-input" autofocus />
-                <div class="hint" id="host-hint"></div>
-            </div>
-            <div class="form-group">
-                <label asp-for="Name">Name</label>
-                <input asp-for="Name" placeholder="optional - otherwise the host is used" />
-            </div>
-        </div>
+        <section class="mat-card" aria-labelledby="route-host-title">
+            <div class="mat-card__head">@Ui.Icon("route")<h2 class="mat-card__title" id="route-host-title">Host</h2></div>
+            <div class="mat-card__body mat-stack">
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-legend">Type</legend>
+                    <div class="mat-choices">
+                        <label class="mat-choice">
+                            <input type="radio" asp-for="RouteType" value="single" id="route-type-single" />
+                            <span class="mat-choice__text"><strong>Single domain</strong><small>One concrete host, for example app.example.com</small></span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" asp-for="RouteType" value="wildcard" id="route-type-wildcard" />
+                            <span class="mat-choice__text"><strong>Wildcard</strong><small>One certificate for every subdomain of a domain</small></span>
+                        </label>
+                    </div>
+                </fieldset>
 
-        <div class="alert alert-warn" id="wildcard-nudge" style="display:none">
-            <span id="wildcard-nudge-text"></span>
-            <button type="button" class="btn btn-sm" id="wildcard-nudge-btn" style="margin-left:.5rem" onclick="matcadUseWildcard()">
-                <icon name="network" /> Use wildcard instead
-            </button>
-        </div>
-
-        <div class="form-group">
-            <label>Target</label>
-            <div class="segmented">
-                <label class="seg-option">
-                    <input type="radio" asp-for="Target" value="proxy" onchange="matcadTarget('proxy')" />
-                    <span><icon name="routes" /> Reverse proxy</span>
-                </label>
-                <label class="seg-option">
-                    <input type="radio" asp-for="Target" value="redirect" onchange="matcadTarget('redirect')" />
-                    <span><icon name="open" /> Redirect</span>
-                </label>
-            </div>
-        </div>
-
-        <div id="proxy-block">
-            <div class="form-group">
-                <label asp-for="Upstream">Upstream (reverse-proxy target)</label>
-                <input asp-for="Upstream" placeholder="http://backend:8080 or whoami:80" />
-                <div class="hint">Requests are proxied to this backend.</div>
-            </div>
-            <div class="form-group">
-                <label style="font-weight:400">
-                    <input type="checkbox" asp-for="InsecureSkipVerify" /> Skip TLS verification (insecure)
-                </label>
-                <div class="hint">For <code>https://</code> upstreams with a self-signed or invalid
-                    certificate. Ignored for plain <code>http://</code> backends.</div>
-            </div>
-            <div class="form-group">
-                <label style="font-weight:400">
-                    <input type="checkbox" asp-for="AllowEmbedding" /> Allow embedding in an iframe
-                </label>
-                <div class="hint">Strips <code>X-Frame-Options</code> and CSP <code>frame-ancestors</code>
-                    from responses so this site can be shown inside another page (e.g. a matOS window).
-                    Off by default — only enable it for apps you want to embed.</div>
-            </div>
-        </div>
-
-        <div id="redirect-block" style="display:none">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="redirect-preset">Redirect to</label>
-                    <select id="redirect-preset" onchange="matcadRedirectPreset(this.value)">
-                        <option value="">- pick an existing domain -</option>
-                        @foreach (var t in Model.RedirectTargets)
-                        {
-                            <option value="@t">@t</option>
-                        }
-                        <option value="__other__">Other (custom URL)...</option>
-                    </select>
-                    <div class="hint">Every request to this host is redirected here.</div>
+                <div class="mat-form__grid">
+                    <mat-field label="Host" asp-for="Host" required>
+                        <input asp-for="Host" id="host-input" class="mat-input" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus required data-msg-required="Please enter a host." />
+                        <span class="mat-hint" id="host-hint"></span>
+                    </mat-field>
+                    <mat-field label="Name" asp-for="Name" hint="Optional. The host is used when it is empty.">
+                        <input asp-for="Name" class="mat-input" />
+                    </mat-field>
                 </div>
-                <div class="form-group" style="max-width:260px">
-                    <label>Redirect type</label>
-                    <label style="font-weight:400"><input type="checkbox" asp-for="RedirectPermanent" /> Permanent (301)</label>
-                    <div class="hint">Leave off for a temporary redirect (302).</div>
+
+                <div class="mat-alert mat-alert--warning" id="wildcard-nudge" hidden>
+                    @Ui.Icon("alert")
+                    <div class="mat-alert__body">
+                        <span id="wildcard-nudge-text"></span>
+                        <div class="mat-alert__actions">
+                            <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" id="wildcard-nudge-btn">@Ui.Icon("network")<span>Use a wildcard instead</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <label class="mat-switch"><input type="checkbox" asp-for="Enabled" /><span class="mat-switch__track"></span><span>Route active</span></label>
+            </div>
+        </section>
+
+        <section class="mat-card" aria-labelledby="route-target-title">
+            <div class="mat-card__head">@Ui.Icon("external")<h2 class="mat-card__title" id="route-target-title">Target</h2></div>
+            <div class="mat-card__body mat-stack">
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-legend">What happens to a request</legend>
+                    <div class="mat-choices">
+                        <label class="mat-choice">
+                            <input type="radio" asp-for="Target" value="proxy" id="target-proxy" />
+                            <span class="mat-choice__text"><strong>Reverse proxy</strong><small>Forward it to a service</small></span>
+                        </label>
+                        <label class="mat-choice">
+                            <input type="radio" asp-for="Target" value="redirect" id="target-redirect" />
+                            <span class="mat-choice__text"><strong>Redirect</strong><small>Send the visitor to another address</small></span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="mat-stack" data-show-if="#target-proxy" data-show-value="proxy">
+                    <mat-field label="Upstream" asp-for="Upstream" hint="Requests are forwarded to this service, for example http://backend:8080 or whoami:80." required>
+                        <input asp-for="Upstream" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" required data-msg-required="Please enter the service to forward to." />
+                    </mat-field>
+                    <div class="mat-field">
+                        <label class="mat-switch"><input type="checkbox" asp-for="InsecureSkipVerify" /><span class="mat-switch__track"></span><span>Skip TLS verification (insecure)</span></label>
+                        <span class="mat-hint">For <code>https://</code> upstreams with a self-signed or invalid certificate. Ignored for plain <code>http://</code> services.</span>
+                    </div>
+                    <div class="mat-field">
+                        <label class="mat-switch"><input type="checkbox" asp-for="AllowEmbedding" /><span class="mat-switch__track"></span><span>Allow embedding in a frame</span></label>
+                        <span class="mat-hint">Removes <code>X-Frame-Options</code> and the CSP <code>frame-ancestors</code> from the responses, so this site can be shown inside another page (for example Mattiverse or MatOS). Off by default: only turn it on for apps you want to embed.</span>
+                    </div>
+                </div>
+
+                <div class="mat-stack" data-show-if="#target-redirect" data-show-value="redirect">
+                    <div class="mat-form__grid">
+                        <div class="mat-field">
+                            <label class="mat-label" for="redirect-preset">Redirect to</label>
+                            <select id="redirect-preset" class="mat-select">
+                                <option value="">Pick an existing domain</option>
+                                @foreach (var t in Model.RedirectTargets)
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                                <option value="__other__">Another address</option>
+                            </select>
+                            <span class="mat-hint">Every request to this host is redirected there.</span>
+                        </div>
+                        <div class="mat-field">
+                            <label class="mat-switch"><input type="checkbox" asp-for="PermanentRedirect" /><span class="mat-switch__track"></span><span>Permanent (301)</span></label>
+                            <span class="mat-hint">Leave it off for a temporary redirect (302).</span>
+                        </div>
+                    </div>
+                    <div id="redirect-url-group" hidden>
+                        <mat-field label="Target address" asp-for="FallbackUrl">
+                            <input asp-for="FallbackUrl" type="url" class="mat-input" placeholder="https://target.example.com" autocapitalize="none" spellcheck="false" />
+                        </mat-field>
+                    </div>
                 </div>
             </div>
-            <div class="form-group" id="redirect-url-group" style="display:none">
-                <label asp-for="FallbackUrl">Target URL</label>
-                <input asp-for="FallbackUrl" placeholder="https://target.example.com" />
-            </div>
-        </div>
+        </section>
 
-        <div class="form-row">
-            <div class="form-group">
-                <label asp-for="AuthenticationId">Authentication</label>
-                <select asp-for="AuthenticationId">
-                    @foreach (var (value, text) in Model.AuthOptions)
-                    {
-                        <option value="@value" selected="@(Sel(Model.AuthenticationId, value) == "selected")">@text</option>
-                    }
-                </select>
-            </div>
-            <div class="form-group" id="provider-block">
-                <label asp-for="ProviderId">DNS provider <span class="text-muted">(required for the wildcard certificate)</span></label>
-                <select asp-for="ProviderId">
-                    @foreach (var (value, text) in Model.ProviderOptions)
-                    {
-                        <option value="@value" selected="@(Sel(Model.ProviderId, value) == "selected")">@text</option>
-                    }
-                </select>
-                <div class="hint">A wildcard certificate (<code>*.domain</code>) covers all subdomains -
-                    subdomain routes then don't need their own provider.</div>
-            </div>
-        </div>
+        <section class="mat-card" aria-labelledby="route-access-title">
+            <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="route-access-title">Access and certificate</h2></div>
+            <div class="mat-card__body mat-stack">
+                <div class="mat-form__grid">
+                    <mat-field label="Authentication" asp-for="AuthenticationId">
+                        <select asp-for="AuthenticationId" class="mat-select">
+                            @foreach (var (value, text) in Model.AuthOptions)
+                            {
+                                <option value="@value" selected="@((Model.AuthenticationId?.ToString() ?? "") == value)">@text</option>
+                            }
+                        </select>
+                    </mat-field>
+                    <div data-show-if="#route-type-wildcard" data-show-value="wildcard">
+                        <mat-field label="DNS provider" asp-for="ProviderId" hint="Needed for the wildcard certificate. It also covers the subdomains, so their routes need no provider of their own.">
+                            <select asp-for="ProviderId" class="mat-select">
+                                @foreach (var (value, text) in Model.ProviderOptions)
+                                {
+                                    <option value="@value" selected="@((Model.ProviderId?.ToString() ?? "") == value)">@text</option>
+                                }
+                            </select>
+                        </mat-field>
+                    </div>
+                </div>
 
-        <div class="form-row" id="acme-email-block">
-            <div class="form-group">
-                <label asp-for="AcmeEmail">ACME email <span class="text-muted">(optional, per domain)</span></label>
-                <input asp-for="AcmeEmail" type="email" placeholder="empty = global email from Settings" />
-                <div class="hint">Contact email for this domain's certificate. Overrides the global
-                    ACME email (<a asp-page="/Settings/Index">Settings -> Caddy &amp; TLS</a>).</div>
+                <div data-show-if="#route-type-wildcard" data-show-value="wildcard">
+                    <mat-field label="ACME e-mail address" asp-for="AcmeEmail" hint="Optional. The contact for the certificate of this domain; it replaces the global address under Settings.">
+                        <input asp-for="AcmeEmail" type="email" class="mat-input" autocapitalize="none" autocomplete="off" />
+                    </mat-field>
+                </div>
             </div>
-            <div class="form-group"></div>
-        </div>
+        </section>
 
-        <div class="form-group">
-            <label>
-                <input type="checkbox" asp-for="Enabled" /> Route active
-            </label>
-        </div>
+        <section class="mat-card" aria-labelledby="route-guard-title">
+            <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="route-guard-title">Guards and upstream</h2></div>
+            <div class="mat-card__body mat-stack">
+                <details class="mat-collapse" open="@Model.AccessOpen" id="route-access">
+                    <summary><span>Who may reach this route, and what the service is told</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <mat-field label="Allowed IP addresses" asp-for="AllowedIpsText" hint="Optional. One address or range per line, IPv4 or IPv6, for example 203.0.113.7 or 10.0.0.0/8. Every other address is refused with 403. It is checked against the connection Caddy sees, not X-Forwarded-For: behind Docker Desktop or a NAT that can be the gateway, not the visitor.">
+                            <textarea asp-for="AllowedIpsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="203.0.113.7&#10;10.0.0.0/8"></textarea>
+                        </mat-field>
 
-        <div class="btn-row">
-            <button type="submit" class="btn btn-primary"><icon name="save" /> Save</button>
-            <a class="btn" asp-page="Index"><icon name="back" /> Back</a>
+                        <div class="mat-form__grid">
+                            <mat-field label="Required header" asp-for="RequireName" hint="Optional. A request without exactly this header and value is refused with 403, before anything else runs; the header is removed again before the request goes to the service. Clear the name to remove it.">
+                                <input asp-for="RequireName" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Edge-Secret" />
+                            </mat-field>
+                            <mat-field label="Header value" for-id="RequireValue" hint="At least 16 characters, visible ASCII without spaces, * { or }. It is never shown again; leave it empty to keep the saved one.">
+                                <input type="password" id="RequireValue" name="RequireValue" class="mat-input mat-mono" autocomplete="new-password" placeholder="@(Model.RequireSet ? "Set - leave empty to keep" : "")" />
+                            </mat-field>
+                        </div>
+
+                        <div class="mat-stack" data-show-if="#target-proxy" data-show-value="proxy">
+                            <mat-field label="Host header to the upstream" asp-for="UpstreamHost" hint="Optional. Sent to the service instead of the host the visitor asked for, for example when the service is another Matcad that routes by host. For an https:// upstream it is also the name of the TLS handshake (and the certificate check).">
+                                <input asp-for="UpstreamHost" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="app.example.com" />
+                            </mat-field>
+
+                            <div class="mat-field">
+                                <span class="mat-label">Headers to the upstream</span>
+                                <div class="mat-table-wrap">
+                                    <table class="mat-table" id="upstream-headers">
+                                        <caption class="mat-sr-only">Headers sent to the upstream</caption>
+                                        <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var row in Model.HeaderRows)
+                                            {
+                                                <tr>
+                                                    <td data-label="Name"><input name="HeaderNames" value="@row.Name" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                                    <td data-label="Value"><input name="HeaderValues" type="password" class="mat-input mat-mono" placeholder="@(row.ValueSet ? "Set - leave empty to keep" : "")" aria-label="Header value" autocomplete="new-password" /></td>
+                                                    <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the header @row.Name" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <span class="mat-hint">Set on every request to the service; they replace a header of the same name that the visitor sent. The values are never shown again; leave one empty to keep the saved value, remove the row to delete the header.</span>
+                            </div>
+                            <div class="mat-actions">
+                                <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#upstream-headers tbody" data-template="header-row-template">@Ui.Icon("plus")<span>Add a header</span></button>
+                            </div>
+                            <template id="header-row-template">
+                                <tr>
+                                    <td data-label="Name"><input name="HeaderNames" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Edge-Secret" /></td>
+                                    <td data-label="Value"><input name="HeaderValues" type="password" class="mat-input mat-mono" aria-label="Header value" autocomplete="new-password" /></td>
+                                    <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the header" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                </tr>
+                            </template>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <mat-form-buttons>
+            <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("save")<span>Save</span></button>
+            <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>
             @if (!Model.IsNew)
             {
-                <span class="spacer"></span>
-                <button type="submit" class="btn btn-danger" asp-page-handler="Delete"
-                        formnovalidate data-confirm="Delete this route?">
-                    <icon name="delete" /> Delete
+                <span class="mat-btn-row__spacer"></span>
+                <button type="submit" class="mat-btn mat-btn--danger" asp-page-handler="Delete" formnovalidate data-confirm="Delete the route @Model.Host? This cannot be undone." data-confirm-ok="Delete">
+                    @Ui.Icon("trash")<span>Delete</span>
                 </button>
             }
-        </div>
+        </mat-form-buttons>
     </form>
-</div>
+}
 
 @section Scripts {
-    <script>
-        const matcadWildcardParents = @Html.Raw(Model.WildcardParentsJson);
-
-        function matcadCurrentType() {
-            return document.querySelector('input[name="RouteType"]:checked')?.value || 'single';
-        }
-
-        function matcadParentOf(host) {
-            const i = host.indexOf('.');
-            return i > 0 ? host.slice(i + 1) : '';
-        }
-
-        // Warn when a single host (subdomain OR apex) is not covered by any
-        // wildcard route, so it would get its own individual certificate.
-        function matcadCheckWildcard() {
-            const nudge = document.getElementById('wildcard-nudge');
-            const host = (document.getElementById('host-input').value || '').trim().toLowerCase().replace(/\.+$/, '');
-            const labels = host.split('.').filter(Boolean).length;
-            const internal = host === 'localhost' || host.endsWith('.localhost') || /^[0-9.]+$/.test(host);
-            // The base domain a *.base wildcard would need to cover this host:
-            // a subdomain (3+ labels) needs *.<immediate parent>; an apex (2 labels)
-            // is folded into its own *.<host> wildcard cert.
-            const base = labels >= 3 ? matcadParentOf(host) : host;
-            const covered = matcadWildcardParents.some(p => p.toLowerCase() === base);
-            if (matcadCurrentType() === 'single' && labels >= 2 && !host.startsWith('*.') && !internal && !covered) {
-                document.getElementById('wildcard-nudge-text').textContent =
-                    'No wildcard covers "' + host + '" -> Caddy will request an individual certificate for it. ' +
-                    'Add a *.' + base + ' wildcard route to cover it (and its subdomains) with a single certificate.';
-                nudge.dataset.parent = base;
-                // Converting to a wildcard replaces this host; only offer it for a
-                // subdomain. For an apex we just warn (you keep the apex route and
-                // add a separate *.domain wildcard).
-                document.getElementById('wildcard-nudge-btn').style.display = labels >= 3 ? '' : 'none';
-                nudge.style.display = '';
-            } else {
-                nudge.style.display = 'none';
-            }
-        }
-
-        function matcadUseWildcard() {
-            const parent = document.getElementById('wildcard-nudge').dataset.parent;
-            if (!parent) return;
-            document.querySelector('input[name="RouteType"][value="wildcard"]').checked = true;
-            document.getElementById('host-input').value = '*.' + parent;
-            matcadRouteType('wildcard');
-        }
-
-        function matcadRouteType(type) {
-            const host = document.getElementById('host-input');
-            const provider = document.getElementById('provider-block');
-            const acme = document.getElementById('acme-email-block');
-            const hostHint = document.getElementById('host-hint');
-            const typeHint = document.getElementById('type-hint');
-            if (type === 'wildcard') {
-                // Make the wildcard explicit: ensure the host starts with "*.".
-                const h = host.value.trim();
-                if (!h.startsWith('*.')) host.value = '*.' + h.replace(/^[*.]+/, '');
-                provider.style.display = '';
-                acme.style.display = '';
-                host.placeholder = '*.example.com';
-                hostHint.textContent = 'Wildcard: enter *.your-domain. Covers all direct subdomains (and the apex if you also add it). Requires a DNS provider (DNS-01).';
-                typeHint.textContent = 'One certificate for the whole domain; individual subdomains inherit it.';
-            } else {
-                // Drop a stray "*." when switching back to a single host.
-                if (host.value.trim().startsWith('*.')) host.value = host.value.trim().slice(2);
-                provider.style.display = 'none';
-                acme.style.display = 'none';
-                host.placeholder = 'app.example.com';
-                hostHint.textContent = 'Exactly one host. Certificate via HTTP challenge - or covered by a wildcard route.';
-                typeHint.textContent = 'A single concrete host.';
-            }
-            matcadCheckWildcard();
-        }
-
-        function matcadTarget(t) {
-            document.getElementById('proxy-block').style.display = t === 'redirect' ? 'none' : '';
-            document.getElementById('redirect-block').style.display = t === 'redirect' ? '' : 'none';
-        }
-
-        // Redirect target: a preset picker of existing domains fills the (hidden)
-        // URL field; "Other" reveals it for a free-text target.
-        function matcadRedirectPreset(v) {
-            const grp = document.getElementById('redirect-url-group');
-            const url = document.getElementById('FallbackUrl');
-            if (v === '__other__') { grp.style.display = ''; url.focus(); }
-            else { grp.style.display = 'none'; url.value = v; }
-        }
-        function matcadRedirectInit() {
-            const url = document.getElementById('FallbackUrl');
-            const sel = document.getElementById('redirect-preset');
-            const grp = document.getElementById('redirect-url-group');
-            const val = (url.value || '').trim();
-            if (!val) { sel.value = ''; grp.style.display = 'none'; return; }
-            if (Array.from(sel.options).some(o => o.value === val)) { sel.value = val; grp.style.display = 'none'; }
-            else { sel.value = '__other__'; grp.style.display = ''; }
-        }
-
-        document.getElementById('host-input').addEventListener('input', matcadCheckWildcard);
-        matcadRouteType(matcadCurrentType());
-        matcadTarget(document.querySelector('input[name="Target"]:checked')?.value || 'proxy');
-        matcadRedirectInit();
-
-        // When prefilled as ".example.com" (Add subdomain), put the cursor at the
-        // very start so the user just types the subdomain label.
-        (function () {
-            const h = document.getElementById('host-input');
-            if (h && h.value.startsWith('.')) { h.focus(); h.setSelectionRange(0, 0); }
-        })();
-    </script>
+    <script src="~/js/route-edit.js" asp-append-version="true"></script>
 }

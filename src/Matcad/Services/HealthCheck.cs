@@ -11,7 +11,8 @@ public static class HealthCheck
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            using var response = await http.GetAsync("http://127.0.0.1:4433/api/health");
+            var port = Environment.GetEnvironmentVariable("Matcad__Port") ?? "4433";
+            using var response = await http.GetAsync($"http://127.0.0.1:{port}/api/health");
             return response.IsSuccessStatusCode ? 0 : 1;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)

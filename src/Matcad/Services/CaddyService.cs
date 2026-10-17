@@ -17,6 +17,7 @@ public class CaddyService
     private readonly ConfigStore _store;
     private readonly IConfiguration _cfg;
     private readonly ILogger<CaddyService> _log;
+    private readonly SemaphoreSlim _pushLock = new(1, 1);
 
     public CaddyService(IHttpClientFactory http, CaddyConfigGenerator generator,
         ConfigStore store, IConfiguration cfg, ILogger<CaddyService> log)
@@ -74,9 +75,19 @@ public class CaddyService
     /// <summary>Regenerates and pushes the config. Returns (success, error?).</summary>
     public async Task<(bool Ok, string? Error)> ApplyAsync(CancellationToken ct = default)
     {
-        var result = await PushAsync(ct);
-        LastApply = new CaddyApplyResult(DateTimeOffset.Now, result.Ok, result.Error);
-        return result;
+        // One push at a time, each built when it is its turn: two quick changes cannot reach Caddy in reverse order
+        // (and LastApply is the outcome of the push that really came last).
+        await _pushLock.WaitAsync(ct);
+        try
+        {
+            var result = await PushAsync(ct);
+            LastApply = new CaddyApplyResult(DateTimeOffset.Now, result.Ok, result.Error);
+            return result;
+        }
+        finally
+        {
+            _pushLock.Release();
+        }
     }
 
     /// <summary>True when Caddy's admin API answers (a short timeout: the platform's status must not hang).</summary>
@@ -95,11 +106,12 @@ public class CaddyService
         }
     }
 
+    // Called under _pushLock only.
     private async Task<(bool Ok, string? Error)> PushAsync(CancellationToken ct)
     {
-        var json = BuildJson();
         try
         {
+            var json = BuildJson();
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(15);
             var content = new StringContent(json, Encoding.UTF8, "application/json");

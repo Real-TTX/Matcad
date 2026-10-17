@@ -1,6 +1,6 @@
-using System.Reflection;
 using System.Text.Json;
 using Matcad.Config;
+using Matcad.Controls;
 using Matcad.Services;
 using MatPlatform;
 
@@ -21,9 +21,9 @@ public sealed class MatcadPlatform(
     ILogger<MatcadPlatform> log) : IMatPlatformState, IMatPlatformConfiguration, IMatPlatformActions, IMatPlatformHealth
 {
     /// <summary>The id of Matcad in the platform (MatDesign AppRegistry) and the default client id in MatIdentity.</summary>
-    public const string AppId = "matcad";
+    public const string AppId = Ui.App.Id;
 
-    public const string Accent = "#2f6feb";
+    public const string Accent = Ui.App.Accent;
 
     /// <summary>A certificate that expires sooner than this is a warning, sooner than <see cref="ExpiryError"/> an error (Caddy renews 30 days ahead).</summary>
     public static readonly TimeSpan ExpiryWarning = TimeSpan.FromDays(14);
@@ -35,8 +35,7 @@ public sealed class MatcadPlatform(
     /// <summary>A host name, optionally a wildcard-free domain; empty is allowed (not set).</summary>
     public const string HostPattern = @"^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$";
 
-    public static string Version { get; } = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "local";
+    public static string Version => Ui.Version;
 
     /// <summary>The MatApiDefinition of Matcad (<c>GET /api</c>); <c>auth</c> and <c>endpoints</c> are filled in by MatPlatform.</summary>
     public static void Describe(MatPlatformBuilder o)
@@ -106,7 +105,7 @@ public sealed class MatcadPlatform(
 
         o.LinkAction("open", T("Matcad öffnen", "Open Matcad"), "external", "/");
         o.LinkAction("openRoutes", T("Routen", "Routes"), "route", "/Routes");
-        o.LinkAction("openCertificates", T("Zertifikate", "Certificates"), "shield", "/Settings#certs");
+        o.LinkAction("openCertificates", T("Zertifikate", "Certificates"), "shield", "/Settings?tab=certificates");
         o.PostAction("reloadCaddy", T("Konfiguration neu an Caddy senden", "Push the config to Caddy again"), "refresh");
         o.PostAction("checkCertificates", T("Zertifikate jetzt prüfen", "Check the certificates now"), "check-circle");
 

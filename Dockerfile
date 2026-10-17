@@ -41,6 +41,6 @@ VOLUME ["/data"]
 EXPOSE 4433
 ENV ASPNETCORE_ENVIRONMENT=Production
 # The image has no curl: the app asks its own /api/health (200 for ok and degraded, 503 for down; an unreachable Caddy
-# is degraded, so Matcad is not restarted for it). /healthz stays as the plain liveness probe.
+# is degraded, so Matcad is not restarted for it). /healthz stays the plain reachability probe (browser banner, offline page).
 HEALTHCHECK --interval=30s --timeout=8s --start-period=30s --retries=3 CMD ["dotnet", "Matcad.dll", "--healthcheck"]
 ENTRYPOINT ["dotnet", "Matcad.dll"]

@@ -47,7 +47,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         var browser = new Browser(site);
         Assert.Equal(LinkTarget, await browser.SignInThroughIdentityAsync(Person("sub-vera", "vera@example.com", "admin")));
 
-        var response = await MatcadFactory.SignInLocallyAsync(browser.Client, "vera@example.com", "vera-password");
+        var response = await PlatformFactory.SignInLocallyAsync(browser.Client, "vera@example.com", "vera-password");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var linked = await FindAsync(vera.Id);
@@ -57,7 +57,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         Assert.False(browser.HasPendingLink);
 
         // The session keeps the ID token of the link: the sign-out ends at MatIdentity too.
-        var logout = await browser.Client.GetAsync("/Logout");
+        var logout = await PlatformFactory.SignOutAsync(browser.Client);
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
         Assert.StartsWith(IdentityFactory.Authority + "/connect/logout", logout.Headers.Location!.OriginalString);
         Assert.Contains("id_token_hint=sub-vera.id.token", logout.Headers.Location!.OriginalString);
@@ -73,14 +73,14 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         var browser = new Browser(site);
         Assert.Equal(LinkTarget, await browser.SignInThroughIdentityAsync(Person("sub-walter", "walter@example.com", "admin")));
 
-        Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser.Client, "admin", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser.Client, "admin", PlatformFactory.AdminPassword)).StatusCode);
 
         Assert.Null((await FindAsync(walter.Id)).ExternalSubject);
         Assert.False(await AnyWithSubjectAsync("sub-walter"));
         Assert.False(browser.HasPendingLink);
 
         // The link is gone: Walter's own sign-in afterwards links nothing either.
-        await MatcadFactory.SignInLocallyAsync(new Browser(site).Client, "walter@example.com", "walter-password");
+        await PlatformFactory.SignInLocallyAsync(new Browser(site).Client, "walter@example.com", "walter-password");
         Assert.Null((await FindAsync(walter.Id)).ExternalSubject);
     }
 
@@ -94,7 +94,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         var page = await browser.Client.GetStringAsync(LinkTarget);
         var cancel = await browser.Client.PostAsync("/Login?handler=CancelLink", new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["__RequestVerificationToken"] = MatcadFactory.Token(page),
+            ["__RequestVerificationToken"] = PlatformFactory.Token(page),
         }));
 
         Assert.Equal(HttpStatusCode.Redirect, cancel.StatusCode);
@@ -102,7 +102,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         Assert.False(browser.HasPendingLink);
         Assert.DoesNotContain("id=\"login-link\"", await browser.Client.GetStringAsync(LinkTarget));
 
-        await MatcadFactory.SignInLocallyAsync(browser.Client, "clara@example.com", "clara-password");
+        await PlatformFactory.SignInLocallyAsync(browser.Client, "clara@example.com", "clara-password");
         Assert.Null((await FindAsync(clara.Id)).ExternalSubject);
     }
 
@@ -130,7 +130,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
             Assert.DoesNotContain("id=\"login-link\"", page);
             Assert.Contains("id=\"login-link-expired\"", page);
 
-            Assert.Equal(HttpStatusCode.Redirect, (await MatcadFactory.SignInLocallyAsync(browser.Client, "erik@example.com", "erik-password")).StatusCode);
+            Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser.Client, "erik@example.com", "erik-password")).StatusCode);
             Assert.Null((await FindAsync(erik.Id)).ExternalSubject);
             Assert.Equal(UserRole.User, (await FindAsync(erik.Id)).Role);
         }
@@ -138,7 +138,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         // The same link with time left does link: the values above failed for their age, forgery or purpose only.
         var fresh = new Browser(site);
         fresh.SetPendingLink(protector.Protect(json, DateTimeOffset.UtcNow.AddMinutes(5)));
-        await MatcadFactory.SignInLocallyAsync(fresh.Client, "erik@example.com", "erik-password");
+        await PlatformFactory.SignInLocallyAsync(fresh.Client, "erik@example.com", "erik-password");
         Assert.Equal("sub-erik", (await FindAsync(erik.Id)).ExternalSubject);
     }
 
@@ -155,7 +155,7 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         Assert.Equal(HttpStatusCode.OK, (await browser.Client.GetAsync("/Settings")).StatusCode);
 
         // No local password: the local form does not let anyone in as nina.
-        Assert.Equal(HttpStatusCode.OK, (await MatcadFactory.SignInLocallyAsync(new Browser(site).Client, "nina", "")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PlatformFactory.SignInLocallyAsync(new Browser(site).Client, "nina", "")).StatusCode);
 
         // The role follows the claim at the next sign-in.
         await new Browser(site).SignInThroughIdentityAsync(Person("sub-nina", "nina@example.com", "user", preferred: "nina"));
@@ -164,6 +164,46 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
         // Without a role claim the role stays as it is (managed by the app).
         await new Browser(site).SignInThroughIdentityAsync(Person("sub-nina", "nina@example.com", null, preferred: "nina"));
         Assert.Equal(UserRole.User, (await FindBySubjectAsync("sub-nina")).Role);
+    }
+
+    [Fact]
+    public async Task An_account_with_the_address_as_its_e_mail_is_linked_only_after_its_password()
+    {
+        // Matcad accounts sign in with the user name or the e-mail address: the e-mail column is a match as well.
+        var olga = await AddUserAsync("olga", "olga-password", email: "olga@example.com");
+        var browser = new Browser(site);
+
+        Assert.Equal(LinkTarget, await browser.SignInThroughIdentityAsync(Person("sub-olga", "olga@example.com", null)));
+        Assert.Null((await FindAsync(olga.Id)).ExternalSubject);
+
+        Assert.Equal(HttpStatusCode.Redirect, (await PlatformFactory.SignInLocallyAsync(browser.Client, "olga@example.com", "olga-password")).StatusCode);
+        Assert.Equal("sub-olga", (await FindAsync(olga.Id)).ExternalSubject);
+    }
+
+    [Fact]
+    public async Task A_new_user_takes_the_address_only_when_no_account_has_it_as_a_login()
+    {
+        await new Browser(site).SignInThroughIdentityAsync(Person("sub-pia", "pia@example.com", null, preferred: "pia"));
+        // Another person whose address starts the same: the user name "pia" is taken, so the new user gets another one.
+        await new Browser(site).SignInThroughIdentityAsync(Person("sub-pia2", "pia@other.example", null));
+
+        var pia = await FindBySubjectAsync("sub-pia");
+        Assert.Equal("pia", pia.Username);
+        Assert.Equal("pia@example.com", pia.Email);
+        var second = await FindBySubjectAsync("sub-pia2");
+        Assert.Equal("pia2", second.Username);
+        Assert.Equal("pia@other.example", second.Email);
+
+        // An address that is already a login of another account does not go with a new user.
+        using (var scope = site.Services.CreateScope())
+        {
+            var auth = scope.ServiceProvider.GetRequiredService<AuthService>();
+            var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
+            var created = await auth.SignInExternal(new ExternalIdentity("sub-quinn", "pia@example.com", null, "quinn", null));
+            // pia@example.com matches pia, who is linked with another person: refused, nobody is created.
+            Assert.Null(created.UserId);
+            Assert.False(await db.Users.AnyAsync(u => u.ExternalSubject == "sub-quinn"));
+        }
     }
 
     [Fact]
@@ -202,8 +242,9 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
     [Fact]
     public async Task Several_matching_accounts_are_refused()
     {
+        // One account has the address as its user name, another as its e-mail address (both are logins).
         await AddUserAsync("Twin@example.com", "twin-password-1");
-        await AddUserAsync("twin@example.com", "twin-password-2");
+        await AddUserAsync("twin", "twin-password-2", email: "twin@example.com");
         var count = await CountUsersAsync();
 
         var target = await new Browser(site).SignInThroughIdentityAsync(Person("sub-twin", "twin@example.com", null));
@@ -216,10 +257,10 @@ public sealed class PendingLinkTests(IdentityFactory site) : IClassFixture<Ident
     private static MatIdentityPerson Person(string subject, string email, string? role, string? preferred = null)
         => new(subject, email, subject, preferred, role, subject + ".id.token", new ClaimsPrincipal());
 
-    private async Task<User> AddUserAsync(string username, string password)
+    private async Task<User> AddUserAsync(string username, string password, string? email = null)
     {
         using var scope = site.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<AuthService>().CreateUser(username, password, UserRole.User, null);
+        return await scope.ServiceProvider.GetRequiredService<AuthService>().CreateUser(username, email, password, UserRole.User, null);
     }
 
     private async Task<User> FindAsync(long id)

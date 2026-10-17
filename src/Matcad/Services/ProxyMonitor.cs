@@ -99,7 +99,7 @@ public sealed class ProxyMonitor : BackgroundService
     }
 
     /// <summary>The names to ask Caddy for: one per certificate it manages.</summary>
-    public static IReadOnlyList<string> ProbeHosts(IReadOnlyList<RouteConfig> routes, List<ProviderConfig> providers)
+    public static IReadOnlyList<string> ProbeHosts(IReadOnlyList<RouteConfig> routes, IReadOnlyList<ProviderConfig> providers)
     {
         var portBound = routes.Where(r => r.ListenPort > 0).Select(r => r.Host).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var plan = CertificatePlanner.Plan(routes.Where(r => !(r.ListenPort > 0)), providers);

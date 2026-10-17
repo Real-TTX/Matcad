@@ -12,23 +12,27 @@ namespace Matcad.Pages;
 /// The sign-in. Without MATIDENTITY_AUTHORITY: the local form, as always. With it a visit goes straight on to MatIdentity; the local form stays
 /// reachable with <c>?local=1</c> (the way in for the admin when MatIdentity is down - Matcad is often the proxy in front of MatIdentity itself),
 /// <c>?signedOut=1</c> stops the automatic sign-in, <c>?ssoError=1</c> says that MatIdentity failed, and when MatIdentity cannot be reached at all
-/// the page falls back to the local form. <c>?link=1</c>: MatIdentity signed in a person whose name matches an account that is not linked yet; a
-/// successful sign-in of exactly that account links it (<see cref="MatIdentityPendingLink"/>, <see cref="AuthService.LinkExternal"/>), another
-/// account links nothing, Cancel deletes the pending link.
+/// the page falls back to the local form (the configuration request gives up after 10 seconds, see Program.cs). <c>?link=1</c>: MatIdentity signed
+/// in a person whose name matches an account that is not linked yet; a successful sign-in of exactly that account links it
+/// (<see cref="MatIdentityPendingLink"/>, <see cref="AuthService.LinkExternal"/>), another account links nothing, Cancel deletes the pending link.
+/// The local form is throttled per account and client (<see cref="LoginAttemptTracker"/>).
 /// </summary>
 public class LoginModel : PageModel
 {
     private readonly AuthService _auth;
+    private readonly LoginAttemptTracker _attempts;
     private readonly MatPlatformSettings _platform;
     private readonly ILogger<LoginModel> _log;
 
-    public LoginModel(AuthService auth, MatPlatformSettings platform, ILogger<LoginModel> log)
+    public LoginModel(AuthService auth, LoginAttemptTracker attempts, MatPlatformSettings platform, ILogger<LoginModel> log)
     {
         _auth = auth;
+        _attempts = attempts;
         _platform = platform;
         _log = log;
     }
 
+    /// <summary>Username or e-mail address.</summary>
     [BindProperty] public string Username { get; set; } = "";
     [BindProperty] public string Password { get; set; } = "";
     [BindProperty(SupportsGet = true)] public string? ReturnUrl { get; set; }
@@ -92,12 +96,20 @@ public class LoginModel : PageModel
         Local = true;
         Prepare();
 
-        var user = await _auth.ValidateCredentials(Username, Password);
+        // The attempt is booked before the password is checked: parallel guesses cannot all slip through.
+        if (_attempts.Begin("admin", Username ?? "", HttpContext.ClientIp()) is not { } attempt)
+        {
+            Error = "Too many failed attempts. Please wait a few minutes and try again.";
+            return Page();
+        }
+
+        var user = await _auth.ValidateCredentials(Username ?? "", Password ?? "");
         if (user == null)
         {
             Error = "Incorrect username or password.";
             return Page();
         }
+        _attempts.Succeeded(attempt);
 
         // A pending link of MatIdentity is only ever for the account that matched; it is deleted either way.
         string? idToken = null;
