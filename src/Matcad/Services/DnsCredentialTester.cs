@@ -22,9 +22,39 @@ public class DnsCredentialTester
         (type ?? "").Trim().ToLowerInvariant() switch
         {
             "netcup" => TestNetcupAsync(creds, ct),
+            "cloudflare" => TestCloudflareAsync(creds, ct),
             _ => Task.FromResult<(bool?, string)>(
                 (null, $"No credential test available for '{type}' yet - it can only be verified by issuing a certificate."))
         };
+
+    /// <summary>Cloudflare: the token check of its API (reads nothing, changes nothing). An inactive or unknown token fails.</summary>
+    internal const string CloudflareVerifyEndpoint = "https://api.cloudflare.com/client/v4/user/tokens/verify";
+
+    private async Task<(bool?, string)> TestCloudflareAsync(IDictionary<string, string> creds, CancellationToken ct)
+    {
+        var token = creds.TryGetValue("api_token", out var t) ? t.Trim() : "";
+        if (token.Length == 0) return (false, "Missing api_token.");
+        var client = _http.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(15);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, CloudflareVerifyEndpoint);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            using var response = await client.SendAsync(request, ct);
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            var success = root.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True;
+            var status = root.TryGetProperty("result", out var result) && result.TryGetProperty("status", out var st) ? st.GetString() : null;
+            if (success && status == "active")
+                return (true, "Cloudflare accepted the token. Make sure it may edit the DNS of the zone (Zone.DNS edit).");
+            return (false, success ? $"The Cloudflare token is {status}." : "Cloudflare rejected the token.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            _log.LogWarning("Cloudflare credential test failed: {Message}", ex.Message);
+            return (false, "Could not reach the Cloudflare API.");
+        }
+    }
 
     private const string NetcupEndpoint = "https://ccp.netcup.net/run/webservice/servers/endpoint.php?JSON";
 
