@@ -207,6 +207,12 @@ public class CaddyConfigGenerator
                 if (error != null || ips.Count == 0) return null;
                 refusals.Add(Refusal(new Dictionary<string, object?> { ["remote_ip"] = new Dictionary<string, object?> { ["ranges"] = ips } }));
             }
+            if (route.BlockedIps.Count > 0)
+            {
+                var (blocked, error) = RouteGuards.NormalizeIps(route.BlockedIps, RouteGuards.BlockedLabel);
+                if (error != null || blocked.Count == 0) return null;
+                refusals.Add(Refuse(new Dictionary<string, object?> { ["remote_ip"] = new Dictionary<string, object?> { ["ranges"] = blocked } }));
+            }
             if (route.RequireHeader != null)
             {
                 if (RouteGuards.CheckRequireHeader(route.RequireHeader) != null) return null;
@@ -226,11 +232,35 @@ public class CaddyConfigGenerator
         }
     }
 
-    private static Dictionary<string, object?> Refusal(Dictionary<string, object?> matcher) => new()
+    /// <summary>403 for a request that does NOT match (an allow list, a required header).</summary>
+    private static Dictionary<string, object?> Refusal(Dictionary<string, object?> matcher) =>
+        Refuse(new Dictionary<string, object?> { ["not"] = new[] { matcher } });
+
+    /// <summary>403 (no body) for a request that matches one of the matcher sets.</summary>
+    private static Dictionary<string, object?> Refuse(params Dictionary<string, object?>[] matchers) => new()
     {
-        ["match"] = new[] { new Dictionary<string, object?> { ["not"] = new[] { matcher } } },
+        ["match"] = matchers,
         ["handle"] = new object[] { new Dictionary<string, object?> { ["handler"] = "static_response", ["status_code"] = 403 } },
         ["terminal"] = true
+    };
+
+    // What "block common exploits" refuses. Kept to what a normal site never sends: hidden folders of tools and files with secrets in
+    // the path, and in the query SQL injection, script tags, PHP superglobals and path traversal (also percent-encoded).
+    internal const string ExploitPathPattern = @"(?i)/\.(git|svn|hg|env|htaccess|htpasswd|ds_store)(/|$)|/(wp-config\.php|etc/passwd|proc/self/environ)$";
+    internal const string ExploitQueryPattern =
+        @"(?i)(union(\s|\+|%20)+(all(\s|\+|%20)+)?select|concat(\s|%20)*\(|base64_(en|de)code(\s|%20)*\(|(<|%3c)(\s|%20)*script|(globals|_request)(=|\[|%5b)|proc/self/environ|etc/passwd|\.\./|\.\.%2f|%2e%2e(/|%2f))";
+
+    /// <summary>The "block common exploits" filter: 403 for a request whose path or query looks like an attack.</summary>
+    private static Dictionary<string, object?> ExploitFilter() => new()
+    {
+        ["handler"] = "subroute",
+        ["routes"] = new[]
+        {
+            Refuse(
+                new Dictionary<string, object?> { ["path_regexp"] = new Dictionary<string, object?> { ["pattern"] = ExploitPathPattern } },
+                // A CEL raw string takes the pattern as it is; Caddy turns the placeholder into a lookup of the query.
+                new Dictionary<string, object?> { ["expression"] = "{http.request.uri.query}.matches(r'" + ExploitQueryPattern + "')" })
+        }
     };
 
     /// <summary>The encoder of the access log. The log is a file on a shared volume, and Caddy writes the request headers
@@ -271,6 +301,19 @@ public class CaddyConfigGenerator
 
         var handlers = new List<object>(guarded);
 
+        if (route.BlockExploits) handlers.Add(ExploitFilter());
+
+        // HSTS on every answer of the host (a login or an error too), so the browser keeps to HTTPS.
+        if (route.Hsts)
+            handlers.Add(new Dictionary<string, object?>
+            {
+                ["handler"] = "headers",
+                ["response"] = new Dictionary<string, object?>
+                {
+                    ["set"] = new Dictionary<string, object?> { ["Strict-Transport-Security"] = new[] { "max-age=31536000" } }
+                }
+            });
+
         // Optional: strip framing headers so the site can be embedded in an iframe (e.g. matOS).
         // Deferred so it runs after the upstream sets them; placed first so it wraps the response.
         if (route.AllowEmbedding)
@@ -300,6 +343,15 @@ public class CaddyConfigGenerator
                 return [.. guarded, Unavailable("Matcad: the authentication of this route is missing or has no users, so the route is not served.")];
             handlers.AddRange(BuildAuthHandlers(auth));
         }
+
+        // Compression wraps what the upstream answers (encode compresses only types and sizes worth it).
+        if (route.Compress && !string.IsNullOrWhiteSpace(route.Upstream))
+            handlers.Add(new Dictionary<string, object?>
+            {
+                ["handler"] = "encode",
+                ["encodings"] = new Dictionary<string, object?> { ["zstd"] = new Dictionary<string, object?>(), ["gzip"] = new Dictionary<string, object?>() },
+                ["prefer"] = new[] { "zstd", "gzip" }
+            });
 
         handlers.Add(BuildTerminalHandler(route));
         return handlers;
@@ -358,7 +410,7 @@ public class CaddyConfigGenerator
                 ["status_code"] = route.RedirectPermanent ? 301 : 302,
                 ["headers"] = new Dictionary<string, object?>
                 {
-                    ["Location"] = new[] { RedirectLocation(route.FallbackUrl!) }
+                    ["Location"] = new[] { RedirectLocation(route.FallbackUrl!, route.RedirectKeepPath) }
                 }
             };
         }
@@ -527,13 +579,15 @@ public class CaddyConfigGenerator
     }
 
     /// <summary>The Location of a redirect. Caddy replaces {placeholders} in it, so braces are sent percent-encoded: only a trailing
-    /// {http.request.uri} (what the Caddyfile import makes of <c>redir https://target{uri}</c>) stays a placeholder.</summary>
-    public static string RedirectLocation(string url)
+    /// {http.request.uri} stays a placeholder: what <paramref name="keepPath"/> adds (path and query of the request), and what older
+    /// versions of the Caddyfile import stored for <c>redir https://target{uri}</c>.</summary>
+    public static string RedirectLocation(string url, bool keepPath = false)
     {
         const string KeepUri = "{http.request.uri}";
-        var keep = url.EndsWith(KeepUri, StringComparison.Ordinal);
-        var target = (keep ? url[..^KeepUri.Length] : url).Replace("{", "%7B").Replace("}", "%7D");
-        return keep ? target + KeepUri : target;
+        var keep = keepPath || url.EndsWith(KeepUri, StringComparison.Ordinal);
+        var target = (url.EndsWith(KeepUri, StringComparison.Ordinal) ? url[..^KeepUri.Length] : url).Replace("{", "%7B").Replace("}", "%7D");
+        // The request URI starts with a slash: the target must not end with one, or the path would start with two.
+        return keep ? target.TrimEnd('/') + KeepUri : target;
     }
 
     /// <summary>Turns "http://host:8080" or "host:8080" into a Caddy dial + https flag.</summary>

@@ -29,6 +29,10 @@ public class EditModel : PageModel
     [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
     [BindProperty] public bool PermanentRedirect { get; set; }
+    [BindProperty] public bool RedirectKeepPath { get; set; }
+    [BindProperty] public bool Hsts { get; set; }
+    [BindProperty] public bool Compress { get; set; }
+    [BindProperty] public bool BlockExploits { get; set; }
     [BindProperty] public long? AuthenticationId { get; set; }
     [BindProperty] public long? ProviderId { get; set; }
     [BindProperty] public string? AcmeEmail { get; set; }
@@ -43,6 +47,7 @@ public class EditModel : PageModel
     [BindProperty] public string? RequireValue { get; set; }
     /// <summary>One address or range per line.</summary>
     [BindProperty] public string? AllowedIpsText { get; set; }
+    [BindProperty] public string? BlockedIpsText { get; set; }
 
     /// <summary>A row of the upstream headers on the page: the name, and whether a value is saved for it.</summary>
     public record HeaderRow(string Name, bool ValueSet);
@@ -53,7 +58,7 @@ public class EditModel : PageModel
     /// <summary>The section is folded away unless something in it is set, or the last save was refused.</summary>
     public bool AccessOpen => Error != null
         || !string.IsNullOrWhiteSpace(UpstreamHost) || HeaderRows.Count > 0
-        || !string.IsNullOrWhiteSpace(RequireName) || !string.IsNullOrWhiteSpace(AllowedIpsText);
+        || !string.IsNullOrWhiteSpace(RequireName) || !string.IsNullOrWhiteSpace(AllowedIpsText) || !string.IsNullOrWhiteSpace(BlockedIpsText);
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
@@ -80,7 +85,9 @@ public class EditModel : PageModel
             PortBinding = r.ListenPort > 0 ? r.ListenPort : null;
             RouteType = r.Wildcard ? "wildcard" : "single";
             Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
-            FallbackUrl = r.FallbackUrl; PermanentRedirect = r.RedirectPermanent;
+            FallbackUrl = r.FallbackUrl; PermanentRedirect = r.RedirectPermanent; RedirectKeepPath = r.RedirectKeepPath;
+            Hsts = r.Hsts; Compress = r.Compress; BlockExploits = r.BlockExploits;
+            BlockedIpsText = string.Join('\n', r.BlockedIps);
             // A route with a redirect target and no upstream is a redirect.
             Target = string.IsNullOrWhiteSpace(r.Upstream) && !string.IsNullOrWhiteSpace(r.FallbackUrl)
                 ? "redirect" : "proxy";
@@ -115,7 +122,8 @@ public class EditModel : PageModel
             FallbackUrl, PermanentRedirect, AuthenticationId, ProviderId, AcmeEmail, Enabled, Name, AllowEmbedding, ListenPort: null,
             // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
             UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
-            RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText));
+            RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText),
+            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText)));
         var error = RouteEditor.Apply(form, route);
         if (error != null) return Fail(error);
         if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))

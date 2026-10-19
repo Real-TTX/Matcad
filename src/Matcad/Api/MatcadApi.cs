@@ -226,7 +226,9 @@ public static class MatcadApi
             error = RouteEditor.Apply(form with
             {
                 UpstreamHost = access.UpstreamHost, UpstreamHeaders = access.UpstreamHeaders,
-                RequireHeader = access.RequireHeader, AllowedIps = access.AllowedIps
+                RequireHeader = access.RequireHeader, AllowedIps = access.AllowedIps,
+                // The API does not carry the options of the edit page (blocked IPs, HSTS, ...): the route keeps what it has.
+                Options = replaced is null ? null : RouteEditor.OptionsOf(replaced)
             }, route);
             if (error != null) return Results.BadRequest(new { error });
             route.ManagedBy = ResolveManagedBy(inp.ManagedBy, replaced);

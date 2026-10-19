@@ -12,7 +12,12 @@ public record RouteForm(
     string? FallbackUrl, bool RedirectPermanent, long? AuthenticationId, long? ProviderId,
     string? AcmeEmail, bool Enabled, string? Name, bool AllowEmbedding, int? ListenPort,
     string? UpstreamHost = null, IReadOnlyList<HeaderPair>? UpstreamHeaders = null,
-    HeaderPair? RequireHeader = null, IReadOnlyList<string>? AllowedIps = null);
+    HeaderPair? RequireHeader = null, IReadOnlyList<string>? AllowedIps = null,
+    RouteExtras? Options = null);
+
+/// <summary>The options only the edit page sets (the REST API keeps what the route has). Null in a <see cref="RouteForm"/>: leave them as
+/// the route has them.</summary>
+public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -95,6 +100,9 @@ public static partial class RouteEditor
         if (clashError != null) return clashError;
         var (allowedIps, ipError) = RouteGuards.NormalizeIps(form.AllowedIps);
         if (ipError != null) return ipError;
+        var options = form.Options ?? OptionsOf(route);
+        var (blockedIps, blockedError) = RouteGuards.NormalizeIps(options.BlockedIps, RouteGuards.BlockedLabel);
+        if (blockedError != null) return blockedError;
 
         route.Name = !string.IsNullOrWhiteSpace(form.Name) ? form.Name.Trim()
                    : host.Length > 0 ? host
@@ -117,8 +125,17 @@ public static partial class RouteEditor
         route.UpstreamHeaders = upstreamHeaders;
         route.RequireHeader = requireHeader;
         route.AllowedIps = allowedIps;
+        route.BlockedIps = blockedIps;
+        route.RedirectKeepPath = redirect && options.RedirectKeepPath;
+        route.Hsts = options.Hsts;
+        route.Compress = !redirect && options.Compress;
+        route.BlockExploits = options.BlockExploits;
         return null;
     }
+
+    /// <summary>The options a route has now.</summary>
+    public static RouteExtras OptionsOf(RouteConfig route) =>
+        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps);
 
     /// <summary>host, host:port, or an http(s) URL - what Caddy can dial.</summary>
     public static bool IsUpstream(string value)

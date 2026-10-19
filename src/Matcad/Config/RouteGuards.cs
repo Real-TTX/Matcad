@@ -128,16 +128,16 @@ public static partial class RouteGuards
 
     /// <summary>Normalises the list of allowed addresses (single IPs and CIDR ranges, IPv4 and IPv6) or says which entry is not one.
     /// Blank entries are skipped, duplicates collapse, a range is written with its network address.</summary>
-    public static (List<string> Ips, string? Error) NormalizeIps(IEnumerable<string>? entries)
+    public static (List<string> Ips, string? Error) NormalizeIps(IEnumerable<string>? entries, string label = "Allowed IPs")
     {
         var result = new List<string>();
         foreach (var entry in entries ?? [])
         {
             if (string.IsNullOrWhiteSpace(entry)) continue;
             if (!TryNormalizeIp(entry.Trim(), out var normalized))
-                return (result, $"Allowed IPs: '{Short(entry.Trim())}' is not an IP address or CIDR range (like 203.0.113.7, 10.0.0.0/8 or fd00::/8).");
+                return (result, $"{label}: '{Short(entry.Trim())}' is not an IP address or CIDR range (like 203.0.113.7, 10.0.0.0/8 or fd00::/8).");
             if (!result.Contains(normalized)) result.Add(normalized);
-            if (result.Count > MaxIps) return (result, $"Allowed IPs: at most {MaxIps} entries.");
+            if (result.Count > MaxIps) return (result, $"{label}: at most {MaxIps} entries.");
         }
         return (result, null);
     }
@@ -177,7 +177,11 @@ public static partial class RouteGuards
         ?? CheckUpstreamHeaders(route.UpstreamHeaders)
         ?? CheckRequireHeader(route.RequireHeader)
         ?? CheckNameClash(route.RequireHeader, route.UpstreamHeaders)
-        ?? NormalizeIps(route.AllowedIps).Error;
+        ?? NormalizeIps(route.AllowedIps).Error
+        ?? NormalizeIps(route.BlockedIps, BlockedLabel).Error;
+
+    /// <summary>The label of the blocked addresses in messages.</summary>
+    public const string BlockedLabel = "Blocked IPs";
 
     /// <summary>
     /// The value of a header left empty on a form (or missing in an API call) means "keep the saved one": fills it from

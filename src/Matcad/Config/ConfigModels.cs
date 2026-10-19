@@ -80,6 +80,7 @@ public class RouteConfig : ConfigEntity
 {
     private List<HeaderPair> _upstreamHeaders = new();
     private List<string> _allowedIps = new();
+    private List<string> _blockedIps = new();
 
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
@@ -96,6 +97,8 @@ public class RouteConfig : ConfigEntity
     /// <summary>Use a permanent (301) redirect for <see cref="FallbackUrl"/> instead
     /// of a temporary (302) one.</summary>
     public bool RedirectPermanent { get; set; }
+    /// <summary>Append the path and query of the request to <see cref="FallbackUrl"/> (old.example.com/a?b to new.example.com/a?b).</summary>
+    public bool RedirectKeepPath { get; set; }
     public long? AuthenticationId { get; set; }
     /// <summary>Strip X-Frame-Options and CSP frame-ancestors from responses so the site can be
     /// embedded in an iframe (e.g. inside matOS). Off by default — keeps the app's clickjacking
@@ -121,8 +124,18 @@ public class RouteConfig : ConfigEntity
     /// <summary>Guard: a request whose direct peer (the TCP connection, not X-Forwarded-For) is not in this list of
     /// IP addresses or CIDR ranges is answered 403.</summary>
     public List<string> AllowedIps { get => _allowedIps; set => _allowedIps = value ?? new(); }
-    /// <summary>True when a guard (required header and/or allowed IPs) is configured.</summary>
-    [JsonIgnore] public bool HasGuards => RequireHeader != null || AllowedIps.Count > 0;
+    /// <summary>Guard: a request whose direct peer is in this list of IP addresses or CIDR ranges is answered 403.</summary>
+    public List<string> BlockedIps { get => _blockedIps; set => _blockedIps = value ?? new(); }
+    /// <summary>True when a guard (required header, allowed or blocked IPs) is configured.</summary>
+    [JsonIgnore] public bool HasGuards => RequireHeader != null || AllowedIps.Count > 0 || BlockedIps.Count > 0;
+
+    // --- Options of the response (off by default; the page sets them, the REST API keeps what the route has).
+    /// <summary>Requests that look like common attacks (SQL injection or script in the query, paths such as /.git or /.env) get 403.</summary>
+    public bool BlockExploits { get; set; }
+    /// <summary>Send Strict-Transport-Security, so browsers use HTTPS only for this host for a year.</summary>
+    public bool Hsts { get; set; }
+    /// <summary>Compress the responses of the upstream (zstd or gzip, whatever the browser takes).</summary>
+    public bool Compress { get; set; }
 
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }

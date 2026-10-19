@@ -25,8 +25,7 @@
     var covered = wildcardParents.some(function (p) { return p.toLowerCase() === base; });
     if (routeType() === 'single' && labels >= 2 && h.indexOf('*.') !== 0 && !internal && !covered) {
       $('wildcard-nudge-text').textContent =
-        'No wildcard covers "' + h + '": Caddy will request an individual certificate for it. ' +
-        'A *.' + base + ' wildcard route would cover it (and its subdomains) with a single certificate.';
+        'No wildcard covers "' + h + '", so it gets a certificate of its own. A *.' + base + ' wildcard route would cover it.';
       nudge.setAttribute('data-parent', base);
       // Converting replaces this host, so it is only offered for a subdomain.
       $('wildcard-nudge-btn').hidden = labels < 3;
@@ -42,11 +41,11 @@
       var h = host.value.trim();
       if (h.indexOf('*.') !== 0) { host.value = '*.' + h.replace(/^[*.]+/, ''); }
       host.placeholder = '*.example.com';
-      $('host-hint').textContent = 'Enter *.your-domain. It covers every direct subdomain, and the domain itself if you add that as well. Needs a DNS provider (DNS-01).';
+      $('host-hint').textContent = 'Covers every direct subdomain. Needs a DNS provider.';
     } else {
       if (host.value.trim().indexOf('*.') === 0) { host.value = host.value.trim().slice(2); }
       host.placeholder = 'app.example.com';
-      $('host-hint').textContent = 'Exactly one host. The certificate comes from the HTTP challenge, or from a wildcard route.';
+      $('host-hint').textContent = 'One host. Its certificate comes from the HTTP challenge or a wildcard route.';
     }
     checkWildcard();
   }

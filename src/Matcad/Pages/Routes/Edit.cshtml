@@ -4,7 +4,7 @@
     ViewData["Title"] = Model.IsNew ? "New route" : "Edit route";
     ViewData["PageSub"] = Model.PortBinding is null
         ? "A host name, where its requests go, and who may see it."
-        : "A port binding forwards a port of the proxy to a service.";
+        : "A port of the proxy forwarded to a service.";
     ViewData["Crumbs"] = Crumbs.Of(("Routes", "/Routes"), (Model.IsNew ? "New route" : "Edit route", null));
     ViewData["Width"] = "narrow";
 }
@@ -77,6 +77,20 @@ else
                     </div>
                 </div>
 
+                <div class="mat-form__grid" data-show-if="#route-type-wildcard" data-show-value="wildcard">
+                    <mat-field label="DNS provider" asp-for="ProviderId" hint="Needed for the wildcard certificate.">
+                        <select asp-for="ProviderId" class="mat-select">
+                            @foreach (var (value, text) in Model.ProviderOptions)
+                            {
+                                <option value="@value" selected="@((Model.ProviderId?.ToString() ?? "") == value)">@text</option>
+                            }
+                        </select>
+                    </mat-field>
+                    <mat-field label="ACME e-mail address" asp-for="AcmeEmail" hint="Optional. Replaces the one under Settings.">
+                        <input asp-for="AcmeEmail" type="email" class="mat-input" autocapitalize="none" autocomplete="off" />
+                    </mat-field>
+                </div>
+
                 <label class="mat-switch"><input type="checkbox" asp-for="Enabled" /><span class="mat-switch__track"></span><span>Route active</span></label>
             </div>
         </section>
@@ -99,16 +113,20 @@ else
                 </fieldset>
 
                 <div class="mat-stack" data-show-if="#target-proxy" data-show-value="proxy">
-                    <mat-field label="Upstream" asp-for="Upstream" hint="Requests are forwarded to this service, for example http://backend:8080 or whoami:80." required>
+                    <mat-field label="Upstream" asp-for="Upstream" hint="For example http://backend:8080 or whoami:80." required>
                         <input asp-for="Upstream" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" required data-msg-required="Please enter the service to forward to." />
                     </mat-field>
                     <div class="mat-field">
                         <label class="mat-switch"><input type="checkbox" asp-for="InsecureSkipVerify" /><span class="mat-switch__track"></span><span>Skip TLS verification (insecure)</span></label>
-                        <span class="mat-hint">For <code>https://</code> upstreams with a self-signed or invalid certificate. Ignored for plain <code>http://</code> services.</span>
+                        <span class="mat-hint">For an <code>https://</code> upstream with a self-signed certificate.</span>
+                    </div>
+                    <div class="mat-field">
+                        <label class="mat-switch"><input type="checkbox" asp-for="Compress" /><span class="mat-switch__track"></span><span>Compress responses</span></label>
+                        <span class="mat-hint">zstd or gzip, for browsers that take it.</span>
                     </div>
                     <div class="mat-field">
                         <label class="mat-switch"><input type="checkbox" asp-for="AllowEmbedding" /><span class="mat-switch__track"></span><span>Allow embedding in a frame</span></label>
-                        <span class="mat-hint">Removes <code>X-Frame-Options</code> and the CSP <code>frame-ancestors</code> from the responses, so this site can be shown inside another page (for example Mattiverse or MatOS). Off by default: only turn it on for apps you want to embed.</span>
+                        <span class="mat-hint">Removes <code>X-Frame-Options</code> and CSP <code>frame-ancestors</code>, so another page (Mattiverse, MatOS) can show this site.</span>
                     </div>
                 </div>
 
@@ -124,11 +142,14 @@ else
                                 }
                                 <option value="__other__">Another address</option>
                             </select>
-                            <span class="mat-hint">Every request to this host is redirected there.</span>
                         </div>
                         <div class="mat-field">
                             <label class="mat-switch"><input type="checkbox" asp-for="PermanentRedirect" /><span class="mat-switch__track"></span><span>Permanent (301)</span></label>
-                            <span class="mat-hint">Leave it off for a temporary redirect (302).</span>
+                            <span class="mat-hint">Off: temporary (302).</span>
+                        </div>
+                        <div class="mat-field">
+                            <label class="mat-switch"><input type="checkbox" asp-for="RedirectKeepPath" /><span class="mat-switch__track"></span><span>Keep the path</span></label>
+                            <span class="mat-hint">/docs?page=2 goes to the same path of the target.</span>
                         </div>
                     </div>
                     <div id="redirect-url-group" hidden>
@@ -141,33 +162,23 @@ else
         </section>
 
         <section class="mat-card" aria-labelledby="route-access-title">
-            <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="route-access-title">Access and certificate</h2></div>
+            <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="route-access-title">Access</h2></div>
             <div class="mat-card__body mat-stack">
-                <div class="mat-form__grid">
-                    <mat-field label="Authentication" asp-for="AuthenticationId">
-                        <select asp-for="AuthenticationId" class="mat-select">
-                            @foreach (var (value, text) in Model.AuthOptions)
-                            {
-                                <option value="@value" selected="@((Model.AuthenticationId?.ToString() ?? "") == value)">@text</option>
-                            }
-                        </select>
-                    </mat-field>
-                    <div data-show-if="#route-type-wildcard" data-show-value="wildcard">
-                        <mat-field label="DNS provider" asp-for="ProviderId" hint="Needed for the wildcard certificate. It also covers the subdomains, so their routes need no provider of their own.">
-                            <select asp-for="ProviderId" class="mat-select">
-                                @foreach (var (value, text) in Model.ProviderOptions)
-                                {
-                                    <option value="@value" selected="@((Model.ProviderId?.ToString() ?? "") == value)">@text</option>
-                                }
-                            </select>
-                        </mat-field>
-                    </div>
+                <mat-field label="Authentication" asp-for="AuthenticationId">
+                    <select asp-for="AuthenticationId" class="mat-select">
+                        @foreach (var (value, text) in Model.AuthOptions)
+                        {
+                            <option value="@value" selected="@((Model.AuthenticationId?.ToString() ?? "") == value)">@text</option>
+                        }
+                    </select>
+                </mat-field>
+                <div class="mat-field">
+                    <label class="mat-switch"><input type="checkbox" asp-for="BlockExploits" /><span class="mat-switch__track"></span><span>Block common exploits</span></label>
+                    <span class="mat-hint">403 for SQL injection or script in the query and for paths like <code>/.git</code> or <code>/.env</code>.</span>
                 </div>
-
-                <div data-show-if="#route-type-wildcard" data-show-value="wildcard">
-                    <mat-field label="ACME e-mail address" asp-for="AcmeEmail" hint="Optional. The contact for the certificate of this domain; it replaces the global address under Settings.">
-                        <input asp-for="AcmeEmail" type="email" class="mat-input" autocapitalize="none" autocomplete="off" />
-                    </mat-field>
+                <div class="mat-field">
+                    <label class="mat-switch"><input type="checkbox" asp-for="Hsts" /><span class="mat-switch__track"></span><span>HSTS</span></label>
+                    <span class="mat-hint">Browsers use only HTTPS for this host, for a year.</span>
                 </div>
             </div>
         </section>
@@ -176,23 +187,29 @@ else
             <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="route-guard-title">Guards and upstream</h2></div>
             <div class="mat-card__body mat-stack">
                 <details class="mat-collapse" open="@Model.AccessOpen" id="route-access">
-                    <summary><span>Who may reach this route, and what the service is told</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <summary><span>IP lists, required header, headers to the upstream</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
                     <div class="mat-accordion__body mat-stack">
-                        <mat-field label="Allowed IP addresses" asp-for="AllowedIpsText" hint="Optional. One address or range per line, IPv4 or IPv6, for example 203.0.113.7 or 10.0.0.0/8. Every other address is refused with 403. It is checked against the connection Caddy sees, not X-Forwarded-For: behind Docker Desktop or a NAT that can be the gateway, not the visitor.">
-                            <textarea asp-for="AllowedIpsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="203.0.113.7&#10;10.0.0.0/8"></textarea>
-                        </mat-field>
+                        <div class="mat-form__grid">
+                            <mat-field label="Allowed IP addresses" asp-for="AllowedIpsText" hint="One address or range per line; every other one gets 403.">
+                                <textarea asp-for="AllowedIpsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="203.0.113.7&#10;10.0.0.0/8"></textarea>
+                            </mat-field>
+                            <mat-field label="Blocked IP addresses" asp-for="BlockedIpsText" hint="One address or range per line; these get 403.">
+                                <textarea asp-for="BlockedIpsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="198.51.100.0/24"></textarea>
+                            </mat-field>
+                        </div>
+                        <p class="mat-hint">Both lists see the connection Caddy gets, not X-Forwarded-For: behind Docker Desktop or a NAT that can be the gateway.</p>
 
                         <div class="mat-form__grid">
-                            <mat-field label="Required header" asp-for="RequireName" hint="Optional. A request without exactly this header and value is refused with 403, before anything else runs; the header is removed again before the request goes to the service. Clear the name to remove it.">
+                            <mat-field label="Required header" asp-for="RequireName" hint="Without exactly this header and value: 403. It is removed before the request goes upstream. Clear the name to drop it.">
                                 <input asp-for="RequireName" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Edge-Secret" />
                             </mat-field>
-                            <mat-field label="Header value" for-id="RequireValue" hint="At least 16 characters, visible ASCII without spaces, * { or }. It is never shown again; leave it empty to keep the saved one.">
+                            <mat-field label="Header value" for-id="RequireValue" hint="16+ visible ASCII characters, no * { }. Never shown again; empty keeps it.">
                                 <input type="password" id="RequireValue" name="RequireValue" class="mat-input mat-mono" autocomplete="new-password" placeholder="@(Model.RequireSet ? "Set - leave empty to keep" : "")" />
                             </mat-field>
                         </div>
 
                         <div class="mat-stack" data-show-if="#target-proxy" data-show-value="proxy">
-                            <mat-field label="Host header to the upstream" asp-for="UpstreamHost" hint="Optional. Sent to the service instead of the host the visitor asked for, for example when the service is another Matcad that routes by host. For an https:// upstream it is also the name of the TLS handshake (and the certificate check).">
+                            <mat-field label="Host header to the upstream" asp-for="UpstreamHost" hint="Sent instead of the visitor's host; for an https:// upstream also the TLS server name.">
                                 <input asp-for="UpstreamHost" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="app.example.com" />
                             </mat-field>
 
@@ -214,7 +231,7 @@ else
                                         </tbody>
                                     </table>
                                 </div>
-                                <span class="mat-hint">Set on every request to the service; they replace a header of the same name that the visitor sent. The values are never shown again; leave one empty to keep the saved value, remove the row to delete the header.</span>
+                                <span class="mat-hint">They replace a header of the same name from the visitor. Values are never shown again; empty keeps the saved one.</span>
                             </div>
                             <div class="mat-actions">
                                 <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#upstream-headers tbody" data-template="header-row-template">@Ui.Icon("plus")<span>Add a header</span></button>
