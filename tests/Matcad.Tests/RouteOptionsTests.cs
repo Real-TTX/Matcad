@@ -140,6 +140,26 @@ public sealed class RouteOptionsTests : IDisposable
         Assert.True(route.Hsts && route.BlockExploits);
         Assert.Equal(["192.0.2.1"], route.BlockedIps);
     }
+
+    [Fact]
+    public void The_caddyfile_import_keeps_the_path_of_a_redirect_and_leaves_other_placeholders_raw()
+    {
+        const string adapted = """
+            { "apps": { "http": { "servers": { "srv0": { "listen": [":443"], "routes": [
+              { "match": [ { "host": [ "a.example.com" ] } ], "terminal": true,
+                "handle": [ { "handler": "static_response", "status_code": 301, "headers": { "Location": [ "https://b.example.com{http.request.uri}" ] } } ] },
+              { "match": [ { "host": [ "c.example.com" ] } ], "terminal": true,
+                "handle": [ { "handler": "static_response", "status_code": 302, "headers": { "Location": [ "https://{http.request.host}.example.net" ] } } ] } ] } } } } }
+            """;
+
+        var plan = new CaddyfileImporter().Analyze(adapted);
+
+        var route = Assert.Single(plan.Routes).Route;
+        Assert.Equal("https://b.example.com", route.FallbackUrl);
+        Assert.True(route.RedirectKeepPath);
+        Assert.True(route.RedirectPermanent);
+        Assert.Contains("c.example.com", plan.RawRemainder);
+    }
 }
 
 /// <summary>The options through the edit page and the REST API.</summary>

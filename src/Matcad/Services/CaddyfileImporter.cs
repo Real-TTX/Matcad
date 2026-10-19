@@ -157,6 +157,8 @@ public class CaddyfileImporter
             Wildcard = host.StartsWith("*."),
             Upstream = c.Upstream,
             FallbackUrl = c.Upstream == null ? c.Redirect : null,
+            RedirectKeepPath = c.Upstream == null && c.RedirectKeepPath,
+            RedirectPermanent = c.Upstream == null && c.RedirectPermanent,
             Enabled = true
         };
         var ir = new ImportRoute { Route = r, BasicUsers = new List<BasicAuthUser>(c.BasicUsers) };
@@ -168,6 +170,8 @@ public class CaddyfileImporter
     {
         public string? Upstream;
         public string? Redirect;
+        public bool RedirectKeepPath;
+        public bool RedirectPermanent;
         public List<BasicAuthUser> BasicUsers = new();
     }
 
@@ -219,7 +223,17 @@ public class CaddyfileImporter
                     break;
                 case "static_response":
                     var loc = (h["headers"]?["Location"] as JsonArray)?.FirstOrDefault()?.GetValue<string>();
-                    if (!string.IsNullOrEmpty(loc)) c.Redirect = loc;
+                    if (!string.IsNullOrEmpty(loc))
+                    {
+                        // redir https://target{uri} keeps the path; any other placeholder cannot be modelled (and a route refuses braces).
+                        const string KeepUri = "{http.request.uri}";
+                        var keep = loc.EndsWith(KeepUri, StringComparison.Ordinal);
+                        var target = keep ? loc[..^KeepUri.Length] : loc;
+                        if (target.Contains('{') || target.Contains('}')) return false;
+                        c.Redirect = target;
+                        c.RedirectKeepPath = keep;
+                        c.RedirectPermanent = h["status_code"]?.ToString() is "301" or "308";
+                    }
                     break;
                 case "authentication":
                     var accounts = h["providers"]?["http_basic"]?["accounts"] as JsonArray;
