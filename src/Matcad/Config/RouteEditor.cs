@@ -18,7 +18,8 @@ public record RouteForm(
 /// <summary>The options only the edit page sets (the REST API keeps what the route has). Null in a <see cref="RouteForm"/>: leave them as
 /// the route has them.</summary>
 public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps,
-    bool RedirectKeepMethod = false, IReadOnlyList<ResponseHeader>? ResponseHeaders = null);
+    bool RedirectKeepMethod = false, IReadOnlyList<ResponseHeader>? ResponseHeaders = null,
+    IReadOnlyList<RouteLocation>? Locations = null);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -108,6 +109,22 @@ public static partial class RouteEditor
         var responseError = RouteGuards.CheckResponseHeaders(responseHeaders)
                             ?? RouteGuards.CheckResponseHeaderClash(responseHeaders, options.Hsts, form.AllowEmbedding);
         if (responseError != null) return responseError;
+        var locations = new List<RouteLocation>();
+        foreach (var l in options.Locations ?? route.Locations)
+        {
+            var (path, pathError) = RouteLocations.NormalizePath(l.Path);
+            if (pathError != null) return pathError;
+            var upstreamOf = l.Upstream?.Trim();
+            var redirectOf = l.RedirectUrl?.Trim();
+            locations.Add(new RouteLocation
+            {
+                Path = path, Upstream = string.IsNullOrEmpty(upstreamOf) ? null : upstreamOf, StripPath = l.StripPath,
+                RedirectUrl = string.IsNullOrEmpty(redirectOf) ? null : redirectOf, RedirectCode = l.RedirectCode
+            });
+        }
+        var locationError = RouteLocations.Check(locations);
+        if (locationError != null) return locationError;
+        if (locations.Count > 0 && listenPort is not null) return "Locations only apply to a route with a host.";
 
         route.Name = !string.IsNullOrWhiteSpace(form.Name) ? form.Name.Trim()
                    : host.Length > 0 ? host
@@ -137,12 +154,13 @@ public static partial class RouteEditor
         route.Compress = !redirect && options.Compress;
         route.BlockExploits = options.BlockExploits;
         route.ResponseHeaders = responseHeaders;
+        route.Locations = locations;
         return null;
     }
 
     /// <summary>The options a route has now.</summary>
     public static RouteExtras OptionsOf(RouteConfig route) =>
-        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod, route.ResponseHeaders);
+        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod, route.ResponseHeaders, route.Locations);
 
     /// <summary>The redirect codes a route can answer with.</summary>
     public static readonly int[] RedirectCodes = [301, 302, 307, 308];

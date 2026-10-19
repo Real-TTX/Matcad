@@ -435,67 +435,104 @@ public class CaddyConfigGenerator
                 ["prefer"] = new[] { "zstd", "gzip" }
             });
 
-        handlers.Add(BuildTerminalHandler(route));
+        handlers.Add(route.Locations.Count > 0 ? BuildLocations(route) : BuildTerminalHandler(route));
         return handlers;
     }
 
+    /// <summary>
+    /// The custom locations of a route: a subroute that tries the most specific path first (/api/v2 before /api), each matching the path
+    /// itself and everything below it, and ends with the route's own target for the rest. Everything before it (guard, exploit filter,
+    /// headers, authentication, compression) holds for every location.
+    /// </summary>
+    private object BuildLocations(RouteConfig route)
+    {
+        var routes = new List<object>();
+        foreach (var l in RouteLocations.MostSpecificFirst(route.Locations))
+        {
+            var handle = new List<object>();
+            if (!string.IsNullOrEmpty(l.Upstream))
+            {
+                if (l.StripPath) handle.Add(new Dictionary<string, object?> { ["handler"] = "rewrite", ["strip_path_prefix"] = l.Path });
+                handle.Add(BuildProxy(route, l.Upstream!, toRouteUpstream: false));
+            }
+            else
+            {
+                handle.Add(Redirect(l.RedirectCode, RedirectLocation(l.RedirectUrl!)));
+            }
+            routes.Add(new Dictionary<string, object?>
+            {
+                ["match"] = new[] { new Dictionary<string, object?> { ["path"] = new[] { l.Path, l.Path + "/*" } } },
+                ["handle"] = handle,
+                ["terminal"] = true
+            });
+        }
+        routes.Add(new Dictionary<string, object?> { ["handle"] = new[] { BuildTerminalHandler(route) } });
+        return new Dictionary<string, object?> { ["handler"] = "subroute", ["routes"] = routes };
+    }
+
+    private static Dictionary<string, object?> Redirect(int status, string location) => new()
+    {
+        ["handler"] = "static_response",
+        ["status_code"] = status,
+        ["headers"] = new Dictionary<string, object?> { ["Location"] = new[] { location } }
+    };
+
+    /// <summary>
+    /// reverse_proxy to an upstream of the route. <paramref name="toRouteUpstream"/>: the route's own upstream, which gets the Host header and
+    /// the headers of the route (they were set up for that one service; a location's upstream is another one and must not get a secret meant
+    /// for it). The required header is removed on the way to every upstream.
+    /// </summary>
+    private static Dictionary<string, object?> BuildProxy(RouteConfig route, string upstream, bool toRouteUpstream)
+    {
+        var (dial, isHttps) = ParseDial(upstream);
+        var proxy = new Dictionary<string, object?>
+        {
+            ["handler"] = "reverse_proxy",
+            ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
+        };
+        var host = toRouteUpstream ? RouteGuards.NormalizeUpstreamHost(route.UpstreamHost).Host : null;
+        if (isHttps)
+        {
+            var tls = new Dictionary<string, object?>();
+            if (route.InsecureSkipVerify) tls["insecure_skip_verify"] = true;
+            // The name asked for is also the name the certificate has to carry (and the one the upstream picks its certificate by).
+            if (host != null) tls["server_name"] = RouteGuards.TlsServerName(host);
+            proxy["transport"] = new Dictionary<string, object?>
+            {
+                ["protocol"] = "http",
+                ["tls"] = tls
+            };
+        }
+
+        // Headers to the upstream. Caddy sets a header under exactly the key it is given, so the names are written the way
+        // the HTTP stack writes them - otherwise "x-foo" would sit next to the "X-Foo" the visitor sent instead of replacing it.
+        var set = new Dictionary<string, object?>();
+        if (host != null) set["Host"] = new[] { host };
+        if (toRouteUpstream)
+            foreach (var h in route.UpstreamHeaders) set[RouteGuards.CanonicalName(h.Name)] = new[] { h.Value };
+        // The secret of a required header was for this proxy: the website behind it (and any plugin or log there) must not see it.
+        // Caddy deletes after it sets, so the validation keeps an upstream header of the same name out (RouteGuards.CheckNameClash).
+        var delete = new List<string>();
+        if (route.RequireHeader is { Name.Length: > 0 } required)
+            delete.Add(RouteGuards.CanonicalName(required.Name));
+        if (set.Count > 0 || delete.Count > 0)
+        {
+            var request = new Dictionary<string, object?>();
+            if (set.Count > 0) request["set"] = set;
+            if (delete.Count > 0) request["delete"] = delete;
+            proxy["headers"] = new Dictionary<string, object?> { ["request"] = request };
+        }
+        return proxy;
+    }
+
     /// <summary>reverse_proxy to the upstream, else redirect to the fallback URL.</summary>
-    private object BuildTerminalHandler(RouteConfig route)
+    private static object BuildTerminalHandler(RouteConfig route)
     {
         if (!string.IsNullOrWhiteSpace(route.Upstream))
-        {
-            var (dial, isHttps) = ParseDial(route.Upstream!);
-            var proxy = new Dictionary<string, object?>
-            {
-                ["handler"] = "reverse_proxy",
-                ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
-            };
-            var host = RouteGuards.NormalizeUpstreamHost(route.UpstreamHost).Host;
-            if (isHttps)
-            {
-                var tls = new Dictionary<string, object?>();
-                if (route.InsecureSkipVerify) tls["insecure_skip_verify"] = true;
-                // The name asked for is also the name the certificate has to carry (and the one the upstream picks its certificate by).
-                if (host != null) tls["server_name"] = RouteGuards.TlsServerName(host);
-                proxy["transport"] = new Dictionary<string, object?>
-                {
-                    ["protocol"] = "http",
-                    ["tls"] = tls
-                };
-            }
-
-            // Headers to the upstream. Caddy sets a header under exactly the key it is given, so the names are written the way
-            // the HTTP stack writes them - otherwise "x-foo" would sit next to the "X-Foo" the visitor sent instead of replacing it.
-            var set = new Dictionary<string, object?>();
-            if (host != null) set["Host"] = new[] { host };
-            foreach (var h in route.UpstreamHeaders) set[RouteGuards.CanonicalName(h.Name)] = new[] { h.Value };
-            // The secret of a required header was for this proxy: the website behind it (and any plugin or log there) must not see it.
-            // Caddy deletes after it sets, so the validation keeps an upstream header of the same name out (RouteGuards.CheckNameClash).
-            var delete = new List<string>();
-            if (route.RequireHeader is { Name.Length: > 0 } required)
-                delete.Add(RouteGuards.CanonicalName(required.Name));
-            if (set.Count > 0 || delete.Count > 0)
-            {
-                var request = new Dictionary<string, object?>();
-                if (set.Count > 0) request["set"] = set;
-                if (delete.Count > 0) request["delete"] = delete;
-                proxy["headers"] = new Dictionary<string, object?> { ["request"] = request };
-            }
-            return proxy;
-        }
+            return BuildProxy(route, route.Upstream!, toRouteUpstream: true);
 
         if (!string.IsNullOrWhiteSpace(route.FallbackUrl))
-        {
-            return new Dictionary<string, object?>
-            {
-                ["handler"] = "static_response",
-                ["status_code"] = route.RedirectStatus,
-                ["headers"] = new Dictionary<string, object?>
-                {
-                    ["Location"] = new[] { RedirectLocation(route.FallbackUrl!, route.RedirectKeepPath) }
-                }
-            };
-        }
+            return Redirect(route.RedirectStatus, RedirectLocation(route.FallbackUrl!, route.RedirectKeepPath));
 
         return new Dictionary<string, object?>
         {

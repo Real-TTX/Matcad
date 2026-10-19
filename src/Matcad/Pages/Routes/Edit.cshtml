@@ -165,6 +165,60 @@ else
             </div>
         </section>
 
+        <section class="mat-card" aria-labelledby="route-locations-title">
+            <div class="mat-card__head">@Ui.Icon("route")<h2 class="mat-card__title" id="route-locations-title">Locations</h2></div>
+            <div class="mat-card__body mat-stack">
+                <details class="mat-collapse" open="@(Model.LocationRows.Count > 0)" id="route-locations">
+                    <summary><span>Paths with their own upstream or redirect</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <div class="mat-table-wrap">
+                            <table class="mat-table" id="locations">
+                                <caption class="mat-sr-only">Custom locations</caption>
+                                <thead><tr><th scope="col">Path</th><th scope="col">Action</th><th scope="col">Upstream or address</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                                <tbody>
+                                    @foreach (var row in Model.LocationRows)
+                                    {
+                                        <tr>
+                                            <td data-label="Path"><input name="LocationPaths" value="@row.Path" class="mat-input mat-mono" aria-label="Path" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                            <td data-label="Action">
+                                                <select name="LocationKinds" class="mat-select" aria-label="Action">
+                                                    @foreach (var (value, text) in Matcad.Pages.Routes.EditModel.LocationKindOptions)
+                                                    {
+                                                        <option value="@value" selected="@(row.Kind == value)">@text</option>
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td data-label="Upstream or address"><input name="LocationTargets" value="@row.Target" class="mat-input mat-mono" aria-label="Upstream or address" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                            <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the location @row.Path" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <span class="mat-hint">/api covers /api and everything below it; the most specific path wins. The rest of the host goes to the target above. Guards, login and headers apply to every path.</span>
+                        <div class="mat-actions">
+                            <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#locations tbody" data-template="location-row-template">@Ui.Icon("plus")<span>Add a location</span></button>
+                        </div>
+                        <template id="location-row-template">
+                            <tr>
+                                <td data-label="Path"><input name="LocationPaths" class="mat-input mat-mono" aria-label="Path" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="/api" /></td>
+                                <td data-label="Action">
+                                    <select name="LocationKinds" class="mat-select" aria-label="Action">
+                                        @foreach (var (value, text) in Matcad.Pages.Routes.EditModel.LocationKindOptions)
+                                        {
+                                            <option value="@value">@text</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td data-label="Upstream or address"><input name="LocationTargets" class="mat-input mat-mono" aria-label="Upstream or address" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="api:8080" /></td>
+                                <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the location" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                            </tr>
+                        </template>
+                    </div>
+                </details>
+            </div>
+        </section>
+
         <section class="mat-card" aria-labelledby="route-access-title">
             <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="route-access-title">Access</h2></div>
             <div class="mat-card__body mat-stack">

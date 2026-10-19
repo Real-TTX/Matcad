@@ -57,6 +57,18 @@ public class EditModel : PageModel
     [BindProperty] public List<string> ResponseActions { get; set; } = new();
     public List<ResponseHeader> ResponseRows { get; private set; } = new();
 
+    // --- Custom locations: three parallel lists, one entry per row. Kind: "proxy", "proxy-strip" or a redirect code ("301" ... "308").
+    [BindProperty] public List<string> LocationPaths { get; set; } = new();
+    [BindProperty] public List<string> LocationKinds { get; set; } = new();
+    [BindProperty] public List<string> LocationTargets { get; set; } = new();
+    public record LocationRow(string Path, string Kind, string Target);
+    public static readonly (string Value, string Text)[] LocationKindOptions =
+    [
+        ("proxy", "Proxy"), ("proxy-strip", "Proxy, strip the path"),
+        ("302", "Redirect 302"), ("301", "Redirect 301"), ("307", "Redirect 307"), ("308", "Redirect 308"),
+    ];
+    public List<LocationRow> LocationRows { get; private set; } = new();
+
     /// <summary>A row of the upstream headers on the page: the name, and whether a value is saved for it.</summary>
     public record HeaderRow(string Name, bool ValueSet);
 
@@ -106,6 +118,9 @@ public class EditModel : PageModel
             RequireName = r.RequireHeader?.Name; RequireSet = r.RequireHeader != null;
             AllowedIpsText = string.Join('\n', r.AllowedIps);
             ResponseRows = r.ResponseHeaders.Select(h => new ResponseHeader { Name = h.Name, Value = h.Value, Remove = h.Remove }).ToList();
+            LocationRows = r.Locations.Select(l => new LocationRow(l.Path,
+                l.Upstream != null ? (l.StripPath ? "proxy-strip" : "proxy") : l.RedirectCode.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                l.Upstream ?? l.RedirectUrl ?? "")).ToList();
         }
         else if (!string.IsNullOrWhiteSpace(Sub))
         {
@@ -127,6 +142,8 @@ public class EditModel : PageModel
         var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy };
         var (access, accessError) = ReadAccess(existing);
         if (accessError != null) return Fail(accessError);
+        var (locations, locationError) = ReadLocations();
+        if (locationError != null) return Fail(locationError);
         if (!RouteEditor.TrySplitRedirectCode(RedirectCode, out var permanent, out var keepMethod) && Target == "redirect")
             return Fail("The redirect code must be 301, 302, 307 or 308.");
         var form = new RouteForm(Host, RouteType == "wildcard", Target == "redirect", Upstream, InsecureSkipVerify,
@@ -134,7 +151,7 @@ public class EditModel : PageModel
             // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
             UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
             RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText),
-            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod, ReadResponseHeaders()));
+            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod, ReadResponseHeaders(), locations));
         var error = RouteEditor.Apply(form, route);
         if (error != null) return Fail(error);
         if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))
@@ -173,6 +190,7 @@ public class EditModel : PageModel
         PortBinding = portBinding;
         ShowPostedAccess();
         ResponseRows = ReadResponseHeaders();
+        LocationRows = PostedLocationRows();
         BuildOptions();
         return Page();
     }
@@ -203,6 +221,37 @@ public class EditModel : PageModel
             if (kept != null) return (new PostedAccess(headers, require), kept);
         }
         return (new PostedAccess(headers, require), null);
+    }
+
+    /// <summary>The location rows as posted (an entirely empty row is dropped).</summary>
+    private List<LocationRow> PostedLocationRows()
+    {
+        var rows = new List<LocationRow>();
+        for (var i = 0; i < LocationPaths.Count; i++)
+        {
+            var path = LocationPaths[i]?.Trim() ?? "";
+            var kind = i < LocationKinds.Count ? LocationKinds[i] ?? "proxy" : "proxy";
+            var target = i < LocationTargets.Count ? LocationTargets[i]?.Trim() ?? "" : "";
+            if (path.Length == 0 && target.Length == 0) continue;
+            rows.Add(new LocationRow(path, kind, target));
+        }
+        return rows;
+    }
+
+    /// <summary>The posted rows as locations; the kind says whether the target is an upstream (stripped or not) or a redirect with its code.</summary>
+    private (List<RouteLocation> Locations, string? Error) ReadLocations()
+    {
+        var locations = new List<RouteLocation>();
+        foreach (var row in PostedLocationRows())
+        {
+            if (row.Kind is "proxy" or "proxy-strip")
+                locations.Add(new RouteLocation { Path = row.Path, Upstream = row.Target, StripPath = row.Kind == "proxy-strip" });
+            else if (int.TryParse(row.Kind, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var code))
+                locations.Add(new RouteLocation { Path = row.Path, RedirectUrl = row.Target, RedirectCode = code });
+            else
+                return (locations, $"Location '{row.Path}': choose what happens to its requests.");
+        }
+        return (locations, null);
     }
 
     /// <summary>The rows of the response headers the form posted; an entirely empty row is dropped, a removed header has no value.</summary>

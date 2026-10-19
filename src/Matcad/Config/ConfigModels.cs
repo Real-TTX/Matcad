@@ -80,6 +80,22 @@ public class ResponseHeader
     public bool Remove { get; set; }
 }
 
+/// <summary>A custom location of a route: requests under <see cref="Path"/> (the path itself and everything below it) go to their own
+/// upstream or are redirected, the rest of the host goes to the route's target. Rules in <see cref="RouteLocations"/>.</summary>
+public class RouteLocation
+{
+    /// <summary>For example /api: matches /api and /api/...</summary>
+    public string Path { get; set; } = "";
+    /// <summary>Reverse-proxy target of this path (or <see cref="RedirectUrl"/>).</summary>
+    public string? Upstream { get; set; }
+    /// <summary>Remove <see cref="Path"/> from the request before it goes to the upstream (/api/users reaches it as /users).</summary>
+    public bool StripPath { get; set; }
+    /// <summary>Redirect target of this path (or <see cref="Upstream"/>).</summary>
+    public string? RedirectUrl { get; set; }
+    /// <summary>301, 302, 307 or 308.</summary>
+    public int RedirectCode { get; set; } = 302;
+}
+
 /// <summary>
 /// A route in the hierarchical domain tree. A route may be a wildcard host and
 /// may have children (e.g. sub.example.com under *.example.com).
@@ -90,6 +106,7 @@ public class RouteConfig : ConfigEntity
     private List<string> _allowedIps = new();
     private List<string> _blockedIps = new();
     private List<ResponseHeader> _responseHeaders = new();
+    private List<RouteLocation> _locations = new();
 
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
@@ -151,6 +168,8 @@ public class RouteConfig : ConfigEntity
     public bool Compress { get; set; }
     /// <summary>Headers set on or removed from every answer of the route (also those of the upstream, applied when the answer is written).</summary>
     public List<ResponseHeader> ResponseHeaders { get => _responseHeaders; set => _responseHeaders = value ?? new(); }
+    /// <summary>Custom locations: paths with their own upstream or redirect, tried before the route's own target (most specific first).</summary>
+    public List<RouteLocation> Locations { get => _locations; set => _locations = value ?? new(); }
 
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }
