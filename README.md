@@ -36,6 +36,12 @@ lose the YAML-in-your-head part.
   **HSTS**, **compression** (zstd/gzip) and **blocked IP addresses** (set on the route page; the REST API keeps them)
 - **Response headers** per route: set or remove headers of the answer (`X-Content-Type-Options`, `Referrer-Policy`, drop `Server` or
   `X-Powered-By`), also over what the upstream sends; values are visible ASCII without line breaks or `{ }` (route page only)
+- **Locations** per route: a path (`/api` covers `/api` and everything below it) with its own upstream - optionally stripping the
+  path - or a redirect; the most specific path wins, guards, login and headers of the route hold for every path (route page only)
+- **Several upstreams** per route with **load balancing** (round robin, least connections, first available) and an **active health
+  check** (path, interval, expected status such as `200` or `2xx`); an upstream that fails is left out until it answers again, and the
+  routes list shows how many upstreams are healthy (as Matcad sees them from its container; route page only)
+- Plain HTTP to a known host is **redirected to HTTPS** (308, path and query kept)
 - **Unknown hosts** (Settings): a host without a route gets Caddy's default (plain HTTP to HTTPS), a small 404 page, a redirect
   or a closed connection
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs

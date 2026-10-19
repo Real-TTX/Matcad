@@ -35,13 +35,14 @@ src/Matcad
   Program.cs            pipeline, auth (session + sign-in through MatIdentity), health checks, SSE log stream, MapMatcadApi + MapMatPlatform
   Api/                  REST API for matOS / Mattiverse / the Cloud (X-Api-Key); RouteAccessFields reads the tri-state access fields
   Auth/                 session cookie scheme (SessionCookie writes it), account guard (forced password change, first-run wizard)
-  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), RouteGuards (rules for the access properties), certificates, backup
+  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), RouteGuards (rules for the access properties), RouteLocations, RouteBalancing, certificates, backup
   Data/                 EF Core context, migrations, DatabaseBootstrapper (also upgrades pre-0.6 databases)
   MatPlatform/          the platform contract of the Mat apps: a COPY of MatPlatform from MatDesign (tools/matplatform-copy.js) - never edit
   Platform/             MatcadPlatform (the MatApiDefinition: tiles, settings, actions; de+en via o.T), MatcadIdentityUsers (MatIdentity -> local user)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest,
                         ProxyMonitor / ProxyStatusService (Caddy reachability, certificate checks, upstream errors for the platform tiles),
-                        RequestLogQueries (dashboard + statistics: pages never hold the DbContext), AuditLog (who changed what)
+                        RequestLogQueries (dashboard + statistics: pages never hold the DbContext), AuditLog (who changed what),
+                        UpstreamHealthService (health checks of the routes for the routes list)
   Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar
   Controls/             Ui (icons, logo), tag helpers (<icon>, <mat-field>, <mat-form-buttons>), ToolbarModel, BrandAccent
   wwwroot/              matui/ (the toolkit, a copy), css/matcad.css, js/*.js, sw.js, offline.html, manifest.webmanifest, img/
@@ -105,7 +106,7 @@ page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host h
   (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
   `{http.request.header.X-Up}`), routes created through the REST API, then curl.
 
-**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`, `ResponseHeaders`): set on the route page only (`RouteExtras` in
+**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`, `ResponseHeaders`, `Locations`, `ExtraUpstreams` / `LoadBalancing` / `Health*`): set on the route page only (`RouteExtras` in
 `RouteForm`; null = keep what the route has), so `POST /api/v1/routes` keeps them and the API answers keep their shape. Blocked IPs are part of
 the guard (403, unreadable list = 503). The exploit filter is a `path_regexp` plus a CEL `expression` on `{http.request.uri.query}` (checked
 against a real caddy:2). A redirect target never contains `{`/`}` (Caddy fills placeholders into `Location`; `{env.*}` would leak).
@@ -113,6 +114,23 @@ against a real caddy:2). A redirect target never contains `{`/`}` (Caddy fills p
 (or remove) what the upstream sends: names are tokens without `*` (Caddy's delete reads it as a wildcard), canonical; values visible ASCII and
 space only (no CR/LF: header injection), no edge space, no `{`/`}` (placeholders); the framing headers (`Content-Length`, `Content-Encoding`, ...)
 are refused, and so are `Strict-Transport-Security` with HSTS on and setting `X-Frame-Options` with embedding allowed. A stored invalid list = 503.
+`Locations` (`Config/RouteLocations.cs`): the last handler of the chain becomes a `subroute`, most specific path first (more segments, then
+longer), each matching `[path, path/*]` (Caddy compares paths case-insensitively, so duplicates are judged that way), then the route's own
+target without matcher. A location has one upstream (optional `rewrite` `strip_path_prefix`) or a redirect with its code; its proxy gets the
+`delete` of the required header but NOT the route's `UpstreamHost` / `UpstreamHeaders` (those were set up for the route's upstream, a secret
+must not reach another service). Paths: plain segments only - no `*` (wildcard), `%` (escape rules), `{ }`, `?`, `.`/`..`, and not `/auth`.
+`ExtraUpstreams` / `LoadBalancing` / `HealthPath` / `HealthIntervalSeconds` / `HealthStatus` (`Config/RouteBalancing.cs`): `AllUpstreams` is
+`Upstream` + the extra ones (the API only knows `upstream`, the first, and keeps the rest), all http or all https (one transport), a
+`load_balancing.selection_policy` from two upstreams on, `health_checks.active` (`uri`, interval, timeout min(5, interval), `expect_status`:
+a code or a class, 2 = 2xx). Caddy's admin API does not say which upstream it considers healthy, so `UpstreamHealthService` asks the same
+path itself (named HTTP clients, no redirects followed; the insecure one only when the route skips TLS verification) and the routes list
+shows "n/m healthy" - from Matcad's container, which is the right view when it shares the network with Caddy.
+
+**HTTP -> HTTPS:** the main server listens on :80 and :443; Caddy inserts its automatic redirects after the last route with a host matcher,
+which never got a request because the host routes match both schemes. So `Build` puts a first route `{host: [all hosts], protocol: "http"}`
+-> 308 `https://{http.request.host}{http.request.uri}`. ACME HTTP-01 is answered by the server before any route; unknown hosts are not in the
+list and reach the unknown-host answer; port bindings have their own servers and stay plain HTTP. Tests that look for a site route skip it
+(`match[0].protocol`).
 
 **Unknown hosts** (`MatcadSettings.UnknownHost`: `""` Caddy's default, `notfound`, `redirect` + `UnknownHostRedirect`, `drop`; Settings ->
 General only, `/api/v1/settings` keeps its shape): a route without matcher that `CaddyService.BuildNode` appends AFTER the merge of the extra

@@ -21,6 +21,7 @@ real ACME issuance and renewal (no public DNS), Docker discovery (no socket moun
 | 11 | The plain 401 of the login portal carried an inline style. | Removed. |
 | 12 | **Startup hang:** EF Core 10 on SQLite leaves a row in `__EFMigrationsLock` when the process is stopped while it migrates (an update recreates the container seconds after the start); every later start waited for it forever. | `MigrationLock.ReleaseStaleAsync` (ported from MatDock) removes it before `MigrateAsync`, with a warning in the log. The backup restore does not migrate, so it needs nothing. |
 | 13 | The header-name check ended in `$`, which also matches before a final line break (a stored, untrimmed name). | `\z`. |
+| 14 | **Plain HTTP was served, not redirected:** the main server listens on :80 and :443, and Caddy inserts its automatic HTTP->HTTPS redirects after the last route with a host matcher - our host routes match both schemes, so `http://host/` got the site itself. | A first route matches the hosts of all routes with `protocol: http` and answers 308 to `https://{host}{uri}`. ACME HTTP-01 is answered before routes; unknown hosts are not in it; port bindings keep their own plain-HTTP servers. |
 
 Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to the API key holder - MatOS edits providers through it and
 `/api/v1` must stay byte-compatible. Should a v2 ever come: `credentialsSet` instead (as Mattiverse's own contract already does).
@@ -43,7 +44,7 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 | Access lists: IP allow | has | allowed IPs |
 | Access lists: IP deny | **has (new)** | blocked IPs |
 | Reusable access lists (auth + IPs as one object) | partly | IPs are per route; M - only if many routes share lists |
-| Custom locations (per-path upstreams) | missing | M - `path` matcher per sub-route; next candidate |
+| Custom locations (per-path upstreams) | **has (new)** | route page: a path with its own upstream (optionally stripped) or redirect, most specific first |
 | Websockets | has | Caddy proxies them without a switch |
 | HTTP/2, HTTP/3 | has | Caddy default |
 | HSTS | **has (new)** | per route |
@@ -53,22 +54,29 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 | Users and permissions | has | admin / user, MatIdentity |
 | Audit log | **has (new)** | Settings -> Audit log |
 | Access log per host | has | statistics filtered by host (latest 100), **link from the routes list (new)**, live log on the dashboard |
-| Upstream health | partly | 502/504 hosts in the platform tile; active health checks: M together with load balancing |
-| Load balancing over several upstreams | missing | M - list of upstreams + policy; needs an additive API field (`upstreams`) next to `upstream` |
+| Upstream health | **has (new)** | active health check per route (path, interval, expected status); the routes list shows how many upstreams answer, 502/504 hosts in the platform tile |
+| Load balancing over several upstreams | **has (new)** | route page: more upstreams, round robin / least connections / first available; the API keeps `upstream` as the first one |
 | Compression | **has (new)** | per route |
 | Docker discovery, Caddyfile import, backup | has | beyond NPM |
 
 ### Plan (by value)
 
-1. Custom locations (M): path rules per route, each with its own upstream or redirect.
-2. Several upstreams with load balancing and active health checks (M), API field added, never changed.
+Nothing large left from this list. Only on request: raw TCP/UDP streams (caddy-l4 plugin), reusable access lists, the new route options in
+the REST API (needs additive fields and a `capabilities` entry, as the pinning tests require).
 
 Done since the review: response headers per route, redirect codes 307/308, unknown hosts (404 / default host), stale migration lock. All three
 route features were checked against a real caddy:2 with Matcad driving it (headers replaced and removed over the upstream, 307/308 with the kept
 path, the 404 page for an unknown host on plain HTTP; the redirect and the closed connection with the same JSON loaded by hand); that the answer stays behind the routes of the extra
 JSON is a unit test.
 
+Second round: plain HTTP to a known host now redirects to HTTPS (finding 14), custom locations, several upstreams with load balancing and
+active health checks. Checked against a real caddy:2 driven by Matcad: `curl -I http://host/a/b?c=1` gives 308 to `https://host/a/b?c=1` (the
+login portal path too) while an unknown host still gets the 404 page; locations pick the most specific path (case-insensitive), strip the
+prefix and never pass the guard's secret on; round robin skips the upstream whose health check answers 500, and the routes list shows
+"2/3 healthy" with the failing upstream in the tooltip. Not exercised live: a real ACME HTTP-01 challenge (Caddy answers it before any route).
+
 ## Tests
 
-Before: 432. After the review: 489. After the follow-ups (migration lock, redirect codes, response headers, unknown hosts): 549, all green;
+Before: 432. After the review: 489. After the follow-ups (migration lock, redirect codes, response headers, unknown hosts): 549. After the second round (HTTPS redirect,
+locations, load balancing and health checks): 595, all green;
 `dotnet build` 0 warnings.
