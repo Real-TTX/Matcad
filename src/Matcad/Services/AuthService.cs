@@ -29,11 +29,13 @@ public class AuthService
 
     private readonly MatcadDbContext _db;
     private readonly ILogger<AuthService> _log;
+    private readonly AuditLog? _audit;
 
-    public AuthService(MatcadDbContext db, ILogger<AuthService> log)
+    public AuthService(MatcadDbContext db, ILogger<AuthService> log, AuditLog? audit = null)
     {
         _db = db;
         _log = log;
+        _audit = audit;
     }
 
     /// <summary>Without a logger (unit tests, tools).</summary>
@@ -111,6 +113,7 @@ public class AuthService
         };
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
+        _audit?.Record("User", "created", user.Username);
         return user;
     }
 
@@ -132,6 +135,7 @@ public class AuthService
         user.UpdateUserId = actorId;
         await _db.SaveChangesAsync();
         SessionCache.Clear();
+        _audit?.Record("User", string.IsNullOrEmpty(newPassword) ? "changed" : "changed (new password)", user.Username);
     }
 
     public async Task DeleteUser(long id)
@@ -141,6 +145,7 @@ public class AuthService
         _db.Users.Remove(user); // the sessions go with it (cascade)
         await _db.SaveChangesAsync();
         SessionCache.Clear(); // drop any cached sessions of the removed user
+        _audit?.Record("User", "deleted", user.Username);
     }
 
     /// <summary>Replaces all users (backup restore). Password hashes are taken as-is.</summary>
@@ -158,6 +163,7 @@ public class AuthService
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
         SessionCache.Clear();
+        _audit?.Record("User", "restored", $"{_db.Users.Local.Count} users");
     }
 
     /// <summary>Returns the user if credentials are valid, otherwise null.</summary>

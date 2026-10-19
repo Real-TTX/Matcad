@@ -86,6 +86,23 @@ public class ConfigStore
         File.Move(temp, path, overwrite: true);
     }
 
+    /// <summary>Raised after a change was written (outside the lock), for the audit log. Carries names, never values.</summary>
+    public event Action<ConfigChange>? Changed;
+
+    private void Raise(string kind, string action, string subject) => Changed?.Invoke(new ConfigChange(kind, action, subject));
+
+    private static string KindOf<T>() => typeof(T) == typeof(RouteConfig) ? "Route"
+        : typeof(T) == typeof(ProviderConfig) ? "DNS provider"
+        : typeof(T) == typeof(AuthenticationConfig) ? "Authentication" : typeof(T).Name;
+
+    private static string SubjectOf(ConfigEntity item) => item switch
+    {
+        RouteConfig r => r.ListenPort is > 0 ? $"port {r.ListenPort}" : r.Host,
+        ProviderConfig p => p.Name,
+        AuthenticationConfig a => a.Name,
+        _ => item.Id.ToString()
+    };
+
     public void SaveSettings(MatcadSettings settings)
     {
         lock (_lock)
@@ -93,6 +110,7 @@ public class ConfigStore
             Write("settings.json", settings);
             _settings = settings;
         }
+        Raise("Settings", "changed", "settings");
     }
 
     // --- Mutations: assign Id, stamp audit fields, persist. ---
@@ -145,8 +163,10 @@ public class ConfigStore
 
     private void Upsert<T>(string key, string file, ref IReadOnlyList<T>? field, T item, long? userId) where T : ConfigEntity
     {
+        bool created;
         lock (_lock)
         {
+            created = item.Id == 0 || (field ??= Load<T>(file)).All(x => x.Id != item.Id);
             var list = new List<T>(field ??= Load<T>(file));
             var now = DateTime.UtcNow;
             if (item.Id == 0)
@@ -178,17 +198,22 @@ public class ConfigStore
             Write(file, list);
             field = list;
         }
+        Raise(KindOf<T>(), created ? "created" : "changed", SubjectOf(item));
     }
 
     private void Remove<T>(string file, ref IReadOnlyList<T>? field, long id) where T : ConfigEntity
     {
+        T? removed;
         lock (_lock)
         {
             var list = new List<T>(field ??= Load<T>(file));
-            list.RemoveAll(x => x.Id == id);
+            removed = list.FirstOrDefault(x => x.Id == id);
+            if (removed == null) return;
+            list.Remove(removed);
             Write(file, list);
             field = list;
         }
+        Raise(KindOf<T>(), "deleted", SubjectOf(removed));
     }
 
     // Monotonic ID sequences per entity type, persisted so IDs are never reused
@@ -239,5 +264,9 @@ public class ConfigStore
                 _sequences = sequences;
             }
         }
+        Raise("Backup", "restored", $"{providers.Count} providers, {routes.Count} routes, {authentications.Count} authentications");
     }
 }
+
+/// <summary>One change of the configuration: what kind of object, what happened (created, changed, deleted, restored) and its name.</summary>
+public sealed record ConfigChange(string Kind, string Action, string Subject);

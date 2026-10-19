@@ -11,7 +11,9 @@
     var width = ViewData["Width"] as string;
     var crumbs = ViewData["Crumbs"] as IReadOnlyList<Crumb> ?? [];
 
-    bool IsCurrent(string folder) => folder == "/Index" ? page == "/Index" : page.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+    bool IsCurrent(string folder) => folder == "/Index" ? page == "/Index"
+        : folder == "/Settings" ? page.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && !page.StartsWith("/Settings/Audit", StringComparison.OrdinalIgnoreCase)
+        : page.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
 
     void Item(string folder, string href, string icon, string text)
     {
@@ -57,6 +59,7 @@
                         Item("/Providers", "/Providers", "cloud", "DNS providers");
                         <li class="mat-nav__group" role="presentation">System</li>
                         Item("/Settings", "/Settings", "settings", "Settings");
+                        Item("/Settings/Audit", "/Settings/Audit", "list", "Audit log");
                     }
                 </ul>
             </nav>

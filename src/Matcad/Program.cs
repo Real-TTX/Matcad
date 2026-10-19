@@ -64,6 +64,8 @@ builder.Services.AddSingleton<ProxyMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxyMonitor>());
 builder.Services.AddScoped<ProxyStatusService>();
 builder.Services.AddScoped<RequestLogQueries>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<AuditLog>();
 
 // --- Platform contract of the Mat apps (MatDesign docs/PLATFORM.md) ------------
 // /api, /api/health, /api/state, /api/configure, /api/actions from the package MatPlatform (a copy in MatPlatform/); MatcadPlatform describes
@@ -161,6 +163,9 @@ using (var scope = app.Services.CreateScope())
         app.Logger.LogInformation("Existing configuration detected - setup wizard skipped.");
     }
 }
+
+// From here on every change of the configuration goes into the audit log (the start-up adjustments above are not changes of a person).
+app.Services.GetRequiredService<AuditLog>().Attach(app.Services.GetRequiredService<ConfigStore>());
 
 // Push the current desired config to Caddy on startup (best effort; Caddy may
 // still be starting). Route changes re-push at runtime.

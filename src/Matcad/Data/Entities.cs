@@ -69,3 +69,15 @@ public class RequestLog : AuditedEntity
     public double DurationMs { get; set; }
     public DateTime Timestamp { get; set; }
 }
+
+/// <summary>
+/// One change in Matcad: who (a user name, "API" for the REST API, "Matcad" for the app itself), what kind of object, what happened
+/// and its name. Never a value: no password, header value or credential ends up here. <see cref="AuditedEntity.CreateDate"/> is the time.
+/// </summary>
+public class AuditEntry : AuditedEntity
+{
+    public string Actor { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string Subject { get; set; } = "";
+}

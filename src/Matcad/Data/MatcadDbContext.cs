@@ -14,6 +14,7 @@ public class MatcadDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -50,6 +51,17 @@ public class MatcadDbContext : DbContext
             e.HasIndex(x => x.Timestamp).HasDatabaseName("IxRequestLogTimestamp");
             // "Latest access per host" and host-filtered statistics.
             e.HasIndex(x => new { x.Host, x.Timestamp }).HasDatabaseName("IxRequestLogHostTimestamp");
+        });
+
+        b.Entity<AuditEntry>(e =>
+        {
+            e.ToTable("AuditEntry");
+            e.HasKey(x => x.Id).HasName("PkAuditEntry");
+            e.Property(x => x.Actor).HasMaxLength(256);
+            e.Property(x => x.Kind).HasMaxLength(64);
+            e.Property(x => x.Action).HasMaxLength(64);
+            e.Property(x => x.Subject).HasMaxLength(512);
+            e.HasIndex(x => x.CreateDate).HasDatabaseName("IxAuditEntryCreateDate");
         });
     }
 }

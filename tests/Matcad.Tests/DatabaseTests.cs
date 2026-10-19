@@ -79,7 +79,7 @@ public class DatabaseTests
         await InitializeAsync(database);
 
         var schema = database.Schema();
-        Assert.Equal(["RequestLog", "User", "UserSession"],
+        Assert.Equal(["AuditEntry", "RequestLog", "User", "UserSession"],
             schema.Where(s => s.Type == "table" && !s.Name.StartsWith("__") && s.Name != "sqlite_sequence").Select(s => s.Name).Order());
 
         // Every table, column, index and constraint name of the app: letters and digits, starting with a capital.

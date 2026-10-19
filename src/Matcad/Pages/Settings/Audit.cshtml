@@ -1,0 +1,61 @@
+@page
+@model Matcad.Pages.Settings.AuditModel
+@{
+    ViewData["Title"] = "Audit log";
+    ViewData["PageSub"] = "Who changed what. Names only, never a secret; kept for a year.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Audit log", null));
+    var tools = Model.Toolbar.SearchActive || Model.Toolbar.ActiveFilters > 0;
+}
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+
+    @if (Model.Entries.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon">@Ui.Icon(tools ? "search" : "list")</span>
+            @if (tools)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>Change the search or the filter, or reset them.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Audit">@Ui.Icon("refresh")<span>Reset the tools</span></a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No changes yet</div>
+                <p>Every change of a route, provider, authentication, setting or user shows up here.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Audit log</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Time</th>
+                        <th scope="col">Change</th>
+                        <th scope="col" class="mat-hide-sm">Kind</th>
+                        <th scope="col">By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Model.Entries)
+                    {
+                        <tr>
+                            <td data-label="Time" class="mat-mono">@Ui.LocalTime(e.CreateDate, "short")</td>
+                            <td data-label="Change"><span class="mat-text-break">@e.Subject</span> <span class="mat-muted">@e.Action</span></td>
+                            <td data-label="Kind" class="mat-hide-sm"><span class="mat-tag">@e.Kind</span></td>
+                            <td data-label="By">@e.Actor</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.Total > Model.Entries.Count)
+        {
+            <p class="mat-muted">The newest @Model.Entries.Count of @Model.Total.ToString("N0"). Search or filter to find older ones.</p>
+        }
+    }
+</div>
