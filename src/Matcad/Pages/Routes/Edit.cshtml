@@ -19,7 +19,7 @@
         }
         <div class="mat-alert mat-alert--info">
             @Ui.Icon("info")
-            <div class="mat-alert__body">This is a port binding (<code>:@port</code>). It is managed through the API: the proxy listens on that port and forwards to <code>@Model.Upstream</code>. Here it can only be deleted.</div>
+            <div class="mat-alert__body">Port <code>:@port</code> forwards to <code>@Model.Upstream</code>. Port bindings are managed through the API; here they can only be deleted.</div>
         </div>
         <mat-form-buttons>
             <a class="mat-btn mat-btn--secondary" asp-page="Index">@Ui.Icon("back")<span>Back</span></a>

@@ -17,8 +17,7 @@
         <div class="mat-card__head">@Ui.Icon("upload")<h2 class="mat-card__title" id="caddyfile-title">Caddyfile</h2></div>
         <div class="mat-card__body mat-stack">
             <p class="mat-muted">
-                Matcad adapts it with Caddy's own adapter and maps what it recognises (hosts, <code>reverse_proxy</code>, redirects, <code>basic_auth</code> and ACME DNS providers)
-                to routes, authentications and providers. Anything it cannot model is kept as <strong>raw passthrough</strong>, so nothing is lost.
+                Hosts, <code>reverse_proxy</code>, redirects, <code>basic_auth</code> and DNS providers become routes, authentications and providers; the rest is kept as <strong>raw passthrough</strong>.
             </p>
             <mat-field label="Caddyfile" asp-for="Caddyfile">
                 <textarea asp-for="Caddyfile" rows="12" class="mat-textarea mat-mono" spellcheck="false" placeholder="example.com {&#10;    reverse_proxy backend:8080&#10;}"></textarea>

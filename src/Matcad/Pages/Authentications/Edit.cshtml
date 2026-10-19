@@ -2,7 +2,7 @@
 @model Matcad.Pages.Authentications.EditModel
 @{
     ViewData["Title"] = Model.IsNew ? "New authentication" : "Edit authentication";
-    ViewData["PageSub"] = "Who may open the routes that use it, and for the Matcad login page how it looks.";
+    ViewData["PageSub"] = "Who may open the routes that use it, and how the login page looks.";
     ViewData["Crumbs"] = Crumbs.Of(("Authentications", "/Authentications"), (Model.IsNew ? "New authentication" : "Edit authentication", null));
     var logoMissing = string.IsNullOrWhiteSpace(Model.BrandLogo);
 }
@@ -35,7 +35,7 @@
     <section class="mat-card" aria-labelledby="auth-users-title">
         <div class="mat-card__head">@Ui.Icon("users")<h2 class="mat-card__title" id="auth-users-title">Users</h2></div>
         <div class="mat-card__body mat-stack">
-            <p class="mat-muted">Both types keep their accounts here. Leave the password empty to keep an existing one.</p>
+            <p class="mat-muted">Leave a password empty to keep it.</p>
             <div class="mat-table-wrap">
                 <table class="mat-table" id="basic-users">
                     <caption class="mat-sr-only">Users of this authentication</caption>
@@ -69,8 +69,7 @@
         <div class="mat-card__head">@Ui.Icon("login")<h2 class="mat-card__title" id="auth-login-title">Login page</h2></div>
         <div class="mat-card__body mat-stack">
             <p class="mat-muted">
-                Visitors without a login see this page and, after signing in, go back to the page they asked for (Caddy <code>forward_auth</code>).
-                Where the login is shown (on the site itself, as a redirect or as a plain 401) and the base domain are set under <a asp-page="/Settings/Index">Settings</a>.
+                Visitors without a login see this page and then return to where they were. Where it is shown is set under <a asp-page="/Settings/Index">Settings</a>.
             </p>
             <div class="mat-cols">
                 <div class="mat-col-12 mat-col-lg-7">
@@ -81,12 +80,12 @@
                         <mat-field label="Welcome text" asp-for="BrandText" hint="Empty shows “Protected area - please sign in”.">
                             <input asp-for="BrandText" class="mat-input" data-preview="text" />
                         </mat-field>
-                        <mat-field label="Accent colour" asp-for="BrandColor" hint="The colour of the button and the focus. Empty keeps the colour of Matcad.">
+                        <mat-field label="Accent colour" asp-for="BrandColor" hint="Empty keeps the colour of Matcad.">
                             <div class="mat-picker" data-picker="colour" data-clearable data-placeholder="The colour of Matcad">
                                 <input class="mat-picker__input" asp-for="BrandColor" data-preview="color" />
                             </div>
                         </mat-field>
-                        <mat-field label="Logo address" asp-for="BrandLogo" hint="An address, or upload a file below (PNG, JPEG, GIF, WebP, SVG or ICO, up to 256 KB, kept inside the configuration).">
+                        <mat-field label="Logo address" asp-for="BrandLogo" hint="An https address, or upload an image below (up to 256 KB).">
                             <input asp-for="BrandLogo" class="mat-input" data-preview="logo" autocapitalize="none" spellcheck="false" />
                         </mat-field>
                         <mat-field label="Logo upload" asp-for="LogoFile">
