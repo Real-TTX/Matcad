@@ -40,6 +40,10 @@ public static class DatabaseBootstrapper
             await tx.CommitAsync(ct);
         }
 
+        // A process stopped while it migrated leaves EF Core's lock row behind; the migration would wait for it forever.
+        if (await MigrationLock.ReleaseStaleAsync(db.Database, ct))
+            logger.LogWarning("Removed a stale migration lock left behind by a Matcad that was stopped while it migrated the database.");
+
         await db.Database.MigrateAsync(ct);
 
         // Step 2: copy the data over. Runs again after a crash between the steps (the legacy tables are still there).
