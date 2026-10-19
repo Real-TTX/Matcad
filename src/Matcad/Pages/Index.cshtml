@@ -2,14 +2,28 @@
 @model Matcad.Pages.IndexModel
 @{
     ViewData["Title"] = "Dashboard";
-    ViewData["PageSub"] = "Traffic and routes at a glance, and the requests as they arrive.";
+    ViewData["PageSub"] = "Traffic, routes and the requests as they arrive.";
+}
+
+@if (Model.FailedPush is { } push)
+{
+    <div class="mat-alert mat-alert--danger" role="alert">
+        @Ui.Icon("x-circle")
+        <div class="mat-alert__body">
+            <strong>Caddy did not take the configuration.</strong> @push.Error
+            @if (User.IsInRole("Admin"))
+            {
+                <div class="mat-alert__actions"><a class="mat-btn mat-btn--secondary mat-btn--sm" href="/Settings">@Ui.Icon("settings")<span>Open the settings</span></a></div>
+            }
+        </div>
+    </div>
 }
 
 <div class="mat-cols">
-    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests</span><span class="mat-stat__value">@Model.Requests24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
-    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests in total</span><span class="mat-stat__value">@Model.TotalRequests.ToString("N0")</span><span class="mat-stat__delta">since the log began</span></div></div>
-    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Client errors (4xx)</span><span class="mat-stat__value">@Model.ClientErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
-    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Server errors (5xx)</span><span class="mat-stat__value">@Model.ServerErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 hours</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Requests (24 h)</span><span class="mat-stat__value">@Model.Requests24h.ToString("N0")</span><span class="mat-stat__delta">@Model.TotalRequests.ToString("N0") in the log</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Active routes</span><span class="mat-stat__value">@Model.ActiveRoutes.ToString("N0")</span><span class="mat-stat__delta">@(Model.InactiveRoutes == 0 ? "none switched off" : $"{Model.InactiveRoutes:N0} switched off")</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Client errors (4xx)</span><span class="mat-stat__value">@Model.ClientErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 h</span></div></div>
+    <div class="mat-card mat-col-6 mat-col-lg-3"><div class="mat-card__body mat-stat"><span class="mat-stat__label">Server errors (5xx)</span><span class="mat-stat__value">@Model.ServerErrors24h.ToString("N0")</span><span class="mat-stat__delta">in the last 24 h</span></div></div>
 </div>
 
 <section class="mat-card" aria-labelledby="routes-title">

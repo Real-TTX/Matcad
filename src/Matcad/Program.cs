@@ -63,6 +63,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerService>());
 builder.Services.AddSingleton<ProxyMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxyMonitor>());
 builder.Services.AddScoped<ProxyStatusService>();
+builder.Services.AddScoped<RequestLogQueries>();
 
 // --- Platform contract of the Mat apps (MatDesign docs/PLATFORM.md) ------------
 // /api, /api/health, /api/state, /api/configure, /api/actions from the package MatPlatform (a copy in MatPlatform/); MatcadPlatform describes
