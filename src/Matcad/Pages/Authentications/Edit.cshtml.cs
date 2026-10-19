@@ -99,7 +99,9 @@ public partial class EditModel : PageModel
 
         if (LogoFile is not { Length: > 0 })
         {
-            auth.BrandLogo = BrandLogo?.Trim() ?? ""; // a URL, or the kept data URI (a hidden field carries it)
+            var logo = BrandLogo?.Trim() ?? ""; // a URL, or the kept data URI (a hidden field carries it)
+            if (!IsLogoAddress(logo)) return "The logo must be an http(s) address, a path on this site or an uploaded image.";
+            auth.BrandLogo = logo;
             return null;
         }
         if (LogoFile.Length > MaxLogoBytes) return "Logo is too large (max 256 KB).";
@@ -141,6 +143,17 @@ public partial class EditModel : PageModel
         var (ok, error) = await _caddy.ApplyAsync();
         if (ok) TempData["Flash"] = success + " Caddy configuration updated.";
         else TempData["FlashError"] = success + $" But the Caddy push failed: {error}";
+    }
+
+    /// <summary>What the login page may put into the src of its logo: an http(s) address, a path, or an image this page embedded.</summary>
+    public static bool IsLogoAddress(string value)
+    {
+        if (value.Length == 0) return true;
+        if (value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))) return false;
+        if (value.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return LogoTypes.Any(t => value.StartsWith($"data:{t};base64,", StringComparison.OrdinalIgnoreCase));
+        if (value.StartsWith('/')) return !value.StartsWith("//") && !value.StartsWith("/\\");
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
     }
 
     [GeneratedRegex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")]

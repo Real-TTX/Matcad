@@ -93,13 +93,18 @@ public static class MatcadApi
 
         // ---- providers (DNS credentials, e.g. netcup) ------------------------
         api.MapGet("/providers", (ConfigStore s) => Results.Ok(s.Providers.Select(ToProviderDto)));
-        api.MapPost("/providers", (ConfigStore s, ProviderInput inp) =>
+        api.MapPost("/providers", async (ConfigStore s, CaddyService caddy, ProviderInput inp) =>
         {
             if (string.IsNullOrWhiteSpace(inp.Name)) return Results.BadRequest(new { error = "Name is required." });
             if (string.IsNullOrWhiteSpace(inp.Type)) return Results.BadRequest(new { error = "Type (Caddy DNS module, e.g. netcup) is required." });
-            var p = new ProviderConfig { Id = inp.Id ?? 0, Name = inp.Name.Trim(), Type = inp.Type.Trim(), Credentials = inp.Credentials ?? new() };
+            // The type and the keys go into Caddy's JSON as a module name and object keys: refuse what could not be one.
+            var credentials = inp.Credentials ?? new();
+            if (ProviderRules.Check(inp.Type.Trim(), credentials.Keys) is { } invalid) return Results.BadRequest(new { error = invalid });
+            var p = new ProviderConfig { Id = inp.Id ?? 0, Name = inp.Name.Trim(), Type = inp.Type.Trim(), Credentials = credentials };
             p.ManagedBy = ResolveManagedBy(inp.ManagedBy, s.Providers.FirstOrDefault(x => x.Id == p.Id && p.Id != 0));
             s.UpsertProvider(p, null);
+            // A wildcard route that uses the provider needs the new credentials in Caddy (the answer keeps its shape).
+            await caddy.ApplyAsync();
             return Results.Ok(ToProviderDto(p));
         });
         api.MapDelete("/providers/{id:long}", (ConfigStore s, RouteProvider rp, long id) =>

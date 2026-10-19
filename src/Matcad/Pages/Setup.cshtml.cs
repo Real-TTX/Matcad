@@ -41,9 +41,6 @@ public class SetupModel : PageModel
 
     public string? Error { get; private set; }
     public (bool? Ok, string Message)? TestResult { get; private set; }
-    public Dictionary<string, string> CredentialValues { get; } = new();
-    public Dictionary<string, string> CustomCredentials { get; } = new();
-    public string CustomModule { get; private set; } = "";
 
     /// <summary>The user still has the default or an administrator-set password and has to choose their own first.</summary>
     public bool MustChange => User.MustChangePassword();
@@ -119,67 +116,30 @@ public class SetupModel : PageModel
         return RedirectToPage(new { step = "provider" });
     }
 
-    private Dictionary<string, string> ReadProviderCreds(out string module)
+    /// <summary>Reads the module and the credentials, and keeps what was typed for the form when it is shown again.</summary>
+    private (string Module, Dictionary<string, string> Credentials, string? Error) ReadProvider()
     {
-        var creds = new Dictionary<string, string>();
-        if (ProviderType == ProviderTypes.CustomId)
-        {
-            module = Request.Form["CustomModule"].ToString().Trim();
-            var keys = Request.Form["CustomKeys"];
-            var vals = Request.Form["CustomValues"];
-            for (var i = 0; i < keys.Count; i++)
-            {
-                var k = keys[i]?.Trim();
-                if (string.IsNullOrEmpty(k)) continue;
-                creds[k] = i < vals.Count ? vals[i] ?? "" : "";
-            }
-        }
-        else
-        {
-            var t = ProviderTypes.Find(ProviderType);
-            module = t?.Id ?? ProviderType;
-            if (t != null)
-                foreach (var f in t.Fields)
-                    creds[f.Key] = Request.Form[$"cred_{t.Id}_{f.Key}"].ToString();
-        }
-        return creds;
+        var (module, creds, error) = ProviderFieldsModel.Read(Request.Form, ProviderType);
+        ProviderFields = ProviderFieldsModel.ForPosted(nameof(ProviderType), ProviderType, module, creds, null);
+        return (module, creds, error);
     }
 
-    /// <summary>Keeps the entered values when the form is shown again.</summary>
-    private void PopulateCreds(string module, Dictionary<string, string> creds)
-    {
-        if (ProviderType == ProviderTypes.CustomId)
-        {
-            CustomModule = module;
-            foreach (var kv in creds) CustomCredentials[kv.Key] = kv.Value;
-        }
-        else
-        {
-            foreach (var kv in creds) CredentialValues[$"{ProviderType}:{kv.Key}"] = kv.Value;
-        }
-    }
-
-    public ProviderFieldsModel ProviderFields => new()
-    {
-        TypeFieldName = nameof(ProviderType), Type = ProviderType, CustomModule = CustomModule,
-        Values = CredentialValues, CustomCredentials = CustomCredentials
-    };
+    public ProviderFieldsModel ProviderFields { get; private set; } = new() { TypeFieldName = nameof(ProviderType), Type = "netcup" };
 
     public async Task<IActionResult> OnPostProviderTestAsync()
     {
         Step = "provider";
-        var creds = ReadProviderCreds(out var module);
-        PopulateCreds(module, creds);
+        var (module, creds, error) = ReadProvider();
+        if (error != null) { Error = error; return Page(); }
         TestResult = await _tester.TestAsync(module, creds);
         return Page();
     }
 
     public async Task<IActionResult> OnPostProviderSaveAsync()
     {
-        var creds = ReadProviderCreds(out var module);
-        PopulateCreds(module, creds);
-        if (string.IsNullOrWhiteSpace(ProviderName) || string.IsNullOrWhiteSpace(module))
-            return Stay("provider", "Please give the provider a name and a type.");
+        var (module, creds, error) = ReadProvider();
+        if (string.IsNullOrWhiteSpace(ProviderName)) error ??= "Please give the provider a name.";
+        if (error != null) return Stay("provider", error);
 
         _store.UpsertProvider(new ProviderConfig { Name = ProviderName.Trim(), Type = module, Credentials = creds }, User.GetUserId());
 

@@ -63,9 +63,7 @@ public class VerifyModel : PageModel
             {
                 StatusCode = 401,
                 ContentType = "text/html; charset=utf-8",
-                Content = "<!doctype html><meta charset=utf-8><title>401 Unauthorized</title>" +
-                          "<body style=\"font-family:system-ui;text-align:center;padding:3rem\">" +
-                          "<h1>401</h1><p>Unauthorized.</p></body>"
+                Content = "<!doctype html><meta charset=utf-8><title>401 Unauthorized</title><h1>401</h1><p>Unauthorized.</p>"
             },
             // Redirect to the configured portal host (may reveal the Matcad host).
             "redirect" => Redirect(

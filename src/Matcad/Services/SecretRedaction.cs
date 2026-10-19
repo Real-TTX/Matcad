@@ -5,7 +5,8 @@ namespace Matcad.Services;
 
 /// <summary>
 /// Makes a Caddy config fit to show on a page. The config that Caddy runs has to carry the secrets of the access properties of
-/// a route (the value a required header is compared with, the values of the headers sent to an upstream), but the Settings page
+/// a route (the value a required header is compared with, the values of the headers sent to an upstream), the credentials of the DNS
+/// providers and the password hashes of basic auth, but the Settings page
 /// shows that config to read and copy: there the values are replaced, so no page ever prints one.
 /// </summary>
 public static class SecretRedaction
@@ -43,6 +44,13 @@ public static class SecretRedaction
                 if (obj["handler"]?.GetValue<string>() == "reverse_proxy" && obj["handle_response"] == null
                     && obj["headers"]?["request"]?["set"] is JsonObject set)
                     HideAll(set, keep: "Host");
+                // A DNS provider of a certificate: { "dns": { "provider": { "name": "netcup", "api_key": "<secret>" } } }
+                if (obj["dns"]?["provider"] is JsonObject provider)
+                    foreach (var key in provider.Select(p => p.Key).Where(k => k != "name").ToList()) provider[key] = Hidden;
+                // Basic auth: { "http_basic": { "accounts": [ { "username": "...", "password": "<hash>" } ] } }
+                if (obj["http_basic"]?["accounts"] is JsonArray accounts)
+                    foreach (var account in accounts.OfType<JsonObject>())
+                        if (account.ContainsKey("password")) account["password"] = Hidden;
                 foreach (var child in obj.Select(p => p.Value).ToList()) Walk(child);
                 break;
             case JsonArray array:

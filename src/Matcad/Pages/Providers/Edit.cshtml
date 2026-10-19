@@ -27,11 +27,7 @@
                 <input asp-for="Name" class="mat-input" autofocus required data-msg-required="Please give the provider a name." />
             </mat-field>
 
-            <partial name="Controls/_ProviderFields" model="@(new ProviderFieldsModel
-            {
-                TypeFieldName = nameof(Model.Type), Type = Model.Type, CustomModule = Model.CustomModule,
-                Values = Model.CredentialValues, CustomCredentials = Model.CustomCredentials
-            })" />
+            <partial name="Controls/_ProviderFields" model="Model.Fields" />
         </div>
     </section>
 

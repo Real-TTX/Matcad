@@ -102,12 +102,20 @@ public class IndexModel : PageModel
             return RedirectToPage("Index", new { tab = "general" });
         }
 
+        var portalUrl = AuthPortalUrl?.Trim() ?? "";
+        if (portalUrl.Length > 0 && !(Uri.TryCreate(portalUrl, UriKind.Absolute, out var portal) && portal.Scheme is "http" or "https"
+                                      && portal.PathAndQuery == "/" && !portalUrl.Any(char.IsWhiteSpace)))
+        {
+            TempData["FlashError"] = "The login portal address must be an http(s) address without a path, like https://login.example.com. Nothing was saved.";
+            return RedirectToPage("Index", new { tab = "general" });
+        }
+
         var s = _store.Settings;
         s.BaseDomain = baseDomain;
         s.MatcadHost = matcadHost;
         s.SystemRouteEnabled = SystemRouteEnabled;
         s.PortalMode = PortalMode is "inline" or "redirect" or "unauthorized" ? PortalMode : "inline";
-        s.AuthPortalUrl = AuthPortalUrl?.Trim() ?? "";
+        s.AuthPortalUrl = portalUrl;
         s.LogRetentionDays = LogRetentionDays < 1 ? 1 : LogRetentionDays;
         s.LogRetentionMaxRows = LogRetentionMaxRows < 0 ? 0 : LogRetentionMaxRows;
         s.CaddyAdminUrl = string.IsNullOrWhiteSpace(CaddyAdminUrl) ? "http://caddy:2019" : CaddyAdminUrl.Trim();
@@ -125,10 +133,17 @@ public class IndexModel : PageModel
 
     public IActionResult OnPostDocker()
     {
+        var dockerDomain = DockerBaseDomain?.Trim().ToLowerInvariant() ?? "";
+        if (dockerDomain.Length > 0 && !RouteEditor.IsHostName(dockerDomain))
+        {
+            TempData["FlashError"] = "The base domain must be a plain name like example.com. Nothing was saved.";
+            return RedirectToPage("Index", new { tab = "docker" });
+        }
         var s = _store.Settings;
+
         s.Docker.Enabled = DockerEnabled;
         s.Docker.Endpoint = string.IsNullOrWhiteSpace(DockerEndpoint) ? "unix:///var/run/docker.sock" : DockerEndpoint.Trim();
-        s.Docker.BaseDomain = DockerBaseDomain?.Trim() ?? "";
+        s.Docker.BaseDomain = dockerDomain;
         s.Docker.RequireEnableLabel = DockerRequireLabel;
         _store.SaveSettings(s);
 

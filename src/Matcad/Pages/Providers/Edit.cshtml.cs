@@ -1,5 +1,7 @@
 using Matcad.Auth;
 using Matcad.Config;
+using Matcad.Controls;
+using Matcad.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -8,123 +10,87 @@ namespace Matcad.Pages.Providers;
 public class EditModel : PageModel
 {
     private readonly ConfigStore _store;
-    private readonly Matcad.Services.RouteProvider _routes;
-    private readonly Matcad.Services.DnsCredentialTester _tester;
-    public EditModel(ConfigStore store, Matcad.Services.RouteProvider routes, Matcad.Services.DnsCredentialTester tester)
-    { _store = store; _routes = routes; _tester = tester; }
+    private readonly RouteProvider _routes;
+    private readonly DnsCredentialTester _tester;
+    private readonly CaddyService _caddy;
+    public EditModel(ConfigStore store, RouteProvider routes, DnsCredentialTester tester, CaddyService caddy)
+    { _store = store; _routes = routes; _tester = tester; _caddy = caddy; }
 
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
     /// <summary>Dropdown value: a known type id or "custom".</summary>
     [BindProperty] public string Type { get; set; } = "netcup";
-    /// <summary>Caddy DNS module name when Type == "custom".</summary>
-    [BindProperty] public string CustomModule { get; set; } = "";
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
     /// <summary>Result of a "Test credentials" run (Ok = true/false, or null = no test for this type).</summary>
     public (bool? Ok, string Message)? TestResult { get; private set; }
-    /// <summary>Existing credential values, keyed by "type:key", to prefill known-type fields.</summary>
-    public Dictionary<string, string> CredentialValues { get; } = new();
-    /// <summary>Existing credentials for the custom key/value editor.</summary>
-    public Dictionary<string, string> CustomCredentials { get; } = new();
+    /// <summary>The type picker and the credential fields (stored secrets are never put into the page).</summary>
+    public ProviderFieldsModel Fields { get; private set; } = new() { TypeFieldName = nameof(Type), Type = "netcup" };
+
+    private ProviderConfig? Stored => IsNew ? null : _store.Providers.FirstOrDefault(x => x.Id == Id);
 
     public IActionResult OnGet()
     {
         if (!IsNew)
         {
-            var p = _store.Providers.FirstOrDefault(x => x.Id == Id);
+            var p = Stored;
             if (p == null) return RedirectToPage("Index");
             Name = p.Name;
-            if (ProviderTypes.Find(p.Type) != null)
-            {
-                Type = p.Type;
-                foreach (var kv in p.Credentials) CredentialValues[$"{p.Type}:{kv.Key}"] = kv.Value;
-            }
-            else
-            {
-                Type = ProviderTypes.CustomId;
-                CustomModule = p.Type;
-                foreach (var kv in p.Credentials) CustomCredentials[kv.Key] = kv.Value;
-            }
+            Fields = ProviderFieldsModel.ForStored(nameof(Type), p, Type);
+            Type = Fields.Type;
         }
         return Page();
     }
 
-    /// <summary>Reads the module name + credentials out of the posted form.</summary>
-    private (string Module, Dictionary<string, string> Creds, string? Error) ReadForm()
+    /// <summary>The module and the credentials of the form; a blank secret keeps the stored value.</summary>
+    private (string Module, Dictionary<string, string> Credentials, string? Error) ReadForm(ProviderConfig? stored)
     {
-        var credentials = new Dictionary<string, string>();
-        if (Type == ProviderTypes.CustomId)
-        {
-            var moduleName = CustomModule?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(moduleName))
-                return ("", credentials, "Please enter the Caddy DNS module name (e.g. cloudflare).");
-            var keys = Request.Form["CustomKeys"];
-            var values = Request.Form["CustomValues"];
-            for (var i = 0; i < keys.Count; i++)
-            {
-                var k = keys[i]?.Trim();
-                if (string.IsNullOrEmpty(k)) continue;
-                credentials[k] = i < values.Count ? values[i] ?? "" : "";
-            }
-            return (moduleName, credentials, null);
-        }
-        var type = ProviderTypes.Find(Type);
-        if (type == null) return ("", credentials, "Please select a valid type.");
-        foreach (var field in type.Fields)
-            credentials[field.Key] = Request.Form[$"cred_{type.Id}_{field.Key}"].ToString();
-        return (type.Id, credentials, null);
+        var (module, posted, error) = ProviderFieldsModel.Read(Request.Form, Type);
+        Fields = ProviderFieldsModel.ForPosted(nameof(Type), Type, module, posted, stored);
+        return (module, ProviderRules.KeepStored(module, posted, stored), error);
     }
 
-    /// <summary>Re-fills the display fields so a re-rendered form keeps its values.</summary>
-    private void PopulateDisplay(Dictionary<string, string> creds)
+    public async Task<IActionResult> OnPostAsync()
     {
-        if (Type == ProviderTypes.CustomId)
-            foreach (var kv in creds) CustomCredentials[kv.Key] = kv.Value;
-        else
-            foreach (var kv in creds) CredentialValues[$"{Type}:{kv.Key}"] = kv.Value;
-    }
+        var stored = Stored;
+        if (!IsNew && stored == null) return RedirectToPage("Index");
+        var (module, credentials, error) = ReadForm(stored);
+        if (string.IsNullOrWhiteSpace(Name)) error ??= "Please give the provider a name.";
+        if (error != null) { Error = error; return Page(); }
 
-    public IActionResult OnPost()
-    {
-        if (string.IsNullOrWhiteSpace(Name)) { Error = "Please provide a name."; return Page(); }
-
-        var (moduleName, credentials, error) = ReadForm();
-        if (error != null) { Error = error; PopulateDisplay(credentials); return Page(); }
-
-        if (!IsNew && _store.Providers.All(x => x.Id != Id)) return RedirectToPage("Index");
-        // Type is the Caddy DNS module name.
         // A provider that another tool (Mattiverse) writes keeps its mark when it is edited by hand.
-        var provider = new ProviderConfig { Id = Id ?? 0, Name = Name.Trim(), Type = moduleName, Credentials = credentials,
-            ManagedBy = _store.Providers.FirstOrDefault(x => x.Id == Id)?.ManagedBy };
+        var provider = new ProviderConfig { Id = Id ?? 0, Name = Name.Trim(), Type = module, Credentials = credentials, ManagedBy = stored?.ManagedBy };
         _store.UpsertProvider(provider, User.GetUserId());
 
-        TempData["Flash"] = $"Provider '{provider.Name}' saved.";
+        // A wildcard route that uses the provider needs the new credentials in Caddy.
+        var (ok, applyError) = await _caddy.ApplyAsync();
+        if (ok) TempData["Flash"] = $"Provider '{provider.Name}' saved.";
+        else TempData["FlashError"] = $"Provider '{provider.Name}' saved, but the Caddy push failed: {applyError}";
         return RedirectToPage("Index");
     }
 
-    /// <summary>Tests the entered credentials against the provider's API (where supported).</summary>
+    /// <summary>Tests the entered credentials (a field left empty uses the stored value) against the provider's API, where there is a test.</summary>
     public async Task<IActionResult> OnPostTestAsync()
     {
-        var (moduleName, credentials, error) = ReadForm();
-        PopulateDisplay(credentials);
+        var (module, credentials, error) = ReadForm(Stored);
         if (error != null) { Error = error; return Page(); }
-        TestResult = await _tester.TestAsync(moduleName, credentials);
+        TestResult = await _tester.TestAsync(module, credentials);
         return Page();
     }
 
-    public IActionResult OnPostDelete()
+    public async Task<IActionResult> OnPostDeleteAsync()
     {
         if (Id is > 0)
         {
-            var name = _store.Providers.FirstOrDefault(x => x.Id == Id)?.Name;
+            var name = Stored?.Name;
             if (_routes.All().Any(r => r.ProviderId == Id))
             {
-                TempData["FlashError"] = "Provider is used by at least one route and cannot be deleted.";
+                TempData["FlashError"] = "The provider is used by a route and cannot be deleted.";
                 return RedirectToPage("Edit", new { id = Id });
             }
             _store.DeleteProvider(Id.Value);
+            await _caddy.ApplyAsync();
             TempData["Flash"] = $"Provider '{name}' deleted.";
         }
         return RedirectToPage("Index");

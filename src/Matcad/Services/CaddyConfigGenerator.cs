@@ -358,7 +358,7 @@ public class CaddyConfigGenerator
                 ["status_code"] = route.RedirectPermanent ? 301 : 302,
                 ["headers"] = new Dictionary<string, object?>
                 {
-                    ["Location"] = new[] { route.FallbackUrl }
+                    ["Location"] = new[] { RedirectLocation(route.FallbackUrl!) }
                 }
             };
         }
@@ -469,9 +469,11 @@ public class CaddyConfigGenerator
 
             // The Type IS the Caddy DNS module name, so any compiled-in module
             // (including custom ones not in the registry) works.
-            var dnsProvider = new Dictionary<string, object?> { ["name"] = provider.Type };
-            foreach (var kv in provider.Credentials)
+            // A credential called "name" (only a hand-edited file or an old backup can have one) must not replace the module.
+            var dnsProvider = new Dictionary<string, object?>();
+            foreach (var kv in provider.Credentials.Where(kv => !kv.Key.Equals(ProviderRules.ModuleKey, StringComparison.OrdinalIgnoreCase)))
                 dnsProvider[kv.Key] = kv.Value;
+            dnsProvider[ProviderRules.ModuleKey] = provider.Type;
 
             var dns = new Dictionary<string, object?> { ["provider"] = dnsProvider };
             // Tuning for slow DNS providers (e.g. netcup): wait before validating,
@@ -522,6 +524,16 @@ public class CaddyConfigGenerator
         {
             ["automation"] = new Dictionary<string, object?> { ["policies"] = policies }
         };
+    }
+
+    /// <summary>The Location of a redirect. Caddy replaces {placeholders} in it, so braces are sent percent-encoded: only a trailing
+    /// {http.request.uri} (what the Caddyfile import makes of <c>redir https://target{uri}</c>) stays a placeholder.</summary>
+    public static string RedirectLocation(string url)
+    {
+        const string KeepUri = "{http.request.uri}";
+        var keep = url.EndsWith(KeepUri, StringComparison.Ordinal);
+        var target = (keep ? url[..^KeepUri.Length] : url).Replace("{", "%7B").Replace("}", "%7D");
+        return keep ? target + KeepUri : target;
     }
 
     /// <summary>Turns "http://host:8080" or "host:8080" into a Caddy dial + https flag.</summary>

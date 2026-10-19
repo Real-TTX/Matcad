@@ -64,6 +64,9 @@ public static partial class RouteEditor
         {
             if (string.IsNullOrWhiteSpace(redirectUrl)) return "A redirect route needs a target URL.";
             if (!IsHttpUrl(redirectUrl)) return "The redirect target must be an http:// or https:// URL.";
+            // Caddy fills {placeholders} into the Location header ({env.*} would hand out its environment): braces are refused.
+            if (redirectUrl.Any(c => c is '{' or '}' || char.IsWhiteSpace(c) || char.IsControl(c)))
+                return "The redirect target must not contain spaces, { or }.";
         }
         else if (!string.IsNullOrEmpty(upstream) && !IsUpstream(upstream))
         {
