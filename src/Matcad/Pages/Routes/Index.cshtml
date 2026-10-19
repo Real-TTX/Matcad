@@ -64,6 +64,29 @@
                                     @if (!string.IsNullOrEmpty(r.Upstream))
                                     {
                                         @r.Upstream
+                                        @if (r.ExtraUpstreams.Count > 0)
+                                        {
+                                            <text> </text><span class="mat-tag" title="@string.Join(", ", r.ExtraUpstreams)">+@r.ExtraUpstreams.Count</span>
+                                        }
+                                        @if (r.HealthPath != null && !r.IsDerived)
+                                        {
+                                            var health = Model.Health(r);
+                                            var total = r.AllUpstreams.Count;
+                                            var down = health?.Upstreams.Where(u => !u.Healthy).Select(u => u.Upstream + ": " + (u.Error ?? u.Status?.ToString() ?? "")) ?? [];
+                                            <text> </text>
+                                            if (health == null)
+                                            {
+                                                <span class="mat-pill mat-pill--plain" title="Health check @r.HealthPath">Checking</span>
+                                            }
+                                            else if (health.HealthyCount == total)
+                                            {
+                                                <span class="mat-pill mat-pill--ok" title="Health check @r.HealthPath">@(total == 1 ? "Healthy" : $"{total}/{total} healthy")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="mat-pill @(health.HealthyCount == 0 ? "mat-pill--error" : "mat-pill--warn")" title="@string.Join("; ", down)">@health.HealthyCount/@total healthy</span>
+                                            }
+                                        }
                                     }
                                     else if (!string.IsNullOrEmpty(r.FallbackUrl))
                                     {

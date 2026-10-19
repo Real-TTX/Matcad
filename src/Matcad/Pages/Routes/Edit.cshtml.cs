@@ -26,6 +26,12 @@ public class EditModel : PageModel
     [BindProperty] public string Target { get; set; } = "proxy";
     [BindProperty] public string? Upstream { get; set; }
     [BindProperty] public bool InsecureSkipVerify { get; set; }
+    // --- Several upstreams: one more per line, the policy, and the active health check (an empty path = none).
+    [BindProperty] public string? ExtraUpstreamsText { get; set; }
+    [BindProperty] public string LoadBalancing { get; set; } = RouteBalancing.RoundRobin;
+    [BindProperty] public string? HealthPath { get; set; }
+    [BindProperty] public int HealthIntervalSeconds { get; set; } = 30;
+    [BindProperty] public string? HealthStatus { get; set; } = "2xx";
     [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
     /// <summary>301, 302, 307 or 308.</summary>
@@ -104,6 +110,8 @@ public class EditModel : PageModel
             Name = r.Name; Host = r.Host;
             PortBinding = r.ListenPort > 0 ? r.ListenPort : null;
             RouteType = r.Wildcard ? "wildcard" : "single";
+            ExtraUpstreamsText = string.Join('\n', r.ExtraUpstreams); LoadBalancing = r.LoadBalancing; HealthPath = r.HealthPath;
+            HealthIntervalSeconds = r.HealthIntervalSeconds; HealthStatus = RouteBalancing.FormatStatus(r.HealthStatus);
             Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
             FallbackUrl = r.FallbackUrl; RedirectCode = r.RedirectStatus; RedirectKeepPath = r.RedirectKeepPath;
             Hsts = r.Hsts; Compress = r.Compress; BlockExploits = r.BlockExploits;
@@ -142,6 +150,11 @@ public class EditModel : PageModel
         var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy };
         var (access, accessError) = ReadAccess(existing);
         if (accessError != null) return Fail(accessError);
+        var healthStatus = RouteBalancing.ParseStatus(HealthStatus);
+        if (healthStatus is null && !string.IsNullOrWhiteSpace(HealthPath) && Target != "redirect")
+            return Fail("Health check: the expected status must be a code like 200 or a class like 2xx.");
+        var balancing = new RouteBalancingForm(
+            SplitLines(ExtraUpstreamsText), LoadBalancing, HealthPath, HealthIntervalSeconds, healthStatus ?? 2);
         var (locations, locationError) = ReadLocations();
         if (locationError != null) return Fail(locationError);
         if (!RouteEditor.TrySplitRedirectCode(RedirectCode, out var permanent, out var keepMethod) && Target == "redirect")
@@ -151,7 +164,7 @@ public class EditModel : PageModel
             // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
             UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
             RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText),
-            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod, ReadResponseHeaders(), locations));
+            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod, ReadResponseHeaders(), locations, balancing));
         var error = RouteEditor.Apply(form, route);
         if (error != null) return Fail(error);
         if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))
@@ -222,6 +235,10 @@ public class EditModel : PageModel
         }
         return (new PostedAccess(headers, require), null);
     }
+
+    /// <summary>One entry per line, blank lines dropped.</summary>
+    private static string[] SplitLines(string? text) =>
+        (text ?? "").Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>The location rows as posted (an entirely empty row is dropped).</summary>
     private List<LocationRow> PostedLocationRows()

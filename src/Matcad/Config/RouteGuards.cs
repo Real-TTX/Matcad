@@ -233,7 +233,8 @@ public static partial class RouteGuards
         ?? NormalizeIps(route.AllowedIps).Error
         ?? NormalizeIps(route.BlockedIps, BlockedLabel).Error
         ?? CheckResponseHeaders(route.ResponseHeaders)
-        ?? RouteLocations.Check(route.Locations);
+        ?? RouteLocations.Check(route.Locations)
+        ?? RouteBalancing.Check(route);
 
     /// <summary>The label of the blocked addresses in messages.</summary>
     public const string BlockedLabel = "Blocked IPs";

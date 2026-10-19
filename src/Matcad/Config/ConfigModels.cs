@@ -107,6 +107,7 @@ public class RouteConfig : ConfigEntity
     private List<string> _blockedIps = new();
     private List<ResponseHeader> _responseHeaders = new();
     private List<RouteLocation> _locations = new();
+    private List<string> _extraUpstreams = new();
 
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
@@ -170,6 +171,20 @@ public class RouteConfig : ConfigEntity
     public List<ResponseHeader> ResponseHeaders { get => _responseHeaders; set => _responseHeaders = value ?? new(); }
     /// <summary>Custom locations: paths with their own upstream or redirect, tried before the route's own target (most specific first).</summary>
     public List<RouteLocation> Locations { get => _locations; set => _locations = value ?? new(); }
+
+    // --- Several upstreams (page only; rules in RouteBalancing). The REST API knows only Upstream, the first one, and keeps the rest.
+    /// <summary>More upstreams next to <see cref="Upstream"/>, of the same kind (all http or all https).</summary>
+    public List<string> ExtraUpstreams { get => _extraUpstreams; set => _extraUpstreams = value ?? new(); }
+    /// <summary>How a request picks one of several upstreams: "round_robin", "least_conn" or "first" (the first one that is up).</summary>
+    public string LoadBalancing { get; set; } = RouteBalancing.RoundRobin;
+    /// <summary>Active health check: Caddy asks this path of every upstream; null = no active check.</summary>
+    public string? HealthPath { get; set; }
+    /// <summary>Seconds between two health checks.</summary>
+    public int HealthIntervalSeconds { get; set; } = 30;
+    /// <summary>The status a healthy upstream answers: a code (200) or a class (2 = any 2xx).</summary>
+    public int HealthStatus { get; set; } = 2;
+    /// <summary>All upstreams of the route, the main one first.</summary>
+    [JsonIgnore] public IReadOnlyList<string> AllUpstreams => string.IsNullOrWhiteSpace(Upstream) ? [] : [Upstream!, .. ExtraUpstreams];
 
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }

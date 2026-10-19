@@ -9,7 +9,12 @@ public class IndexModel : PageModel
 {
     private readonly ConfigStore _store;
     private readonly Matcad.Services.RouteProvider _routes;
-    public IndexModel(ConfigStore store, Matcad.Services.RouteProvider routes) { _store = store; _routes = routes; }
+    private readonly Matcad.Services.UpstreamHealthService _health;
+    public IndexModel(ConfigStore store, Matcad.Services.RouteProvider routes, Matcad.Services.UpstreamHealthService health)
+    { _store = store; _routes = routes; _health = health; }
+
+    /// <summary>The last health check of a route with an active check (null: none, or not checked yet).</summary>
+    public Matcad.Services.RouteHealth? Health(RouteConfig r) => r.IsDerived ? null : _health.For(r);
 
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
     [BindProperty(SupportsGet = true)] public string? Status { get; set; }

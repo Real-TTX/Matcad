@@ -19,7 +19,10 @@ public record RouteForm(
 /// the route has them.</summary>
 public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps,
     bool RedirectKeepMethod = false, IReadOnlyList<ResponseHeader>? ResponseHeaders = null,
-    IReadOnlyList<RouteLocation>? Locations = null);
+    IReadOnlyList<RouteLocation>? Locations = null, RouteBalancingForm? Balancing = null);
+
+/// <summary>Several upstreams of a route: the extra ones, the policy and the active health check (null path = none).</summary>
+public record RouteBalancingForm(IReadOnlyList<string> ExtraUpstreams, string LoadBalancing, string? HealthPath, int HealthIntervalSeconds, int HealthStatus);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -125,6 +128,20 @@ public static partial class RouteEditor
         var locationError = RouteLocations.Check(locations);
         if (locationError != null) return locationError;
         if (locations.Count > 0 && listenPort is not null) return "Locations only apply to a route with a host.";
+        var balancing = options.Balancing ?? BalancingOf(route);
+        var probe = new RouteConfig
+        {
+            Upstream = proxies ? upstream : null,
+            ExtraUpstreams = balancing.ExtraUpstreams.Select(u => u.Trim()).Where(u => u.Length > 0).ToList(),
+            LoadBalancing = string.IsNullOrWhiteSpace(balancing.LoadBalancing) ? RouteBalancing.RoundRobin : balancing.LoadBalancing.Trim(),
+            HealthPath = string.IsNullOrWhiteSpace(balancing.HealthPath) ? null : balancing.HealthPath.Trim(),
+            HealthIntervalSeconds = balancing.HealthIntervalSeconds,
+            HealthStatus = balancing.HealthStatus,
+        };
+        // A redirect has no upstream to balance: what the page still carries for the proxy is dropped, not refused.
+        if (!proxies) { probe.ExtraUpstreams = []; probe.HealthPath = null; }
+        var balancingError = RouteBalancing.Check(probe);
+        if (balancingError != null) return balancingError;
 
         route.Name = !string.IsNullOrWhiteSpace(form.Name) ? form.Name.Trim()
                    : host.Length > 0 ? host
@@ -155,12 +172,21 @@ public static partial class RouteEditor
         route.BlockExploits = options.BlockExploits;
         route.ResponseHeaders = responseHeaders;
         route.Locations = locations;
+        route.ExtraUpstreams = probe.ExtraUpstreams;
+        route.LoadBalancing = probe.LoadBalancing;
+        route.HealthPath = probe.HealthPath;
+        route.HealthIntervalSeconds = probe.HealthIntervalSeconds;
+        route.HealthStatus = probe.HealthStatus;
         return null;
     }
 
     /// <summary>The options a route has now.</summary>
     public static RouteExtras OptionsOf(RouteConfig route) =>
-        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod, route.ResponseHeaders, route.Locations);
+        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod, route.ResponseHeaders, route.Locations, BalancingOf(route));
+
+    /// <summary>The balancing settings a route has now.</summary>
+    public static RouteBalancingForm BalancingOf(RouteConfig route) =>
+        new(route.ExtraUpstreams, route.LoadBalancing, route.HealthPath, route.HealthIntervalSeconds, route.HealthStatus);
 
     /// <summary>The redirect codes a route can answer with.</summary>
     public static readonly int[] RedirectCodes = [301, 302, 307, 308];

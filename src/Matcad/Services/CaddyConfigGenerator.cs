@@ -484,12 +484,31 @@ public class CaddyConfigGenerator
     /// </summary>
     private static Dictionary<string, object?> BuildProxy(RouteConfig route, string upstream, bool toRouteUpstream)
     {
-        var (dial, isHttps) = ParseDial(upstream);
+        // The route's own target may be several upstreams (all http or all https, RouteBalancing.Check); a location has one.
+        var dials = (toRouteUpstream ? route.AllUpstreams : [upstream]).Select(ParseDial).ToList();
+        var isHttps = dials[0].IsHttps;
         var proxy = new Dictionary<string, object?>
         {
             ["handler"] = "reverse_proxy",
-            ["upstreams"] = new[] { new Dictionary<string, object?> { ["dial"] = dial } }
+            ["upstreams"] = dials.Select(d => new Dictionary<string, object?> { ["dial"] = d.Dial }).ToArray()
         };
+        if (toRouteUpstream && dials.Count > 1)
+            proxy["load_balancing"] = new Dictionary<string, object?>
+            {
+                ["selection_policy"] = new Dictionary<string, object?> { ["policy"] = route.LoadBalancing }
+            };
+        // Caddy asks every upstream on its own; an upstream that fails is left out until it answers as expected again.
+        if (toRouteUpstream && route.HealthPath != null)
+            proxy["health_checks"] = new Dictionary<string, object?>
+            {
+                ["active"] = new Dictionary<string, object?>
+                {
+                    ["uri"] = route.HealthPath,
+                    ["interval"] = $"{route.HealthIntervalSeconds}s",
+                    ["timeout"] = $"{Math.Min(5, route.HealthIntervalSeconds)}s",
+                    ["expect_status"] = route.HealthStatus
+                }
+            };
         var host = toRouteUpstream ? RouteGuards.NormalizeUpstreamHost(route.UpstreamHost).Host : null;
         if (isHttps)
         {
@@ -710,19 +729,5 @@ public class CaddyConfigGenerator
     }
 
     /// <summary>Turns "http://host:8080" or "host:8080" into a Caddy dial + https flag.</summary>
-    private static (string Dial, bool IsHttps) ParseDial(string upstream)
-    {
-        upstream = upstream.Trim();
-        if (upstream.Contains("://"))
-        {
-            if (Uri.TryCreate(upstream, UriKind.Absolute, out var uri))
-            {
-                var isHttps = uri.Scheme == "https";
-                var port = uri.Port > 0 ? uri.Port : (isHttps ? 443 : 80);
-                return ($"{uri.Host}:{port}", isHttps);
-            }
-        }
-        // Assume host:port; default to :80 if no port given.
-        return (upstream.Contains(':') ? upstream : $"{upstream}:80", false);
-    }
+    private static (string Dial, bool IsHttps) ParseDial(string upstream) => RouteBalancing.ParseDial(upstream);
 }

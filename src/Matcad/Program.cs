@@ -62,6 +62,16 @@ builder.Services.AddSingleton<DockerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerService>());
 builder.Services.AddSingleton<ProxyMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxyMonitor>());
+// The health checks of routes with several upstreams, for the routes list. No redirects followed (Caddy does not either); the insecure
+// client is only for an https upstream of a route that skips TLS verification anyway.
+builder.Services.AddHttpClient(UpstreamHealthService.Client).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient(UpstreamHealthService.InsecureClient).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
+builder.Services.AddSingleton<UpstreamHealthService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<UpstreamHealthService>());
 builder.Services.AddScoped<ProxyStatusService>();
 builder.Services.AddScoped<RequestLogQueries>();
 builder.Services.AddHttpContextAccessor();

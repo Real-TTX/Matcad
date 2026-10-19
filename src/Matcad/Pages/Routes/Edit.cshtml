@@ -116,6 +116,34 @@ else
                     <mat-field label="Upstream" asp-for="Upstream" hint="For example http://backend:8080 or whoami:80." required>
                         <input asp-for="Upstream" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" required data-msg-required="Please enter the service to forward to." />
                     </mat-field>
+                    <details class="mat-collapse" open="@(!string.IsNullOrWhiteSpace(Model.ExtraUpstreamsText) || !string.IsNullOrWhiteSpace(Model.HealthPath))" id="route-balancing">
+                        <summary><span>More upstreams and health check</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                        <div class="mat-accordion__body mat-stack">
+                            <div class="mat-form__grid">
+                                <mat-field label="More upstreams" asp-for="ExtraUpstreamsText" hint="One per line, next to the upstream above; all http or all https.">
+                                    <textarea asp-for="ExtraUpstreamsText" rows="3" class="mat-textarea mat-mono" spellcheck="false" autocapitalize="none" autocomplete="off" placeholder="backend-2:8080"></textarea>
+                                </mat-field>
+                                <mat-field label="Load balancing" asp-for="LoadBalancing" hint="How a request picks one of them.">
+                                    <select asp-for="LoadBalancing" class="mat-select">
+                                        <option value="round_robin">Round robin</option>
+                                        <option value="least_conn">Least connections</option>
+                                        <option value="first">First available</option>
+                                    </select>
+                                </mat-field>
+                            </div>
+                            <div class="mat-form__grid">
+                                <mat-field label="Health check path" asp-for="HealthPath" hint="Empty: no active check. An upstream that fails is left out until it answers again.">
+                                    <input asp-for="HealthPath" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="/health" />
+                                </mat-field>
+                                <mat-field label="Every (seconds)" asp-for="HealthIntervalSeconds">
+                                    <input asp-for="HealthIntervalSeconds" type="number" min="5" max="3600" inputmode="numeric" class="mat-input mat-mono" />
+                                </mat-field>
+                                <mat-field label="Expected status" asp-for="HealthStatus" hint="A code like 200 or a class like 2xx.">
+                                    <input asp-for="HealthStatus" class="mat-input mat-mono" autocapitalize="none" autocomplete="off" spellcheck="false" />
+                                </mat-field>
+                            </div>
+                        </div>
+                    </details>
                     <div class="mat-field">
                         <label class="mat-switch"><input type="checkbox" asp-for="InsecureSkipVerify" /><span class="mat-switch__track"></span><span>Skip TLS verification (insecure)</span></label>
                         <span class="mat-hint">For an <code>https://</code> upstream with a self-signed certificate.</span>
