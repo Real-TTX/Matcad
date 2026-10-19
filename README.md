@@ -31,7 +31,9 @@ lose the YAML-in-your-head part.
 **Routes**
 - A **hierarchical domain tree** built automatically from your host names; every domain folds away, and *Add a subdomain* is the last entry of its group
 - Each route is a **reverse proxy** or a **301/302 redirect** (to any URL, or pick
-  an existing domain from a list)
+  an existing domain from a list; optionally keeping the path and query)
+- Per route: **block common exploits** (SQL injection or script in the query, `/.git`, `/.env`, ...),
+  **HSTS**, **compression** (zstd/gzip) and **blocked IP addresses** (set on the route page; the REST API keeps them)
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs
 - Add a subdomain to an existing domain with one click
 - **Guards and upstream headers** (optional, under *Guards and upstream* in the route editor): refuse every request that lacks a
@@ -44,6 +46,8 @@ lose the YAML-in-your-head part.
   routes need no provider of their own; the UI shows exactly what each cert covers
 - A clear **warning** when a host would get its own individual certificate
 - **Propagation delay / timeout** tuning for slow DNS providers (e.g. netcup)
+- A **Certificates** page: every certificate with what it covers, its expiry and the state of the last
+  TLS check (every six hours, or *Check now*)
 
 **Authentication**
 - **Basic Auth** (browser dialog), managed user list with bcrypt hashes
@@ -64,7 +68,9 @@ lose the YAML-in-your-head part.
 **Insight**
 - A **live dashboard** with the route tree, last access and a real-time request log
 - **Statistics** with filters (time range, host, status class, method, path) and
-  charts for traffic over time, status codes and **top hosts, paths and client IPs**
+  charts for traffic over time, status codes and **top hosts, paths and client IPs**;
+  the routes list opens the requests of a host
+- An **audit log** (Settings): who changed which route, provider, authentication, setting or user
 
 **Getting your config in**
 - **Caddyfile import**: paste a Caddyfile, preview what maps to routes / providers /
@@ -75,7 +81,8 @@ lose the YAML-in-your-head part.
 **DNS providers**
 - netcup, Cloudflare, DigitalOcean, Hetzner, Route53, Gandi, deSEC and OVH baked in,
   plus a **Custom** type for any compiled-in `caddy-dns` module
-- A **Test credentials** button that checks the provider's API before you rely on it
+- A **Test credentials** button that checks the provider's API before you rely on it (netcup, Cloudflare)
+- Stored credentials are never shown again (an empty field keeps them)
 
 ## Screenshots
 

@@ -40,7 +40,8 @@ src/Matcad
   MatPlatform/          the platform contract of the Mat apps: a COPY of MatPlatform from MatDesign (tools/matplatform-copy.js) - never edit
   Platform/             MatcadPlatform (the MatApiDefinition: tiles, settings, actions; de+en via o.T), MatcadIdentityUsers (MatIdentity -> local user)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest,
-                        ProxyMonitor / ProxyStatusService (Caddy reachability, certificate checks, upstream errors for the platform tiles)
+                        ProxyMonitor / ProxyStatusService (Caddy reachability, certificate checks, upstream errors for the platform tiles),
+                        RequestLogQueries (dashboard + statistics: pages never hold the DbContext), AuditLog (who changed what)
   Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar
   Controls/             Ui (icons, logo), tag helpers (<icon>, <mat-field>, <mat-form-buttons>), ToolbarModel, BrandAccent
   wwwroot/              matui/ (the toolkit, a copy), css/matcad.css, js/*.js, sw.js, offline.html, manifest.webmanifest, img/
@@ -103,6 +104,13 @@ page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host h
 - Real-Caddy check (what the unit tests cannot show): `caddy:2` container started with `{"admin":{"listen":"0.0.0.0:2019"}}`, Matcad run against it
   (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
   `{http.request.header.X-Up}`), routes created through the REST API, then curl.
+
+**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`): set on the route page only (`RouteExtras` in
+`RouteForm`; null = keep what the route has), so `POST /api/v1/routes` keeps them and the API answers keep their shape. Blocked IPs are part of
+the guard (403, unreadable list = 503). The exploit filter is a `path_regexp` plus a CEL `expression` on `{http.request.uri.query}` (checked
+against a real caddy:2). A redirect target never contains `{`/`}` (Caddy fills placeholders into `Location`; `{env.*}` would leak).
+
+**Audit log:** `ConfigStore.Changed` and `AuthService` feed `AuditLog` (table `AuditEntry`): actor, kind, action, name - never a value.
 
 **Database:** SQLite for logic, JSON for config. Tables PascalCase and singular, key `Id` (64 bit), audit columns, index and
 constraint names PascalCase without underscores. Schema changes are migrations:
