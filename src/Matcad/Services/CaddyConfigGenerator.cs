@@ -314,6 +314,20 @@ public class CaddyConfigGenerator
                 }
             });
 
+        // Response headers of the route: deferred, so they are applied when the answer is written and win over (or remove) what the
+        // upstream sent; names canonical, because Caddy sets a header under exactly the key it is given. The values are checked
+        // (RouteGuards.Check above): no line breaks, no placeholders.
+        if (route.ResponseHeaders.Count > 0)
+        {
+            var response = new Dictionary<string, object?> { ["deferred"] = true };
+            var set = route.ResponseHeaders.Where(h => !h.Remove)
+                .ToDictionary(h => RouteGuards.CanonicalName(h.Name), h => (object?)new[] { h.Value });
+            var delete = route.ResponseHeaders.Where(h => h.Remove).Select(h => RouteGuards.CanonicalName(h.Name)).ToList();
+            if (set.Count > 0) response["set"] = set;
+            if (delete.Count > 0) response["delete"] = delete;
+            handlers.Add(new Dictionary<string, object?> { ["handler"] = "headers", ["response"] = response });
+        }
+
         // Optional: strip framing headers so the site can be embedded in an iframe (e.g. matOS).
         // Deferred so it runs after the upstream sets them; placed first so it wraps the response.
         if (route.AllowEmbedding)

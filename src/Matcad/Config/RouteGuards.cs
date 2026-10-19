@@ -88,6 +88,59 @@ public static partial class RouteGuards
         return null;
     }
 
+    // Headers of the answer that describe the message itself: set or removed by hand they would break it.
+    private static readonly string[] ForbiddenResponseNames =
+        ["Content-Length", "Transfer-Encoding", "Connection", "Keep-Alive", "Upgrade", "Trailer", "Content-Encoding"];
+
+    /// <summary>
+    /// Checks the headers of the answer (set or removed). The value goes into the HTTP answer as it is, so it may only hold visible ASCII and
+    /// spaces: no CR/LF (header injection), no other control character, nothing Caddy would read as a placeholder (<c>{</c>, <c>}</c>; a
+    /// <c>{env.*}</c> would hand out Caddy's environment to every visitor). A name is a token without <c>*</c> (Caddy's delete reads it as a wildcard).
+    /// </summary>
+    public static string? CheckResponseHeaders(IReadOnlyList<ResponseHeader>? headers)
+    {
+        const string label = "Response header";
+        if (headers == null || headers.Count == 0) return null;
+        if (headers.Count > MaxHeaders) return $"Response headers: at most {MaxHeaders} headers.";
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var h in headers)
+        {
+            var name = h.Name ?? "";
+            if (name.Length == 0) return $"{label}: the header name is empty.";
+            if (name.Length > MaxNameLength || !HeaderName().IsMatch(name) || name.Contains('*'))
+                return $"{label}: '{Short(name)}' is not a usable header name (letters, digits and - _ . ! # $ % & ' + ^ ` | ~, starting with a letter or digit).";
+            if (ForbiddenResponseNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                return $"{label}: '{name}' cannot be set or removed, it describes the HTTP message itself.";
+            if (!seen.Add(name)) return $"Response headers: '{Short(name)}' is listed twice.";
+            var value = h.Value ?? "";
+            if (h.Remove)
+            {
+                if (value.Length > 0) return $"{label} '{Short(name)}': a header that is removed has no value.";
+                continue;
+            }
+            if (value.Length == 0) return $"{label} '{Short(name)}': enter a value (or remove the header).";
+            if (value.Length > MaxValueLength) return $"{label} '{Short(name)}': the value is longer than {MaxValueLength} characters.";
+            if (value.Any(c => c is < ' ' or > '~')) return $"{label} '{Short(name)}': the value may only contain visible ASCII characters and spaces (no line breaks).";
+            if (value[0] == ' ' || value[^1] == ' ') return $"{label} '{Short(name)}': the value must not start or end with a space.";
+            if (value.AsSpan().IndexOfAny('{', '}') >= 0)
+                return $"{label} '{Short(name)}': the value must not contain {{ or }} (Caddy would read it as a placeholder).";
+        }
+        return null;
+    }
+
+    /// <summary>A response header must not fight a switch of the route that writes the same header.</summary>
+    public static string? CheckResponseHeaderClash(IReadOnlyList<ResponseHeader>? headers, bool hsts, bool allowEmbedding)
+    {
+        foreach (var h in headers ?? [])
+        {
+            if (hsts && h.Name.Equals("Strict-Transport-Security", StringComparison.OrdinalIgnoreCase))
+                return "Response header 'Strict-Transport-Security': the HSTS switch of the route writes it. Turn HSTS off to set your own.";
+            if (allowEmbedding && !h.Remove && h.Name.Equals("X-Frame-Options", StringComparison.OrdinalIgnoreCase))
+                return "Response header 'X-Frame-Options': the route allows embedding, which removes it. Turn that off to set it.";
+        }
+        return null;
+    }
+
     /// <summary>The required header is removed from the request before it goes to the upstream (the app behind has no use for the secret,
     /// and neither has a plugin or a log there). Caddy deletes after it sets, so an upstream header of the same name would be deleted
     /// again: the two cannot share a name.</summary>
@@ -178,7 +231,8 @@ public static partial class RouteGuards
         ?? CheckRequireHeader(route.RequireHeader)
         ?? CheckNameClash(route.RequireHeader, route.UpstreamHeaders)
         ?? NormalizeIps(route.AllowedIps).Error
-        ?? NormalizeIps(route.BlockedIps, BlockedLabel).Error;
+        ?? NormalizeIps(route.BlockedIps, BlockedLabel).Error
+        ?? CheckResponseHeaders(route.ResponseHeaders);
 
     /// <summary>The label of the blocked addresses in messages.</summary>
     public const string BlockedLabel = "Blocked IPs";
@@ -224,7 +278,8 @@ public static partial class RouteGuards
     // A message shows a name or an address, never a value; a very long one is cut.
     private static string Short(string? text) => text is { Length: > 40 } ? text[..40] + "..." : text ?? "";
 
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*$")]
+    // \z, not $: $ also matches before a final line break, and a stored name is not trimmed.
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9!#$%&'*+.^_`|~-]*\z")]
     private static partial Regex HeaderName();
 
     [GeneratedRegex(@"^\[([0-9a-f:.]+)\](?::(\d{1,5}))?$")]

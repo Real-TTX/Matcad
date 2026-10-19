@@ -187,6 +187,56 @@ else
             </div>
         </section>
 
+        <section class="mat-card" aria-labelledby="route-response-title">
+            <div class="mat-card__head">@Ui.Icon("code")<h2 class="mat-card__title" id="route-response-title">Response headers</h2></div>
+            <div class="mat-card__body mat-stack">
+                <details class="mat-collapse" open="@(Model.ResponseRows.Count > 0)" id="route-response">
+                    <summary><span>Set or remove headers of the answer</span>@Ui.Icon("chevron-down", "mat-accordion__chev")</summary>
+                    <div class="mat-accordion__body mat-stack">
+                        <div class="mat-table-wrap">
+                            <table class="mat-table" id="response-headers">
+                                <caption class="mat-sr-only">Headers of the answer to the visitor</caption>
+                                <thead><tr><th scope="col">Action</th><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="mat-sr-only">Actions</span></th></tr></thead>
+                                <tbody>
+                                    @foreach (var row in Model.ResponseRows)
+                                    {
+                                        <tr>
+                                            <td data-label="Action">
+                                                <select name="ResponseActions" class="mat-select" aria-label="Action">
+                                                    <option value="set" selected="@(!row.Remove)">Set</option>
+                                                    <option value="remove" selected="@row.Remove">Remove</option>
+                                                </select>
+                                            </td>
+                                            <td data-label="Name"><input name="ResponseNames" value="@row.Name" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                            <td data-label="Value"><input name="ResponseValues" value="@row.Value" class="mat-input mat-mono" aria-label="Header value" autocapitalize="none" autocomplete="off" spellcheck="false" /></td>
+                                            <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the row @row.Name" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <span class="mat-hint">For every answer of the host, also over what the upstream sends. Visible ASCII, no { or }; a removed header needs no value.</span>
+                        <div class="mat-actions">
+                            <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-add-row="#response-headers tbody" data-template="response-row-template">@Ui.Icon("plus")<span>Add a header</span></button>
+                        </div>
+                        <template id="response-row-template">
+                            <tr>
+                                <td data-label="Action">
+                                    <select name="ResponseActions" class="mat-select" aria-label="Action">
+                                        <option value="set">Set</option>
+                                        <option value="remove">Remove</option>
+                                    </select>
+                                </td>
+                                <td data-label="Name"><input name="ResponseNames" class="mat-input mat-mono" aria-label="Header name" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="X-Content-Type-Options" /></td>
+                                <td data-label="Value"><input name="ResponseValues" class="mat-input mat-mono" aria-label="Header value" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="nosniff" /></td>
+                                <td class="mat-table__cell-actions"><div class="mat-table__actions"><button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-remove-row aria-label="Remove the row" data-tip="Remove">@Ui.Icon("trash")</button></div></td>
+                            </tr>
+                        </template>
+                    </div>
+                </details>
+            </div>
+        </section>
+
         <section class="mat-card" aria-labelledby="route-guard-title">
             <div class="mat-card__head">@Ui.Icon("shield")<h2 class="mat-card__title" id="route-guard-title">Guards and upstream</h2></div>
             <div class="mat-card__body mat-stack">

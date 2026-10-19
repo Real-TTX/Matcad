@@ -50,6 +50,13 @@ public class EditModel : PageModel
     [BindProperty] public string? AllowedIpsText { get; set; }
     [BindProperty] public string? BlockedIpsText { get; set; }
 
+    // --- Headers of the answer (not secrets: every visitor gets them, so they are shown again). Three parallel lists, one entry per row.
+    [BindProperty] public List<string> ResponseNames { get; set; } = new();
+    [BindProperty] public List<string> ResponseValues { get; set; } = new();
+    /// <summary>"set" or "remove" per row.</summary>
+    [BindProperty] public List<string> ResponseActions { get; set; } = new();
+    public List<ResponseHeader> ResponseRows { get; private set; } = new();
+
     /// <summary>A row of the upstream headers on the page: the name, and whether a value is saved for it.</summary>
     public record HeaderRow(string Name, bool ValueSet);
 
@@ -98,6 +105,7 @@ public class EditModel : PageModel
             HeaderRows = r.UpstreamHeaders.Select(h => new HeaderRow(h.Name, ValueSet: true)).ToList();
             RequireName = r.RequireHeader?.Name; RequireSet = r.RequireHeader != null;
             AllowedIpsText = string.Join('\n', r.AllowedIps);
+            ResponseRows = r.ResponseHeaders.Select(h => new ResponseHeader { Name = h.Name, Value = h.Value, Remove = h.Remove }).ToList();
         }
         else if (!string.IsNullOrWhiteSpace(Sub))
         {
@@ -126,7 +134,7 @@ public class EditModel : PageModel
             // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
             UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
             RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText),
-            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod));
+            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod, ReadResponseHeaders()));
         var error = RouteEditor.Apply(form, route);
         if (error != null) return Fail(error);
         if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))
@@ -164,6 +172,7 @@ public class EditModel : PageModel
         Error = message;
         PortBinding = portBinding;
         ShowPostedAccess();
+        ResponseRows = ReadResponseHeaders();
         BuildOptions();
         return Page();
     }
@@ -194,6 +203,21 @@ public class EditModel : PageModel
             if (kept != null) return (new PostedAccess(headers, require), kept);
         }
         return (new PostedAccess(headers, require), null);
+    }
+
+    /// <summary>The rows of the response headers the form posted; an entirely empty row is dropped, a removed header has no value.</summary>
+    private List<ResponseHeader> ReadResponseHeaders()
+    {
+        var rows = new List<ResponseHeader>();
+        for (var i = 0; i < ResponseNames.Count; i++)
+        {
+            var name = ResponseNames[i]?.Trim() ?? "";
+            var remove = i < ResponseActions.Count && ResponseActions[i] == "remove";
+            var value = remove || i >= ResponseValues.Count ? "" : ResponseValues[i] ?? "";
+            if (name.Length == 0 && value.Length == 0) continue;
+            rows.Add(new ResponseHeader { Name = name, Value = value, Remove = remove });
+        }
+        return rows;
     }
 
     private record PostedAccess(List<HeaderPair> UpstreamHeaders, HeaderPair? RequireHeader);

@@ -72,6 +72,14 @@ public class HeaderPair
     public string Value { get; set; } = "";
 }
 
+/// <summary>A header of the answer to the visitor: set to a value, or removed (then the value is empty). Not a secret: it goes to every visitor.</summary>
+public class ResponseHeader
+{
+    public string Name { get; set; } = "";
+    public string Value { get; set; } = "";
+    public bool Remove { get; set; }
+}
+
 /// <summary>
 /// A route in the hierarchical domain tree. A route may be a wildcard host and
 /// may have children (e.g. sub.example.com under *.example.com).
@@ -81,6 +89,7 @@ public class RouteConfig : ConfigEntity
     private List<HeaderPair> _upstreamHeaders = new();
     private List<string> _allowedIps = new();
     private List<string> _blockedIps = new();
+    private List<ResponseHeader> _responseHeaders = new();
 
     public string Name { get; set; } = "";
     /// <summary>Host matcher, e.g. app.example.com or *.example.com.</summary>
@@ -140,6 +149,8 @@ public class RouteConfig : ConfigEntity
     public bool Hsts { get; set; }
     /// <summary>Compress the responses of the upstream (zstd or gzip, whatever the browser takes).</summary>
     public bool Compress { get; set; }
+    /// <summary>Headers set on or removed from every answer of the route (also those of the upstream, applied when the answer is written).</summary>
+    public List<ResponseHeader> ResponseHeaders { get => _responseHeaders; set => _responseHeaders = value ?? new(); }
 
     /// <summary>DNS provider used for wildcard cert issuance (DNS-01).</summary>
     public long? ProviderId { get; set; }

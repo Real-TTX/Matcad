@@ -18,7 +18,7 @@ public record RouteForm(
 /// <summary>The options only the edit page sets (the REST API keeps what the route has). Null in a <see cref="RouteForm"/>: leave them as
 /// the route has them.</summary>
 public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps,
-    bool RedirectKeepMethod = false);
+    bool RedirectKeepMethod = false, IReadOnlyList<ResponseHeader>? ResponseHeaders = null);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -104,6 +104,12 @@ public static partial class RouteEditor
         var options = form.Options ?? OptionsOf(route);
         var (blockedIps, blockedError) = RouteGuards.NormalizeIps(options.BlockedIps, RouteGuards.BlockedLabel);
         if (blockedError != null) return blockedError;
+        // Null: the caller does not carry them (a form of older tests or tools), the route keeps its own.
+        var responseHeaders = (options.ResponseHeaders ?? route.ResponseHeaders)
+            .Select(h => new ResponseHeader { Name = (h.Name ?? "").Trim(), Value = h.Value ?? "", Remove = h.Remove }).ToList();
+        var responseError = RouteGuards.CheckResponseHeaders(responseHeaders)
+                            ?? RouteGuards.CheckResponseHeaderClash(responseHeaders, options.Hsts, form.AllowEmbedding);
+        if (responseError != null) return responseError;
 
         route.Name = !string.IsNullOrWhiteSpace(form.Name) ? form.Name.Trim()
                    : host.Length > 0 ? host
@@ -132,12 +138,13 @@ public static partial class RouteEditor
         route.Hsts = options.Hsts;
         route.Compress = !redirect && options.Compress;
         route.BlockExploits = options.BlockExploits;
+        route.ResponseHeaders = responseHeaders;
         return null;
     }
 
     /// <summary>The options a route has now.</summary>
     public static RouteExtras OptionsOf(RouteConfig route) =>
-        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod);
+        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod, route.ResponseHeaders);
 
     /// <summary>The redirect codes a route can answer with.</summary>
     public static readonly int[] RedirectCodes = [301, 302, 307, 308];
