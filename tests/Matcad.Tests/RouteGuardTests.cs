@@ -794,7 +794,7 @@ public class RouteGuardBackupTests : IClassFixture<MatcadFactory>
         Assert.Null(old.UpstreamHost);
         Assert.Empty(old.UpstreamHeaders);
         Assert.Empty(old.AllowedIps);
-        var only = JsonNode.Parse(_factory.Services.GetRequiredService<CaddyService>().BuildJson())!["apps"]!["http"]!["servers"]!["matcad"]!["routes"]![0]!["handle"]!.AsArray();
+        var only = JsonNode.Parse(_factory.Services.GetRequiredService<CaddyService>().BuildJson())!["apps"]!["http"]!["servers"]!["matcad"]!["routes"]![1]!["handle"]!.AsArray(); // [0] is the HTTP -> HTTPS redirect
         Assert.Equal(["reverse_proxy"], only.Select(h => h!["handler"]!.GetValue<string>()));
     }
 

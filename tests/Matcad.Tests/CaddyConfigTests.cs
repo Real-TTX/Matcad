@@ -29,12 +29,56 @@ public sealed class CaddyConfigTests : IDisposable
 
     private JsonNode Build() => JsonSerializer.SerializeToNode(_generator.Build())!;
 
-    private static JsonArray MainRoutes(JsonNode config) => config["apps"]!["http"]!["servers"]!["matcad"]!["routes"]!.AsArray();
+    // The site routes: without the leading HTTP -> HTTPS redirect (its own tests look at it).
+    private static List<JsonNode> MainRoutes(JsonNode config) =>
+        AllMainRoutes(config).Where(r => r!["match"]?[0]?["protocol"] == null).Select(r => r!).ToList();
+
+    private static JsonArray AllMainRoutes(JsonNode config) => config["apps"]!["http"]!["servers"]!["matcad"]!["routes"]!.AsArray();
 
     private static IEnumerable<string> Handlers(JsonNode route) => route["handle"]!.AsArray().Select(h => h!["handler"]!.GetValue<string>());
 
     private static JsonNode RouteFor(JsonNode config, string host) =>
         MainRoutes(config).Single(r => r!["match"]![0]!["host"]![0]!.GetValue<string>() == host && r["match"]![0]!["path"] == null)!;
+
+    [Fact]
+    public void Plain_http_to_a_known_host_is_sent_to_https_before_any_site_route()
+    {
+        _store.UpsertAuthentication(new AuthenticationConfig { Name = "portal", Type = AuthType.Matcad }, null);
+        _store.UpsertRoute(new RouteConfig { Host = "app.example.com", Upstream = "a:1", AuthenticationId = _store.Authentications.Single().Id }, null);
+        _store.UpsertRoute(new RouteConfig { Host = "old.example.com", FallbackUrl = "https://new.example.com" }, null);
+        _store.UpsertRoute(new RouteConfig { Host = "*.example.com", Wildcard = true, Upstream = "b:1" }, null);
+        _store.UpsertRoute(new RouteConfig { Host = "off.example.com", Upstream = "c:1", Enabled = false }, null);
+        _store.UpsertRoute(new RouteConfig { ListenPort = 8100, Upstream = "d:1" }, null);
+
+        var config = Build();
+        var first = AllMainRoutes(config)[0]!;
+
+        // First of all, so neither a site route nor the login pages (/auth/*) answer plain HTTP themselves.
+        Assert.Equal("http", first["match"]![0]!["protocol"]!.GetValue<string>());
+        Assert.Equal(["app.example.com", "old.example.com", "*.example.com"], first["match"]![0]!["host"]!.AsArray().Select(h => h!.GetValue<string>()));
+        Assert.True(first["terminal"]!.GetValue<bool>());
+        var handler = first["handle"]![0]!;
+        Assert.Equal(308, handler["status_code"]!.GetValue<int>());
+        Assert.Equal("https://{http.request.host}{http.request.uri}", handler["headers"]!["Location"]![0]!.GetValue<string>());
+        // A port binding is plain HTTP on purpose and keeps its own server.
+        Assert.DoesNotContain("protocol", config["apps"]!["http"]!["servers"]!["port_8100"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void Without_host_routes_there_is_no_redirect_and_unknown_hosts_stay_after_it()
+    {
+        Assert.Empty(AllMainRoutes(Build()));
+
+        _store.UpsertRoute(new RouteConfig { Host = "app.example.com", Upstream = "a:1" }, null);
+        var settings = _store.Settings;
+        settings.UnknownHost = "notfound";
+        _store.SaveSettings(settings);
+        var caddy = new CaddyService(new TestHttpClientFactory(), _generator, _store, _cfg, NullLogger<CaddyService>.Instance);
+        var routes = AllMainRoutes(JsonNode.Parse(caddy.BuildJson())!);
+
+        Assert.Equal("http", routes[0]!["match"]![0]!["protocol"]!.GetValue<string>());
+        Assert.Null(routes[^1]!["match"]); // the unknown-host answer is not in the list of the redirect, so plain HTTP reaches it
+    }
 
     [Fact]
     public void A_proxy_route_dials_the_upstream_and_a_redirect_answers_itself()

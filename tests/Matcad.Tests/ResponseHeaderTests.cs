@@ -33,6 +33,7 @@ public sealed class ResponseHeaderTests : IDisposable
     {
         var config = JsonSerializer.SerializeToNode(_generator.Build())!;
         var route = config["apps"]!["http"]!["servers"]!["matcad"]!["routes"]!.AsArray()
+            .Where(r => r!["match"]?[0]?["protocol"] == null) // not the HTTP -> HTTPS redirect
             .Single(r => r!["match"]![0]!["host"]![0]!.GetValue<string>() == host)!;
         return route["handle"]!.AsArray();
     }

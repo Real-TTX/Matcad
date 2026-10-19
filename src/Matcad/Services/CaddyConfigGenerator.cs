@@ -54,6 +54,13 @@ public class CaddyConfigGenerator
         var serveAuthLocally = mode != "unauthorized"
             && (mode != "redirect" || string.IsNullOrWhiteSpace(settings.EffectivePortalUrl()));
         var httpRoutes = new List<object>();
+        // Plain HTTP to a known host goes to HTTPS. Caddy's automatic redirects cannot do it here: the main server listens on :80 and :443,
+        // and Caddy inserts its redirect routes AFTER the last route with a host matcher - our host routes match both schemes, so they
+        // answered plain HTTP themselves. ACME HTTP-01 challenges are answered by the server before any route; unknown hosts are not in
+        // the list and reach the unknown-host answer; the login portal (/auth/*) is on the same hosts and moves to HTTPS with them.
+        var tlsHosts = ordered.Select(r => r.Host).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (tlsHosts.Count > 0)
+            httpRoutes.Add(BuildHttpsRedirect(tlsHosts));
         foreach (var r in ordered)
         {
             // Serve /auth/* on the protected host itself (proxied to Matcad,
@@ -126,6 +133,23 @@ public class CaddyConfigGenerator
 
         return config;
     }
+
+    /// <summary>308 from http://host/path?query to https://host/path?query for the hosts of the routes. The host placeholder can only
+    /// be one of these names (the host matcher picked the request), the URI is the request's own.</summary>
+    private static Dictionary<string, object?> BuildHttpsRedirect(List<string> hosts) => new()
+    {
+        ["match"] = new[] { new Dictionary<string, object?> { ["host"] = hosts, ["protocol"] = "http" } },
+        ["handle"] = new[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["handler"] = "static_response",
+                ["status_code"] = 308,
+                ["headers"] = new Dictionary<string, object?> { ["Location"] = new[] { "https://{http.request.host}{http.request.uri}" } }
+            }
+        },
+        ["terminal"] = true
+    };
 
     /// <summary>The page of the "notfound" mode for unknown hosts. Fixed text: Caddy fills placeholders into a body, so nothing from outside goes in.</summary>
     internal const string NotFoundPage =
