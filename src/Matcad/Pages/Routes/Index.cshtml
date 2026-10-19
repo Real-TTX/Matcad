@@ -103,6 +103,7 @@
                                     <div class="mat-table__actions">
                                         @if (!r.Wildcard && !string.IsNullOrWhiteSpace(r.Host))
                                         {
+                                            <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm mat-hide-sm" href="/Statistics?host=@Uri.EscapeDataString(r.Host)" aria-label="Requests to @r.Host" data-tip="Requests">@Ui.Icon("bar-chart")</a>
                                             <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm mat-hide-sm" href="https://@r.Host" target="_blank" rel="noopener" aria-label="Open @r.Host" data-tip="Open">@Ui.Icon("external")</a>
                                         }
                                     </div>
