@@ -34,6 +34,10 @@ lose the YAML-in-your-head part.
   to any URL, or pick an existing domain from a list; optionally keeping the path and query)
 - Per route: **block common exploits** (SQL injection or script in the query, `/.git`, `/.env`, ...),
   **HSTS**, **compression** (zstd/gzip) and **blocked IP addresses** (set on the route page; the REST API keeps them)
+- **Response headers** per route: set or remove headers of the answer (`X-Content-Type-Options`, `Referrer-Policy`, drop `Server` or
+  `X-Powered-By`), also over what the upstream sends; values are visible ASCII without line breaks or `{ }` (route page only)
+- **Unknown hosts** (Settings): a host without a route gets Caddy's default (plain HTTP to HTTPS), a small 404 page, a redirect
+  or a closed connection
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs
 - Add a subdomain to an existing domain with one click
 - **Guards and upstream headers** (optional, under *Guards and upstream* in the route editor): refuse every request that lacks a

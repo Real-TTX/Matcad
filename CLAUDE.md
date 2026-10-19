@@ -105,10 +105,23 @@ page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host h
   (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
   `{http.request.header.X-Up}`), routes created through the REST API, then curl.
 
-**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`): set on the route page only (`RouteExtras` in
+**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`, `ResponseHeaders`): set on the route page only (`RouteExtras` in
 `RouteForm`; null = keep what the route has), so `POST /api/v1/routes` keeps them and the API answers keep their shape. Blocked IPs are part of
 the guard (403, unreadable list = 503). The exploit filter is a `path_regexp` plus a CEL `expression` on `{http.request.uri.query}` (checked
 against a real caddy:2). A redirect target never contains `{`/`}` (Caddy fills placeholders into `Location`; `{env.*}` would leak).
+`ResponseHeaders` (set or remove, `RouteGuards.CheckResponseHeaders`) are one `headers` handler with `deferred: true` after HSTS, so they win over
+(or remove) what the upstream sends: names are tokens without `*` (Caddy's delete reads it as a wildcard), canonical; values visible ASCII and
+space only (no CR/LF: header injection), no edge space, no `{`/`}` (placeholders); the framing headers (`Content-Length`, `Content-Encoding`, ...)
+are refused, and so are `Strict-Transport-Security` with HSTS on and setting `X-Frame-Options` with embedding allowed. A stored invalid list = 503.
+
+**Unknown hosts** (`MatcadSettings.UnknownHost`: `""` Caddy's default, `notfound`, `redirect` + `UnknownHostRedirect`, `drop`; Settings ->
+General only, `/api/v1/settings` keeps its shape): a route without matcher that `CaddyService.BuildNode` appends AFTER the merge of the extra
+JSON (its routes would be hidden otherwise). Only plain HTTP and names with a certificate get there; for others the TLS handshake fails. An
+invalid stored redirect target falls back to the 404 page; a restored backup is sanitised (`BackupRestore.SanitizeSettings`).
+
+**Migrations at startup:** `MigrationLock.ReleaseStaleAsync` deletes a row left in `__EFMigrationsLock` by a process stopped while it migrated
+(EF Core 10 would wait for it forever); `DatabaseBootstrapper` calls it before `MigrateAsync` and logs a warning. Matcad is the only process on its
+database, so a row found then is always stale.
 
 **Audit log:** `ConfigStore.Changed` and `AuthService` feed `AuditLog` (table `AuditEntry`): actor, kind, action, name - never a value.
 

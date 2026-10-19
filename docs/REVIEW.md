@@ -19,6 +19,8 @@ real ACME issuance and renewal (no public DNS), Docker discovery (no socket moun
 | 9 | Certificates were a tab in admin settings listing only the plan; the expiry the monitor reads every six hours was only in the platform tiles. | Own page **Certificates** (menu Proxy): expiry, days left, state of the last TLS check, problems first, search, filter, *Check now*. Old tab link redirects. |
 | 10 | Wordy texts (hints of three lines, sub-titles explaining the obvious, duplicate "Requests in total" tile). | Shortened on route, provider, authentication, settings, import, dashboard; the tile shows active routes. |
 | 11 | The plain 401 of the login portal carried an inline style. | Removed. |
+| 12 | **Startup hang:** EF Core 10 on SQLite leaves a row in `__EFMigrationsLock` when the process is stopped while it migrates (an update recreates the container seconds after the start); every later start waited for it forever. | `MigrationLock.ReleaseStaleAsync` (ported from MatDock) removes it before `MigrateAsync`, with a warning in the log. The backup restore does not migrate, so it needs nothing. |
+| 13 | The header-name check ended in `$`, which also matches before a final line break (a stored, untrimmed name). | `\z`. |
 
 Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to the API key holder - MatOS edits providers through it and
 `/api/v1` must stay byte-compatible. Should a v2 ever come: `credentialsSet` instead (as Mattiverse's own contract already does).
@@ -34,9 +36,9 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 | Certificate list with expiry | **has (new)** | Certificates page |
 | Renew a certificate by hand | dropped | Caddy renews on its own at a third of the lifetime; the page shows whether it did |
 | Redirection hosts | has | 301/302, **keep the path (new)** |
-| Redirect codes 307/308, scheme choice | missing | S - only on request |
+| Redirect codes 307/308 | **has (new)** | per route on the route page (308/307 keep the method); the API keeps the stored choice |
 | Streams (TCP/UDP forwarding) | partly | port bindings (HTTP only, API). Raw TCP/UDP needs the caddy-l4 plugin: L, plan only if asked |
-| 404 hosts / default site | missing | S - a "not found" target type; low value |
+| 404 hosts / default site | **has (new)** | Settings -> General -> Unknown hosts: Caddy default, 404 page, redirect or closed connection (plain HTTP; HTTPS for an unknown name fails at the handshake) |
 | Access lists: basic auth | has | authentications (reusable), plus the Matcad login portal |
 | Access lists: IP allow | has | allowed IPs |
 | Access lists: IP deny | **has (new)** | blocked IPs |
@@ -46,7 +48,7 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 | HTTP/2, HTTP/3 | has | Caddy default |
 | HSTS | **has (new)** | per route |
 | Block common exploits | **has (new)** | per route |
-| Custom headers | partly | to the upstream (incl. Host); response headers: S, next candidate |
+| Custom headers | **has (new)** | to the upstream (incl. Host) and, **new**, set/remove on the answer per route (checked against header injection and placeholders) |
 | Custom config | has | extra Caddy JSON |
 | Users and permissions | has | admin / user, MatIdentity |
 | Audit log | **has (new)** | Settings -> Audit log |
@@ -59,10 +61,14 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 ### Plan (by value)
 
 1. Custom locations (M): path rules per route, each with its own upstream or redirect.
-2. Response headers per route (S): security headers without extra JSON.
-3. Several upstreams with load balancing and active health checks (M), API field added, never changed.
-4. Redirect codes 307/308 (S), 404 / default host (S).
+2. Several upstreams with load balancing and active health checks (M), API field added, never changed.
+
+Done since the review: response headers per route, redirect codes 307/308, unknown hosts (404 / default host), stale migration lock. All three
+route features were checked against a real caddy:2 with Matcad driving it (headers replaced and removed over the upstream, 307/308 with the kept
+path, the 404 page for an unknown host on plain HTTP; the redirect and the closed connection with the same JSON loaded by hand); that the answer stays behind the routes of the extra
+JSON is a unit test.
 
 ## Tests
 
-Before: 432. After: 489, all green; `dotnet build` 0 warnings.
+Before: 432. After the review: 489. After the follow-ups (migration lock, redirect codes, response headers, unknown hosts): 549, all green;
+`dotnet build` 0 warnings.
