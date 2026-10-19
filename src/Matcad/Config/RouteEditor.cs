@@ -69,10 +69,8 @@ public static partial class RouteEditor
         if (redirect)
         {
             if (string.IsNullOrWhiteSpace(redirectUrl)) return "A redirect route needs a target URL.";
-            if (!IsHttpUrl(redirectUrl)) return "The redirect target must be an http:// or https:// URL.";
-            // Caddy fills {placeholders} into the Location header ({env.*} would hand out its environment): braces are refused.
-            if (redirectUrl.Any(c => c is '{' or '}' || char.IsWhiteSpace(c) || char.IsControl(c)))
-                return "The redirect target must not contain spaces, { or }.";
+            var targetError = CheckRedirectTarget(redirectUrl);
+            if (targetError != null) return targetError;
         }
         else if (!string.IsNullOrEmpty(upstream) && !IsUpstream(upstream))
         {
@@ -169,6 +167,16 @@ public static partial class RouteEditor
             return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
                    uri.Scheme is "http" or "https" or "h2c" && !string.IsNullOrEmpty(uri.Host);
         return HostAndPort().IsMatch(value);
+    }
+
+    /// <summary>Checks the target of a redirect: an http(s) address without spaces or braces. Caddy fills {placeholders} into the Location
+    /// header ({env.*} would hand out its environment), so braces are refused.</summary>
+    public static string? CheckRedirectTarget(string url)
+    {
+        if (!IsHttpUrl(url)) return "The redirect target must be an http:// or https:// URL.";
+        if (url.Any(c => c is '{' or '}' || char.IsWhiteSpace(c) || char.IsControl(c)))
+            return "The redirect target must not contain spaces, { or }.";
+        return null;
     }
 
     private static bool IsHttpUrl(string value) =>

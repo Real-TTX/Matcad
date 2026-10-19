@@ -58,6 +58,10 @@ public static class BackupRestore
             settings.PortalMode = "inline";
         else
             settings.PortalMode = settings.PortalMode.Trim().ToLowerInvariant();
+        var unknownHost = settings.UnknownHost?.Trim().ToLowerInvariant() ?? "";
+        settings.UnknownHost = MatcadSettings.UnknownHostModes.Contains(unknownHost) ? unknownHost : "";
+        var unknownRedirect = settings.UnknownHostRedirect?.Trim() ?? "";
+        settings.UnknownHostRedirect = RouteEditor.CheckRedirectTarget(unknownRedirect) == null ? unknownRedirect : "";
     }
 
     private static string ValidHostOrEmpty(string? value)

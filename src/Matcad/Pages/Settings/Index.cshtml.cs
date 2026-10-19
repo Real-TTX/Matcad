@@ -36,6 +36,9 @@ public class IndexModel : PageModel
     [BindProperty] public int AcmePropagationDelaySeconds { get; set; }
     [BindProperty] public int AcmePropagationTimeoutSeconds { get; set; }
     [BindProperty] public string RawCaddyJson { get; set; } = "";
+    /// <summary>What a host without a route gets: "" (Caddy's own), "notfound", "redirect" or "drop".</summary>
+    [BindProperty] public string UnknownHost { get; set; } = "";
+    [BindProperty] public string UnknownHostRedirect { get; set; } = "";
 
     [BindProperty] public bool DockerEnabled { get; set; }
     [BindProperty] public string DockerEndpoint { get; set; } = "";
@@ -86,6 +89,8 @@ public class IndexModel : PageModel
         AcmePropagationDelaySeconds = s.AcmePropagationDelaySeconds;
         AcmePropagationTimeoutSeconds = s.AcmePropagationTimeoutSeconds;
         RawCaddyJson = s.RawCaddyJson;
+        UnknownHost = s.UnknownHost ?? "";
+        UnknownHostRedirect = s.UnknownHostRedirect ?? "";
         DockerEnabled = s.Docker.Enabled;
         DockerEndpoint = s.Docker.Endpoint;
         DockerBaseDomain = s.Docker.BaseDomain;
@@ -110,8 +115,23 @@ public class IndexModel : PageModel
             return RedirectToPage("Index", new { tab = "general" });
         }
 
+        var unknownHost = UnknownHost?.Trim().ToLowerInvariant() ?? "";
+        var unknownRedirect = UnknownHostRedirect?.Trim() ?? "";
+        if (!MatcadSettings.UnknownHostModes.Contains(unknownHost))
+        {
+            TempData["FlashError"] = "Unknown hosts: choose one of the offered answers. Nothing was saved.";
+            return RedirectToPage("Index", new { tab = "general" });
+        }
+        if ((unknownRedirect.Length > 0 || unknownHost == "redirect") && RouteEditor.CheckRedirectTarget(unknownRedirect) is { } redirectError)
+        {
+            TempData["FlashError"] = "Unknown hosts: " + redirectError + " Nothing was saved.";
+            return RedirectToPage("Index", new { tab = "general" });
+        }
+
         var s = _store.Settings;
         s.BaseDomain = baseDomain;
+        s.UnknownHost = unknownHost;
+        s.UnknownHostRedirect = unknownRedirect;
         s.MatcadHost = matcadHost;
         s.SystemRouteEnabled = SystemRouteEnabled;
         s.PortalMode = PortalMode is "inline" or "redirect" or "unauthorized" ? PortalMode : "inline";

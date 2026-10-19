@@ -211,10 +211,19 @@ public class MatcadSettings
     /// merge, arrays concatenate). Escape hatch for anything Matcad doesn't model
     /// directly; also where the Caddyfile importer stores unmappable parts.</summary>
     public string RawCaddyJson { get; set; } = "";
+    /// <summary>What Caddy answers for a host that no route has (see <see cref="UnknownHostModes"/>): "" = Caddy's own behaviour (plain HTTP
+    /// is sent to HTTPS, where the handshake fails without a certificate), "notfound" = a small 404 page, "redirect" = to
+    /// <see cref="UnknownHostRedirect"/>, "drop" = close the connection without an answer.</summary>
+    public string UnknownHost { get; set; } = "";
+    /// <summary>The target of the "redirect" mode of <see cref="UnknownHost"/>: an http(s) address.</summary>
+    public string UnknownHostRedirect { get; set; } = "";
     public DockerSettings Docker { get; set; } = new();
 
     /// <summary>Effective login-portal base URL: explicit AuthPortalUrl, else
     /// derived from the system route host, else empty (relative /auth/portal).</summary>
+    /// <summary>The modes of <see cref="UnknownHost"/>.</summary>
+    public static readonly string[] UnknownHostModes = ["", "notfound", "redirect", "drop"];
+
     public string EffectivePortalUrl()
     {
         if (!string.IsNullOrWhiteSpace(AuthPortalUrl)) return AuthPortalUrl.TrimEnd('/');

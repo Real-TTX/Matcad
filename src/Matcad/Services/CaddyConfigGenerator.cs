@@ -127,6 +127,50 @@ public class CaddyConfigGenerator
         return config;
     }
 
+    /// <summary>The page of the "notfound" mode for unknown hosts. Fixed text: Caddy fills placeholders into a body, so nothing from outside goes in.</summary>
+    internal const string NotFoundPage =
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+        "<title>Not found</title></head><body>" +
+        "<h1>Not found</h1><p>There is no site under this address.</p></body></html>";
+
+    /// <summary>
+    /// The last route of the main server: what a host that no route has gets (<see cref="MatcadSettings.UnknownHost"/>), or null for Caddy's own
+    /// behaviour. It has no matcher, so it has to stay the very last route - after the routes of the extra JSON too (<see cref="CaddyService"/>
+    /// appends it after the merge). Only plain HTTP and names that have a certificate get this far: for any other name the TLS handshake fails.
+    /// A redirect target that is not valid (a hand-edited settings file) falls back to the page instead of passing through.
+    /// </summary>
+    public object? BuildUnknownHostRoute()
+    {
+        var settings = _store.Settings;
+        object? handler = (settings.UnknownHost ?? "").Trim().ToLowerInvariant() switch
+        {
+            "notfound" => NotFound(),
+            "drop" => new Dictionary<string, object?> { ["handler"] = "static_response", ["abort"] = true },
+            "redirect" => RouteEditor.CheckRedirectTarget(settings.UnknownHostRedirect?.Trim() ?? "") == null
+                ? new Dictionary<string, object?>
+                {
+                    ["handler"] = "static_response",
+                    ["status_code"] = 302,
+                    ["headers"] = new Dictionary<string, object?> { ["Location"] = new[] { RedirectLocation(settings.UnknownHostRedirect!.Trim()) } }
+                }
+                : NotFound(),
+            _ => null
+        };
+        return handler == null ? null : new Dictionary<string, object?> { ["handle"] = new[] { handler }, ["terminal"] = true };
+
+        static Dictionary<string, object?> NotFound() => new()
+        {
+            ["handler"] = "static_response",
+            ["status_code"] = 404,
+            ["headers"] = new Dictionary<string, object?>
+            {
+                ["Content-Type"] = new[] { "text/html; charset=utf-8" },
+                ["Cache-Control"] = new[] { "no-store" }
+            },
+            ["body"] = NotFoundPage
+        };
+    }
+
     /// <summary>True when the route is protected by a Matcad forward-auth (which
     /// needs the /auth/* endpoints served on the protected host in inline mode).</summary>
     private bool UsesMatcadAuth(RouteConfig route) =>

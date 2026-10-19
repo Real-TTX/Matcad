@@ -54,6 +54,9 @@ public class CaddyService
             }
             catch (Exception ex) { _log.LogWarning(ex, "Invalid raw Caddy JSON; ignoring it"); }
         }
+        // The answer for unknown hosts has no matcher: it goes last, after the routes of the extra JSON, or it would hide them.
+        if (_generator.BuildUnknownHostRoute() is { } unknown && node["apps"]?["http"]?["servers"]?["matcad"]?["routes"] is JsonArray routes)
+            routes.Add(JsonSerializer.SerializeToNode(unknown));
         return node;
     }
 

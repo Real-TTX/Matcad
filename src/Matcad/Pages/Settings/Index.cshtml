@@ -83,6 +83,27 @@
                 </div>
             </section>
 
+            <section class="mat-card" aria-labelledby="set-unknown-title">
+                <div class="mat-card__head">@Ui.Icon("globe")<h2 class="mat-card__title" id="set-unknown-title">Unknown hosts</h2></div>
+                <div class="mat-card__body">
+                    <div class="mat-form__grid">
+                        <mat-field label="Answer for a host without a route" asp-for="UnknownHost" hint="Plain HTTP only: HTTPS for such a name already fails at the certificate.">
+                            <select asp-for="UnknownHost" class="mat-select">
+                                <option value="">Caddy's default: send to HTTPS</option>
+                                <option value="notfound">A small "not found" page (404)</option>
+                                <option value="redirect">Redirect to an address</option>
+                                <option value="drop">Close the connection</option>
+                            </select>
+                        </mat-field>
+                        <div data-show-if="#UnknownHost" data-show-value="redirect">
+                            <mat-field label="Redirect to" asp-for="UnknownHostRedirect" hint="An http(s) address, without { or }. Temporary (302).">
+                                <input asp-for="UnknownHostRedirect" type="url" class="mat-input" placeholder="https://www.example.com" autocapitalize="none" spellcheck="false" />
+                            </mat-field>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="mat-card" aria-labelledby="set-logs-title">
                 <div class="mat-card__head">@Ui.Icon("clock")<h2 class="mat-card__title" id="set-logs-title">Logs</h2></div>
                 <div class="mat-card__body">
