@@ -105,7 +105,7 @@ public sealed class MatcadPlatform(
 
         o.LinkAction("open", T("Matcad öffnen", "Open Matcad"), "external", "/");
         o.LinkAction("openRoutes", T("Routen", "Routes"), "route", "/Routes");
-        o.LinkAction("openCertificates", T("Zertifikate", "Certificates"), "shield", "/Settings?tab=certificates");
+        o.LinkAction("openCertificates", T("Zertifikate", "Certificates"), "shield", "/Certificates");
         o.PostAction("reloadCaddy", T("Konfiguration neu an Caddy senden", "Push the config to Caddy again"), "refresh");
         o.PostAction("checkCertificates", T("Zertifikate jetzt prüfen", "Check the certificates now"), "check-circle");
 

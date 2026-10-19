@@ -14,12 +14,11 @@ public class IndexModel : PageModel
     private readonly AuthService _auth;
     private readonly DockerService _docker;
     private readonly DockerRouteCache _dockerRoutes;
-    private readonly RouteProvider _routes;
 
     public IndexModel(ConfigStore store, CaddyService caddy, AuthService auth,
-        DockerService docker, DockerRouteCache dockerRoutes, RouteProvider routes)
+        DockerService docker, DockerRouteCache dockerRoutes)
     {
-        _store = store; _caddy = caddy; _auth = auth; _docker = docker; _dockerRoutes = dockerRoutes; _routes = routes;
+        _store = store; _caddy = caddy; _auth = auth; _docker = docker; _dockerRoutes = dockerRoutes;
     }
 
     /// <summary>The tab to open: after a save the page shows the tab it was saved from.</summary>
@@ -43,7 +42,7 @@ public class IndexModel : PageModel
     [BindProperty] public string DockerBaseDomain { get; set; } = "";
     [BindProperty] public bool DockerRequireLabel { get; set; } = true;
 
-    private static readonly string[] Tabs = ["general", "users", "certificates", "docker", "caddy", "system"];
+    private static readonly string[] Tabs = ["general", "users", "docker", "caddy", "system"];
 
     private const long MaxBackupBytes = 20 * 1024 * 1024;
 
@@ -57,18 +56,19 @@ public class IndexModel : PageModel
     public IReadOnlyList<RouteConfig> DockerDiscovered => _dockerRoutes.Routes;
     public IReadOnlyList<DockerContainerInfo> DockerContainers => _docker.Containers;
     public string? DockerError => _docker.LastError;
-    public CertificatePlanner.CertPlan Certificates { get; private set; } = new(new(), new(), new());
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
+        // The certificates were a tab here once; links (and the platform button of older Mattiverse versions) still point there.
+        if (Tab == "certificates") return RedirectToPage("/Certificates/Index");
         if (!Tabs.Contains(Tab)) Tab = "general";
         Load();
         Users = await _auth.ListUsers();
-        Certificates = CertificatePlanner.Plan(_routes.All(), _store.Providers);
         CaddyConfigJson = SecretRedaction.Redact(_caddy.BuildJson());
         var running = await _caddy.GetRunningConfigAsync();
         CaddyStatus = running != null ? "reachable" : "unreachable";
         CaddyLiveJson = running != null ? SecretRedaction.Redact(running) : "// Caddy unreachable";
+        return Page();
     }
 
     private void Load()
@@ -140,7 +140,6 @@ public class IndexModel : PageModel
             return RedirectToPage("Index", new { tab = "docker" });
         }
         var s = _store.Settings;
-
         s.Docker.Enabled = DockerEnabled;
         s.Docker.Endpoint = string.IsNullOrWhiteSpace(DockerEndpoint) ? "unix:///var/run/docker.sock" : DockerEndpoint.Trim();
         s.Docker.BaseDomain = dockerDomain;

@@ -1,0 +1,111 @@
+@page
+@model Matcad.Pages.Certificates.IndexModel
+@{
+    ViewData["Title"] = "Certificates";
+    ViewData["PageSub"] = "What Caddy serves for the active routes. It renews them on its own.";
+    ViewData["Crumbs"] = Crumbs.Of(("Certificates", null));
+    var tools = Model.Toolbar.SearchActive || Model.Toolbar.ActiveFilters > 0;
+}
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="mat-empty">
+            <span class="mat-empty__icon">@Ui.Icon(tools ? "search" : "shield")</span>
+            @if (tools)
+            {
+                <div class="mat-empty__title">Nothing matches</div>
+                <p>Change the search or the filter, or reset them.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="Index">@Ui.Icon("refresh")<span>Reset the tools</span></a>
+            }
+            else
+            {
+                <div class="mat-empty__title">No certificates yet</div>
+                <p>An active route with a public host name gets one.</p>
+                <a class="mat-btn mat-btn--primary" asp-page="/Routes/Edit">@Ui.Icon("plus")<span>New route</span></a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mat-table-wrap">
+            <table class="mat-table">
+                <caption class="mat-sr-only">Certificates</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Certificate</th>
+                        <th scope="col" class="mat-hide-sm">Covers</th>
+                        <th scope="col" class="mat-hide-sm">Challenge</th>
+                        <th scope="col">Expires</th>
+                        <th scope="col">State</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td data-label="Certificate">
+                                <div class="mat-table__name mat-row">
+                                    <span class="mat-mono mat-text-break">@r.Subject</span>
+                                    @if (r.Wildcard) { <span class="mat-tag">Wildcard</span> }
+                                </div>
+                            </td>
+                            <td data-label="Covers" class="mat-hide-sm">
+                                @if (!r.Wildcard) { <span class="mat-muted">this host</span> }
+                                else if (r.Covers.Count == 0) { <span class="mat-muted">no subdomain routes yet</span> }
+                                else
+                                {
+                                    <ul class="mc-list">
+                                        @foreach (var h in r.Covers) { <li class="mat-mono mat-text-break">@h</li> }
+                                    </ul>
+                                }
+                            </td>
+                            <td data-label="Challenge" class="mat-hide-sm">@(r.Wildcard ? $"DNS ({r.Provider})" : "HTTP")</td>
+                            <td data-label="Expires">
+                                @if (r.Check?.NotAfter is { } end)
+                                {
+                                    @Ui.LocalTime(end.UtcDateTime, "date")
+                                    <span class="mat-muted">(@(r.DaysLeft == 1 ? "1 day" : $"{r.DaysLeft} days"))</span>
+                                }
+                                else { <span class="mat-muted">-</span> }
+                            </td>
+                            <td data-label="State">
+                                @switch (r.Tone)
+                                {
+                                    case "ok": <span class="mat-pill mat-pill--ok">Valid</span> break;
+                                    case "warn": <span class="mat-pill mat-pill--warn">@Ui.Icon("alert")Expires soon</span> break;
+                                    case "error": <span class="mat-pill mat-pill--error">@r.Check!.Error</span> break;
+                                    default: <span class="mat-pill">Not checked</span> break;
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <form method="post" asp-page-handler="Check" class="mat-actions">
+        <button type="submit" class="mat-btn mat-btn--primary" disabled="@Model.Checking">@Ui.Icon("refresh")<span>Check now</span></button>
+        <span class="mat-muted">
+            @if (Model.Checking) { <text>Checking...</text> }
+            else if (Model.CheckedAt is { } at) { <text>Last checked </text>@Ui.LocalTime(at.UtcDateTime, "short") }
+            else { <text>Not checked yet.</text> }
+        </span>
+    </form>
+</div>
+
+@if (Model.Internal.Count > 0)
+{
+    <section class="mat-card" aria-labelledby="internal-title">
+        <div class="mat-card__head">@Ui.Icon("lock")<h2 class="mat-card__title" id="internal-title">Internal CA</h2></div>
+        <div class="mat-card__body mat-stack">
+            <p class="mat-muted">localhost and IP addresses get a certificate of Caddy's own CA, which browsers do not trust.</p>
+            <ul class="mc-list">
+                @foreach (var h in Model.Internal) { <li class="mat-mono mat-text-break">@h</li> }
+            </ul>
+        </div>
+    </section>
+}

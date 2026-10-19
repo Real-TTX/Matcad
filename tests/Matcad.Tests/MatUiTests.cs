@@ -183,6 +183,7 @@ public class MatUiPagesTests : IClassFixture<MatcadFactory>
     [InlineData("/Authentications/Edit")]
     [InlineData("/Providers")]
     [InlineData("/Providers/Edit")]
+    [InlineData("/Certificates")]
     [InlineData("/Statistics")]
     [InlineData("/Settings")]
     [InlineData("/Settings?tab=users")]
