@@ -105,7 +105,7 @@ page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host h
   (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
   `{http.request.header.X-Up}`), routes created through the REST API, then curl.
 
-**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`): set on the route page only (`RouteExtras` in
+**Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`): set on the route page only (`RouteExtras` in
 `RouteForm`; null = keep what the route has), so `POST /api/v1/routes` keeps them and the API answers keep their shape. Blocked IPs are part of
 the guard (403, unreadable list = 503). The exploit filter is a `path_regexp` plus a CEL `expression` on `{http.request.uri.query}` (checked
 against a real caddy:2). A redirect target never contains `{`/`}` (Caddy fills placeholders into `Location`; `{env.*}` would leak).

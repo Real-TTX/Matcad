@@ -28,7 +28,8 @@ public class EditModel : PageModel
     [BindProperty] public bool InsecureSkipVerify { get; set; }
     [BindProperty] public bool AllowEmbedding { get; set; }
     [BindProperty] public string? FallbackUrl { get; set; }
-    [BindProperty] public bool PermanentRedirect { get; set; }
+    /// <summary>301, 302, 307 or 308.</summary>
+    [BindProperty] public int RedirectCode { get; set; } = 302;
     [BindProperty] public bool RedirectKeepPath { get; set; }
     [BindProperty] public bool Hsts { get; set; }
     [BindProperty] public bool Compress { get; set; }
@@ -85,7 +86,7 @@ public class EditModel : PageModel
             PortBinding = r.ListenPort > 0 ? r.ListenPort : null;
             RouteType = r.Wildcard ? "wildcard" : "single";
             Upstream = r.Upstream; InsecureSkipVerify = r.InsecureSkipVerify; AllowEmbedding = r.AllowEmbedding;
-            FallbackUrl = r.FallbackUrl; PermanentRedirect = r.RedirectPermanent; RedirectKeepPath = r.RedirectKeepPath;
+            FallbackUrl = r.FallbackUrl; RedirectCode = r.RedirectStatus; RedirectKeepPath = r.RedirectKeepPath;
             Hsts = r.Hsts; Compress = r.Compress; BlockExploits = r.BlockExploits;
             BlockedIpsText = string.Join('\n', r.BlockedIps);
             // A route with a redirect target and no upstream is a redirect.
@@ -118,12 +119,14 @@ public class EditModel : PageModel
         var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy };
         var (access, accessError) = ReadAccess(existing);
         if (accessError != null) return Fail(accessError);
+        if (!RouteEditor.TrySplitRedirectCode(RedirectCode, out var permanent, out var keepMethod) && Target == "redirect")
+            return Fail("The redirect code must be 301, 302, 307 or 308.");
         var form = new RouteForm(Host, RouteType == "wildcard", Target == "redirect", Upstream, InsecureSkipVerify,
-            FallbackUrl, PermanentRedirect, AuthenticationId, ProviderId, AcmeEmail, Enabled, Name, AllowEmbedding, ListenPort: null,
+            FallbackUrl, permanent, AuthenticationId, ProviderId, AcmeEmail, Enabled, Name, AllowEmbedding, ListenPort: null,
             // What is said to the upstream belongs to a reverse proxy; the fields are still on the page when the type is switched to a redirect.
             UpstreamHost: Target == "redirect" ? null : UpstreamHost, UpstreamHeaders: Target == "redirect" ? null : access.UpstreamHeaders,
             RequireHeader: access.RequireHeader, AllowedIps: RouteGuards.SplitIps(AllowedIpsText),
-            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText)));
+            Options: new RouteExtras(RedirectKeepPath, Hsts, Compress, BlockExploits, RouteGuards.SplitIps(BlockedIpsText), keepMethod));
         var error = RouteEditor.Apply(form, route);
         if (error != null) return Fail(error);
         if (!_store.TryUpsertRoute(route, User.GetUserId(), updateSameTarget: false))

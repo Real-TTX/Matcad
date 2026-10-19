@@ -67,7 +67,7 @@
                                     }
                                     else if (!string.IsNullOrEmpty(r.FallbackUrl))
                                     {
-                                        <text>↪ @r.FallbackUrl</text> <span class="mat-tag" title="Redirect">@(r.RedirectPermanent ? "301" : "302")</span>
+                                        <text>↪ @r.FallbackUrl</text> <span class="mat-tag" title="Redirect">@r.RedirectStatus</span>
                                     }
                                     else
                                     {

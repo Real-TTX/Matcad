@@ -30,8 +30,8 @@ lose the YAML-in-your-head part.
 
 **Routes**
 - A **hierarchical domain tree** built automatically from your host names; every domain folds away, and *Add a subdomain* is the last entry of its group
-- Each route is a **reverse proxy** or a **301/302 redirect** (to any URL, or pick
-  an existing domain from a list; optionally keeping the path and query)
+- Each route is a **reverse proxy** or a **redirect** with 301, 302, 307 or 308 (307/308 keep the method, a POST stays a POST;
+  to any URL, or pick an existing domain from a list; optionally keeping the path and query)
 - Per route: **block common exploits** (SQL injection or script in the query, `/.git`, `/.env`, ...),
   **HSTS**, **compression** (zstd/gzip) and **blocked IP addresses** (set on the route page; the REST API keeps them)
 - **Skip TLS verification** per route for HTTPS backends with self-signed certs

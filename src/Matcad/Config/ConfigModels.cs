@@ -99,6 +99,10 @@ public class RouteConfig : ConfigEntity
     public bool RedirectPermanent { get; set; }
     /// <summary>Append the path and query of the request to <see cref="FallbackUrl"/> (old.example.com/a?b to new.example.com/a?b).</summary>
     public bool RedirectKeepPath { get; set; }
+    /// <summary>Answer 307/308 instead of 302/301: the browser repeats the method and the body (a POST stays a POST). Set on the route page.</summary>
+    public bool RedirectKeepMethod { get; set; }
+    /// <summary>The status code of the redirect: 301/302, or 308/307 when the method is kept.</summary>
+    [JsonIgnore] public int RedirectStatus => RouteEditor.RedirectCode(RedirectPermanent, RedirectKeepMethod);
     public long? AuthenticationId { get; set; }
     /// <summary>Strip X-Frame-Options and CSP frame-ancestors from responses so the site can be
     /// embedded in an iframe (e.g. inside matOS). Off by default — keeps the app's clickjacking

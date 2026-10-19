@@ -143,10 +143,14 @@ else
                                 <option value="__other__">Another address</option>
                             </select>
                         </div>
-                        <div class="mat-field">
-                            <label class="mat-switch"><input type="checkbox" asp-for="PermanentRedirect" /><span class="mat-switch__track"></span><span>Permanent (301)</span></label>
-                            <span class="mat-hint">Off: temporary (302).</span>
-                        </div>
+                        <mat-field label="Status code" asp-for="RedirectCode" hint="307 and 308 keep the method: a POST stays a POST.">
+                            <select asp-for="RedirectCode" class="mat-select">
+                                <option value="302">302 - temporary</option>
+                                <option value="301">301 - permanent</option>
+                                <option value="307">307 - temporary, keeps the method</option>
+                                <option value="308">308 - permanent, keeps the method</option>
+                            </select>
+                        </mat-field>
                         <div class="mat-field">
                             <label class="mat-switch"><input type="checkbox" asp-for="RedirectKeepPath" /><span class="mat-switch__track"></span><span>Keep the path</span></label>
                             <span class="mat-hint">/docs?page=2 goes to the same path of the target.</span>

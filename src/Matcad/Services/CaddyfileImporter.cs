@@ -159,6 +159,7 @@ public class CaddyfileImporter
             FallbackUrl = c.Upstream == null ? c.Redirect : null,
             RedirectKeepPath = c.Upstream == null && c.RedirectKeepPath,
             RedirectPermanent = c.Upstream == null && c.RedirectPermanent,
+            RedirectKeepMethod = c.Upstream == null && c.RedirectKeepMethod,
             Enabled = true
         };
         var ir = new ImportRoute { Route = r, BasicUsers = new List<BasicAuthUser>(c.BasicUsers) };
@@ -172,6 +173,7 @@ public class CaddyfileImporter
         public string? Redirect;
         public bool RedirectKeepPath;
         public bool RedirectPermanent;
+        public bool RedirectKeepMethod;
         public List<BasicAuthUser> BasicUsers = new();
     }
 
@@ -233,6 +235,7 @@ public class CaddyfileImporter
                         c.Redirect = target;
                         c.RedirectKeepPath = keep;
                         c.RedirectPermanent = h["status_code"]?.ToString() is "301" or "308";
+                        c.RedirectKeepMethod = h["status_code"]?.ToString() is "307" or "308";
                     }
                     break;
                 case "authentication":

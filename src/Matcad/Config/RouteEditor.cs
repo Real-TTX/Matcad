@@ -17,7 +17,8 @@ public record RouteForm(
 
 /// <summary>The options only the edit page sets (the REST API keeps what the route has). Null in a <see cref="RouteForm"/>: leave them as
 /// the route has them.</summary>
-public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps);
+public record RouteExtras(bool RedirectKeepPath, bool Hsts, bool Compress, bool BlockExploits, IReadOnlyList<string> BlockedIps,
+    bool RedirectKeepMethod = false);
 
 /// <summary>
 /// The rules for a manually managed route, in one place for the edit page and the REST API: normalise the host,
@@ -127,6 +128,7 @@ public static partial class RouteEditor
         route.AllowedIps = allowedIps;
         route.BlockedIps = blockedIps;
         route.RedirectKeepPath = redirect && options.RedirectKeepPath;
+        route.RedirectKeepMethod = redirect && options.RedirectKeepMethod;
         route.Hsts = options.Hsts;
         route.Compress = !redirect && options.Compress;
         route.BlockExploits = options.BlockExploits;
@@ -135,7 +137,22 @@ public static partial class RouteEditor
 
     /// <summary>The options a route has now.</summary>
     public static RouteExtras OptionsOf(RouteConfig route) =>
-        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps);
+        new(route.RedirectKeepPath, route.Hsts, route.Compress, route.BlockExploits, route.BlockedIps, route.RedirectKeepMethod);
+
+    /// <summary>The redirect codes a route can answer with.</summary>
+    public static readonly int[] RedirectCodes = [301, 302, 307, 308];
+
+    /// <summary>301/302 let the browser turn a POST into a GET; 308/307 keep the method and the body.</summary>
+    public static int RedirectCode(bool permanent, bool keepMethod) =>
+        keepMethod ? (permanent ? 308 : 307) : (permanent ? 301 : 302);
+
+    /// <summary>Splits a redirect code into "permanent" and "keeps the method"; false for anything but 301, 302, 307 and 308.</summary>
+    public static bool TrySplitRedirectCode(int code, out bool permanent, out bool keepMethod)
+    {
+        permanent = code is 301 or 308;
+        keepMethod = code is 307 or 308;
+        return RedirectCodes.Contains(code);
+    }
 
     /// <summary>host, host:port, or an http(s) URL - what Caddy can dial.</summary>
     public static bool IsUpstream(string value)
