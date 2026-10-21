@@ -196,6 +196,10 @@ namespace Matcad.Data.Migrations
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalSessionId")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("IdToken")
                         .HasColumnType("TEXT");
 
@@ -216,6 +220,9 @@ namespace Matcad.Data.Migrations
 
                     b.HasIndex("ExpiryDate")
                         .HasDatabaseName("IxUserSessionExpiryDate");
+
+                    b.HasIndex("ExternalSessionId")
+                        .HasDatabaseName("IxUserSessionExternalSessionId");
 
                     b.HasIndex("Token")
                         .IsUnique()

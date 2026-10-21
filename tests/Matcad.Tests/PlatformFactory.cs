@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Matcad.Tests;
 
@@ -25,6 +26,10 @@ public class PlatformFactory : WebApplicationFactory<Program>
     public const string EngineKey = "engine-key-0123456789";
     public const string PlatformKey = "platform-key-0123456789";
     public const string AdminPassword = "admin-password-0123";
+
+    /// <summary>The RSA key "MatIdentity" signs with in the tests (made here, no network); it is in the fixed OpenID configuration's keys.</summary>
+    public static readonly SigningCredentials IdentitySigningCredentials =
+        new(new RsaSecurityKey(System.Security.Cryptography.RSA.Create(2048)) { KeyId = "test-key" }, SecurityAlgorithms.RsaSha256);
 
     private readonly string _data = Path.Combine(Path.GetTempPath(), "matcad-tests-" + Guid.NewGuid().ToString("N"));
     private readonly bool _engineKey;
@@ -76,6 +81,8 @@ public class PlatformFactory : WebApplicationFactory<Program>
                 TokenEndpoint = _authority + "/connect/token",
                 EndSessionEndpoint = _authority + "/connect/logout",
             };
+            // The key MatIdentity signs its logout tokens with in the tests (BackchannelLogoutTests).
+            configuration.SigningKeys.Add(IdentitySigningCredentials.Key);
 
             builder.ConfigureTestServices(services =>
             {

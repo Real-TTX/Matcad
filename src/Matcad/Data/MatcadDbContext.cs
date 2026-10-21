@@ -40,6 +40,8 @@ public class MatcadDbContext : DbContext
             e.HasIndex(x => x.Token).IsUnique().HasDatabaseName("IxUserSessionToken");
             e.HasIndex(x => x.ExpiryDate).HasDatabaseName("IxUserSessionExpiryDate");
             e.HasIndex(x => x.UserId).HasDatabaseName("IxUserSessionUserId");
+            e.Property(x => x.ExternalSessionId).HasMaxLength(256);
+            e.HasIndex(x => x.ExternalSessionId).HasDatabaseName("IxUserSessionExternalSessionId");
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId)
                 .HasConstraintName("FkUserSessionUser").OnDelete(DeleteBehavior.Cascade);
         });

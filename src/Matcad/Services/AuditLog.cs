@@ -41,11 +41,14 @@ public sealed class AuditLog
         return context.User.Identity is { IsAuthenticated: true, Name: { Length: > 0 } name } ? (name, context.User.GetUserId()) : ("anonymous", null);
     }
 
-    public void Record(string kind, string action, string subject)
+    public void Record(string kind, string action, string subject) => Record(kind, action, subject, null);
+
+    /// <summary>Records a change made by <paramref name="actor"/> (for example "MatIdentity" for its back-channel logout) instead of the caller of the request.</summary>
+    public void Record(string kind, string action, string subject, string? actor)
     {
         try
         {
-            var (name, userId) = Actor();
+            var (name, userId) = actor is null ? Actor() : (actor, (long?)null);
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<MatcadDbContext>();
             db.AuditEntries.Add(new AuditEntry

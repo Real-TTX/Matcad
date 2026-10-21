@@ -351,8 +351,11 @@ public class AuthService
 
     // --- Sessions -----------------------------------------------------------
 
-    /// <summary>A new session; <paramref name="idToken"/> is MatIdentity's ID token when the session began there (for the sign-out).</summary>
-    public async Task<UserSession> CreateSession(User user, string? idToken = null)
+    /// <summary>
+    /// A new session; <paramref name="idToken"/> is MatIdentity's ID token when the session began there (for the sign-out), <paramref name="externalSessionId"/>
+    /// its session (the claim <c>sid</c>, for the back-channel logout).
+    /// </summary>
+    public async Task<UserSession> CreateSession(User user, string? idToken = null, string? externalSessionId = null)
     {
         var now = DateTime.UtcNow;
         // Expired sessions are only noticed when their cookie shows up again; sweep them on every sign-in.
@@ -364,6 +367,7 @@ public class AuthService
             UserId = user.Id,
             ExpiryDate = now.Add(SessionLifetime),
             IdToken = string.IsNullOrEmpty(idToken) ? null : idToken,
+            ExternalSessionId = string.IsNullOrWhiteSpace(externalSessionId) ? null : externalSessionId.Trim(),
             CreateDate = now,
             CreateUserId = user.Id
         };
@@ -408,6 +412,48 @@ public class AuthService
     {
         SessionCache.TryRemove(token, out _);
         await _db.UserSessions.Where(s => s.Token == token).ExecuteDeleteAsync();
+    }
+
+    /// <summary>
+    /// MatIdentity's back-channel logout: with <paramref name="externalSessionId"/> the sessions that began with that <c>sid</c> end (only of the user
+    /// linked to <paramref name="subject"/> when it is given), with <paramref name="subject"/> alone every session of the user linked to it.
+    /// An unknown subject or sid ends nothing. Returns how many sessions ended; each user's ended sessions go to the audit log.
+    /// </summary>
+    public async Task<int> EndExternalSessions(string? subject, string? externalSessionId, CancellationToken ct = default)
+    {
+        var sub = string.IsNullOrWhiteSpace(subject) ? null : subject.Trim();
+        var sid = string.IsNullOrWhiteSpace(externalSessionId) ? null : externalSessionId.Trim();
+        if (sub == null && sid == null) return 0;
+
+        long? userId = null;
+        if (sub != null)
+        {
+            userId = await _db.Users.Where(u => u.ExternalSubject == sub).Select(u => (long?)u.Id).FirstOrDefaultAsync(ct);
+            if (userId == null)
+            {
+                _log.LogInformation("MatIdentity ended the sessions of subject {Subject}, which is linked with no user here", sub);
+                return 0;
+            }
+        }
+
+        var sessions = _db.UserSessions.AsQueryable();
+        if (userId != null) sessions = sessions.Where(s => s.UserId == userId);
+        if (sid != null) sessions = sessions.Where(s => s.ExternalSessionId == sid);
+
+        var ended = await sessions.Select(s => new { s.Id, s.Token, Username = s.User!.Username }).ToListAsync(ct);
+        if (ended.Count == 0) return 0;
+
+        var ids = ended.Select(e => e.Id).ToList();
+        await _db.UserSessions.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(ct);
+        foreach (var e in ended) SessionCache.TryRemove(e.Token, out _);
+
+        foreach (var group in ended.GroupBy(e => e.Username))
+        {
+            var count = group.Count();
+            _audit?.Record("User", "signed out by MatIdentity", $"{group.Key} ({count} session{(count == 1 ? "" : "s")})", "MatIdentity");
+        }
+        _log.LogInformation("MatIdentity ended {Count} session(s) (subject {Subject}, sid {SessionId})", ended.Count, sub, sid);
+        return ended.Count;
     }
 
     private static void PruneCache()

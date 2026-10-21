@@ -112,7 +112,7 @@ public class LoginModel : PageModel
         _attempts.Succeeded(attempt);
 
         // A pending link of MatIdentity is only ever for the account that matched; it is deleted either way.
-        string? idToken = null;
+        string? idToken = null, externalSessionId = null;
         if (MatIdentityPendingLink.TakeFor(HttpContext, user.Id.ToString(CultureInfo.InvariantCulture)) is { } pending)
         {
             var (linked, error) = await _auth.LinkExternal(user.Id,
@@ -121,6 +121,7 @@ public class LoginModel : PageModel
             {
                 user = linked;
                 idToken = pending.IdToken;
+                externalSessionId = pending.SessionId;
             }
             else
             {
@@ -128,7 +129,7 @@ public class LoginModel : PageModel
             }
         }
 
-        var session = await _auth.CreateSession(user, idToken);
+        var session = await _auth.CreateSession(user, idToken, externalSessionId);
         SessionCookie.Append(HttpContext, session);
         return Redirect(ResolveReturnUrl());
     }

@@ -52,6 +52,9 @@ public class UserSession : AuditedEntity
 
     /// <summary>The ID token of MatIdentity for a session that began there (or was linked there): the sign-out ends it at MatIdentity too.</summary>
     public string? IdToken { get; set; }
+
+    /// <summary>The session at MatIdentity (the claim <c>sid</c>) this session began with or was linked in: its back-channel logout ends this session.</summary>
+    public string? ExternalSessionId { get; set; }
     public User? User { get; set; }
 }
 

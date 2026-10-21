@@ -327,7 +327,7 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
 ### Platform API and sign-in through MatIdentity
 
 Matcad speaks the platform contract of the Mat apps (MatDesign `docs/PLATFORM.md`,
-shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.2.0), next to the
+shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.4.0), next to the
 engine API above, which does not change:
 
 | Endpoint | Access | What |
@@ -355,7 +355,8 @@ engine API above, which does not change:
 
 **Sign-in through MatIdentity** (only with `MATIDENTITY_AUTHORITY`): the sign-in page
 goes straight to MatIdentity and comes back signed in (redirect address
-`/signin-oidc`, signed-out address `/signout-callback-oidc`). A person is matched by
+`/signin-oidc`, signed-out address `/signout-callback-oidc`, back-channel logout
+`POST /signout-backchannel`). A person is matched by
 the claim `sub`; the first sign-in creates a user without a password (with the
 person's e-mail address when no other account uses it). A backup carries the link. An account
 whose user name or e-mail address is the person's e-mail address (or preferred user name) is **not**
@@ -363,7 +364,11 @@ taken over by the name alone: the person signs in once with that account's passw
 (`/Login?local=1&link=1`, with a Cancel button) and only then is it connected. When
 MatIdentity gives Matcad's role (claim `role`: `admin` or `user`) the user follows it
 at every sign-in, but the last admin is never demoted. The sign-out ends the session
-at MatIdentity too.
+at MatIdentity too. When the person signs out at MatIdentity (or an administrator ends
+their sessions there), MatIdentity posts a signed logout token to `/signout-backchannel`:
+Matcad deletes the session that began with its `sid` (with `sub` alone every session of
+the linked user), writes it to the audit log, and the next request of that browser lands
+on the sign-in page.
 
 **The local way in stays:** `/Login?local=1` shows the local form at any time. Matcad
 is often the proxy in front of MatIdentity itself; when MatIdentity cannot be reached,
