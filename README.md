@@ -12,7 +12,7 @@ no config files to hand-edit. Installable as an app on your phone and desktop.
 
 </div>
 
-![Dashboard with the route tree, certificate badges and the live request log](docs/images/dashboard.png)
+![The dashboard: requests, errors and active routes of the last 24 hours above the route tree](docs/images/dashboard.png)
 
 ---
 
@@ -96,22 +96,48 @@ lose the YAML-in-your-head part.
 
 ## Screenshots
 
+All screenshots show a demo installation with invented domains, upstreams and traffic.
+
 ### Routes and the certificate picture
 
-![The routes list grouped by domain with certificate badges](docs/images/routes.png)
+![The routes list grouped by domain with certificate badges, guards and upstream health](docs/images/routes.png)
 
-Routes are grouped by domain. Each one shows its target and, at a glance, whether
-its certificate is a wildcard, covered by one, individual, or Caddy-internal.
+Routes are grouped by domain. Each one shows its target (a redirect with its code, more upstreams as "+1" with
+"2/2 healthy" from the health check), the authentication, a "Guarded" tag when IP lists or a required header are set,
+and at a glance whether its certificate is a wildcard, covered by one, individual, or Caddy-internal.
+
+### Certificates
+
+![The certificates page: wildcard and individual certificates with expiry and state](docs/images/certificates.png)
+
+Every certificate Caddy manages for the active routes: the wildcard ones with the hosts they cover and their DNS
+provider, the individual ones with the HTTP challenge. Matcad asks Caddy for each one every six hours (or on *Check now*)
+and shows when it expires; one that runs out within 14 days or has a problem comes first.
 
 ### Creating a route
 
-![The route editor with type, target and DNS provider](docs/images/route-edit.png)
+![The route editor: single domain or wildcard, host, name and DNS provider](docs/images/route-edit.png)
 
 Single host or wildcard, reverse proxy or redirect. Pick "Wildcard" and the host
-becomes `*.your-domain`; enter a bare domain that no wildcard covers and Matcad
+becomes `*.your-domain` with the DNS provider for its certificate; enter a bare domain that no wildcard covers and Matcad
 warns you it would get its own certificate.
 
-### Guards and upstream headers
+### Route options: load balancing, health checks and locations
+
+![The target of a route with a second upstream, round robin, a health check, compression and two locations](docs/images/route-options.png)
+
+More upstreams with round robin, least connections or first available, an active health check (path, interval, expected
+status), compression, embedding in a frame, and locations: paths such as `/api` with their own upstream (optionally
+stripping the path) or a redirect. A redirect route can keep the path and answers 301, 302, 307 or 308.
+
+### Access, response headers and guards
+
+![Access, response headers and guards of a route: basic auth, exploit filter, HSTS, Cache-Control, IP lists, a required header and headers to the upstream](docs/images/route-access.png)
+
+An authentication per route, a filter for common exploits, HSTS, response headers to set or remove (over what the
+upstream sends), and the guards described below.
+
+### Guards and upstream headers in detail
 
 A route can be closed to everything but one other proxy, for example an *edge* Matcad that forwards a customer domain to the
 system address of a site on another server, whose Matcad only takes requests from the edge:
@@ -137,23 +163,29 @@ know and would leave the route open. `GET /api/v1/routes/{id}` returns one edita
 
 ### Statistics
 
-![The statistics page with filters, charts and top lists](docs/images/statistics.png)
+![The statistics page: requests, error rate, duration, traffic per hour, status codes and the top hosts, paths and clients](docs/images/statistics.png)
 
 Filter by time range, host, status class, method or path, then read traffic over
 time, the status-code split and the top hosts, paths and client IPs.
 
 ### The login portal, branded per authentication
 
-![The authentication branding editor with a live login preview](docs/images/auth-branding.png)
+![The login page of an authentication: title, welcome text, accent colour and logo with a live preview](docs/images/auth-branding.png)
 
 A Matcad authentication shows a real login page you brand per domain: title,
 accent colour, logo, welcome text and logo placement, with a live preview.
+
+### Audit log
+
+![The audit log: who created or changed which route, authentication or DNS provider](docs/images/audit-log.png)
+
+Who changed what, on the pages or through the API: names only, never a secret, kept for a year.
 
 ### First-run setup
 
 | Setup wizard | Providers |
 |---|---|
-| ![The setup wizard](docs/images/setup-wizard.png) | ![The DNS providers list](docs/images/providers.png) |
+| ![The setup wizard at the step for domains and login](docs/images/setup-wizard.png) | ![The DNS providers list](docs/images/providers.png) |
 
 A fresh install starts empty and walks you through account, domains, an optional
 DNS provider and done. You can skip it and set things up later.
@@ -162,10 +194,10 @@ DNS provider and done. You can skip it and set things up later.
 
 | Dashboard | Menu | Editing a route |
 |---|---|---|
-| ![The dashboard on a phone](docs/images/mobile-dashboard.png) | ![The menu on a phone](docs/images/mobile-menu.png) | ![The route editor on a phone](docs/images/mobile-route-edit.png) |
+| ![The dashboard on a phone: figures as tiles, the routes as cards](docs/images/mobile-dashboard.png) | ![The menu as a drawer on a phone](docs/images/mobile-menu.png) | ![The route editor on a phone](docs/images/mobile-route-edit.png) |
 
-The same interface scales down to a phone: a drawer menu, secondary table columns
-fold away, and the app respects the notch and the home indicator once installed.
+The same interface scales down to a phone: a drawer menu, table rows
+become cards, and the app respects the notch and the home indicator once installed.
 
 ## Quick start
 
