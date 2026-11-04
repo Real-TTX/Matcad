@@ -35,7 +35,7 @@ public class SetupModel : PageModel
     [BindProperty] public string AcmeEmail { get; set; } = "";
     // --- provider ---
     [BindProperty] public string ProviderName { get; set; } = "";
-    [BindProperty] public string ProviderType { get; set; } = "netcup";
+    [BindProperty] public string ProviderType { get; set; } = "netcup_cloud";
     [BindProperty] public int PropagationDelay { get; set; } = 120;
     [BindProperty] public int PropagationTimeout { get; set; } = -1;
 
@@ -124,7 +124,7 @@ public class SetupModel : PageModel
         return (module, creds, error);
     }
 
-    public ProviderFieldsModel ProviderFields { get; private set; } = new() { TypeFieldName = nameof(ProviderType), Type = "netcup" };
+    public ProviderFieldsModel ProviderFields { get; private set; } = new() { TypeFieldName = nameof(ProviderType), Type = "netcup_cloud" };
 
     public async Task<IActionResult> OnPostProviderTestAsync()
     {

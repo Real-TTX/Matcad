@@ -19,14 +19,14 @@ public class EditModel : PageModel
     [BindProperty(SupportsGet = true)] public long? Id { get; set; }
     [BindProperty] public string Name { get; set; } = "";
     /// <summary>Dropdown value: a known type id or "custom".</summary>
-    [BindProperty] public string Type { get; set; } = "netcup";
+    [BindProperty] public string Type { get; set; } = "netcup_cloud";
 
     public bool IsNew => Id is null or 0;
     public string? Error { get; private set; }
     /// <summary>Result of a "Test credentials" run (Ok = true/false, or null = no test for this type).</summary>
     public (bool? Ok, string Message)? TestResult { get; private set; }
     /// <summary>The type picker and the credential fields (stored secrets are never put into the page).</summary>
-    public ProviderFieldsModel Fields { get; private set; } = new() { TypeFieldName = nameof(Type), Type = "netcup" };
+    public ProviderFieldsModel Fields { get; private set; } = new() { TypeFieldName = nameof(Type), Type = "netcup_cloud" };
 
     private ProviderConfig? Stored => IsNew ? null : _store.Providers.FirstOrDefault(x => x.Id == Id);
 

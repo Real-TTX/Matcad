@@ -106,6 +106,15 @@ page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host h
   (`CaddyAdminUrl` in `settings.json`), echo servers merged in through `RawCaddyJson` (`static_response` bodies with `{http.request.host}`,
   `{http.request.header.X-Up}`), routes created through the REST API, then curl.
 
+**DNS providers** (`Config/ProviderTypes.cs`): a provider stores a `Type` (a `ProviderType.Id`); the generator writes the module name
+through `ProviderTypes.Module(type)` = the type's `CaddyModule` (an unknown Id is a custom module, used verbatim). Id and module are the
+same except for the two netcup faces, two UI entries over the one `netcup` module: **Netcup** (`netcup_cloud`, a single `api_key`) is netcup's
+new CloudDNS REST API, **Netcup legacy** (`netcup`, customer number / API key / API password) the old one. No released Caddy module does the
+new API, so the image builds `caddy-dns/netcup` against a libdns fork that switches to REST when the password is empty: `CADDY_DNS_REPLACES`
+in `.env` (`old=new@ref` -> `xcaddy --replace`) points `github.com/libdns/netcup` at `github.com/Real-TTX/libdns-netcup` (a fork of
+egs2003/libdns-netcup; its go.mod `module` line must match that path). Empty `CADDY_DNS_REPLACES` = legacy module only. `DnsCredentialTester`
+tests both netcup APIs (CloudDNS: Bearer against `api.netcup.com/v1`; legacy: CCP login) and Cloudflare.
+
 **Route options** (`BlockedIps`, `BlockExploits`, `Hsts`, `Compress`, `RedirectKeepPath`, `RedirectKeepMethod` = 307/308 with `RedirectPermanent`, `ResponseHeaders`, `Locations`, `ExtraUpstreams` / `LoadBalancing` / `Health*`): set on the route page only (`RouteExtras` in
 `RouteForm`; null = keep what the route has), so `POST /api/v1/routes` keeps them and the API answers keep their shape. Blocked IPs are part of
 the guard (403, unreadable list = 503). The exploit filter is a `path_regexp` plus a CEL `expression` on `{http.request.uri.query}` (checked

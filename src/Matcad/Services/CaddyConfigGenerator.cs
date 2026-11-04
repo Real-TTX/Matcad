@@ -657,13 +657,14 @@ public class CaddyConfigGenerator
             var provider = _store.Providers.FirstOrDefault(p => p.Id == route.ProviderId);
             if (provider == null || string.IsNullOrWhiteSpace(provider.Type)) continue;
 
-            // The Type IS the Caddy DNS module name, so any compiled-in module
-            // (including custom ones not in the registry) works.
+            // The Type maps to a Caddy DNS module name (ProviderTypes.Module), so any
+            // compiled-in module (including custom ones not in the registry) works. The two
+            // netcup types share the one "netcup" module.
             // A credential called "name" (only a hand-edited file or an old backup can have one) must not replace the module.
             var dnsProvider = new Dictionary<string, object?>();
             foreach (var kv in provider.Credentials.Where(kv => !kv.Key.Equals(ProviderRules.ModuleKey, StringComparison.OrdinalIgnoreCase)))
                 dnsProvider[kv.Key] = kv.Value;
-            dnsProvider[ProviderRules.ModuleKey] = provider.Type;
+            dnsProvider[ProviderRules.ModuleKey] = ProviderTypes.Module(provider.Type);
 
             var dns = new Dictionary<string, object?> { ["provider"] = dnsProvider };
             // Tuning for slow DNS providers (e.g. netcup): wait before validating,

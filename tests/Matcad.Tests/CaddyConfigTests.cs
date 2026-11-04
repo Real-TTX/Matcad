@@ -203,6 +203,22 @@ public sealed class CaddyConfigTests : IDisposable
     }
 
     [Fact]
+    public void The_new_netcup_cloud_type_maps_to_the_netcup_module_with_only_the_api_key()
+    {
+        // "Netcup" (new CloudDNS REST API) is a second UI face of the one "netcup" Caddy module:
+        // a single Bearer api_key, no customer number or password (the module then uses REST).
+        _store.UpsertProvider(new ProviderConfig { Name = "cloud", Type = "netcup_cloud", Credentials = new() { ["api_key"] = "bearer" } }, null);
+        _store.UpsertRoute(new RouteConfig { Host = "*.example.com", Wildcard = true, Upstream = "a:1", ProviderId = _store.Providers.Single().Id, AcmeEmail = "me@example.org" }, null);
+
+        var provider = Build()["apps"]!["tls"]!["automation"]!["policies"]![0]!["issuers"]![0]!["challenges"]!["dns"]!["provider"]!;
+
+        Assert.Equal("netcup", provider["name"]!.GetValue<string>());
+        Assert.Equal("bearer", provider["api_key"]!.GetValue<string>());
+        Assert.Null(provider["customer_number"]);
+        Assert.Null(provider["api_password"]);
+    }
+
+    [Fact]
     public void A_placeholder_acme_email_on_example_com_is_dropped()
     {
         _store.UpsertProvider(new ProviderConfig { Name = "p", Type = "netcup" }, null);

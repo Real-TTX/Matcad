@@ -19,6 +19,13 @@ env:
     github.com/caddy-dns/gandi
     github.com/caddy-dns/desec
     github.com/caddy-dns/ovh
+  # Go-module replaces for the Caddy build (same mechanism as .env CADDY_DNS_REPLACES).
+  # Empty = published images carry the legacy netcup module only. To ship the "Netcup"
+  # (CloudDNS, new REST API) provider in the released images, set this to
+  #   github.com/libdns/netcup=github.com/Real-TTX/libdns-netcup@<sha>
+  # where <sha> is a commit of your fork whose go.mod declares
+  # `module github.com/Real-TTX/libdns-netcup` (see .env for the full fork steps).
+  CADDY_DNS_REPLACES: ""
 
 jobs:
   test:
@@ -71,6 +78,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.ver.outputs.v }}
             CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
+            CADDY_DNS_REPLACES=${{ env.CADDY_DNS_REPLACES }}
           tags: |
             ghcr.io/real-ttx/matcad:${{ steps.ver.outputs.v }}
             ghcr.io/real-ttx/matcad:latest
@@ -84,6 +92,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             CADDY_DNS_MODULES=${{ env.CADDY_DNS_MODULES }}
+            CADDY_DNS_REPLACES=${{ env.CADDY_DNS_REPLACES }}
           tags: |
             ghcr.io/real-ttx/matcad-caddy:${{ steps.ver.outputs.v }}
             ghcr.io/real-ttx/matcad-caddy:latest

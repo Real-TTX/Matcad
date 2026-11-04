@@ -21,6 +21,7 @@ public class DnsCredentialTester
     public Task<(bool? Ok, string Message)> TestAsync(string type, IDictionary<string, string> creds, CancellationToken ct = default) =>
         (type ?? "").Trim().ToLowerInvariant() switch
         {
+            "netcup_cloud" => TestNetcupCloudAsync(creds, ct),
             "netcup" => TestNetcupAsync(creds, ct),
             "cloudflare" => TestCloudflareAsync(creds, ct),
             _ => Task.FromResult<(bool?, string)>(
@@ -53,6 +54,42 @@ public class DnsCredentialTester
         {
             _log.LogWarning("Cloudflare credential test failed: {Message}", ex.Message);
             return (false, "Could not reach the Cloudflare API.");
+        }
+    }
+
+    /// <summary>The new netcup CloudDNS REST API. A GET of the domain list touches no DNS records and
+    /// fails only when the Bearer key is wrong, so it verifies the key without a side effect.</summary>
+    internal const string NetcupCloudEndpoint = "https://api.netcup.com/v1/domain";
+
+    private async Task<(bool?, string)> TestNetcupCloudAsync(IDictionary<string, string> creds, CancellationToken ct)
+    {
+        var key = creds.TryGetValue("api_key", out var k) ? k.Trim() : "";
+        if (key.Length == 0) return (false, "Missing api_key.");
+
+        var client = _http.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(15);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, NetcupCloudEndpoint);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+            request.Headers.Accept.ParseAdd("application/json");
+            using var response = await client.SendAsync(request, ct);
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            // netcup wraps every response: { success, errors:[{code,message}], ... }. A logical error
+            // can arrive with HTTP 200 and success:false, so check both.
+            var success = root.TryGetProperty("success", out var ok) && ok.ValueKind == JsonValueKind.True;
+            if (success && response.IsSuccessStatusCode)
+                return (true, "netcup accepted the API key - the CloudDNS credentials are valid.");
+
+            var msg = root.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array && errs.GetArrayLength() > 0
+                && errs[0].TryGetProperty("message", out var m0) ? m0.GetString() : null;
+            return (false, string.IsNullOrEmpty(msg) ? "netcup rejected the API key." : $"netcup rejected the API key: {msg}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            _log.LogWarning("netcup CloudDNS credential test failed: {Message}", ex.Message);
+            return (false, "Could not reach the netcup CloudDNS API.");
         }
     }
 

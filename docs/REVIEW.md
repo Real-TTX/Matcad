@@ -32,8 +32,8 @@ Kept as is (deliberate): `GET /api/v1/providers` returns credentials in clear to
 |---|---|---|
 | Proxy hosts | has | routes, domain tree |
 | SSL per host, Let's Encrypt (HTTP challenge) | has | automatic through Caddy |
-| DNS challenge, wildcard certificates | has | 8 providers + custom module |
-| Credential test | has | netcup, **Cloudflare (new)** |
+| DNS challenge, wildcard certificates | has | 8 provider modules + custom; **Netcup's new CloudDNS REST API (new)** alongside Netcup legacy (both the one `netcup` module, via a libdns fork) |
+| Credential test | has | Netcup CloudDNS, Netcup legacy, Cloudflare |
 | Certificate list with expiry | **has (new)** | Certificates page |
 | Renew a certificate by hand | dropped | Caddy renews on its own at a third of the lifetime; the page shows whether it did |
 | Redirection hosts | has | 301/302, **keep the path (new)** |

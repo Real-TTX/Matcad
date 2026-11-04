@@ -1,11 +1,14 @@
 namespace Matcad.Config;
 
 /// <summary>
-/// Registry of known DNS provider types for the UI. Each Id equals the Caddy DNS
-/// module name (the module must be compiled into the caddy binary - see
-/// CADDY_DNS_MODULES in .env). The generator uses the provider's Type directly as
-/// the module name, so the "Custom" type below allows ANY compiled-in module even
-/// if it isn't listed here.
+/// Registry of known DNS provider types for the UI. A type's Id is the value the UI
+/// stores, and <see cref="Module"/> maps it to the Caddy DNS module name (the module
+/// must be compiled into the caddy binary - see CADDY_DNS_MODULES in .env). Id and
+/// CaddyModule are the same for almost every type; they differ for the two netcup
+/// entries, which are two UI faces of the one "netcup" module (the new CloudDNS REST
+/// API and the legacy CCP API, told apart by whether the API password is set). The
+/// generator uses <see cref="Module"/>, so the "Custom" type below (an unknown Id)
+/// still maps straight to any compiled-in module.
 /// </summary>
 public static class ProviderTypes
 {
@@ -17,7 +20,14 @@ public static class ProviderTypes
 
     public static readonly List<ProviderType> All = new()
     {
-        new ProviderType("netcup", "Netcup", "netcup", new()
+        // netcup's new CloudDNS REST API: one long-lived Bearer key (CCP -> Master Data
+        // -> API -> "API Keys"), no customer number or password. Same Caddy module as the
+        // legacy type below; the module uses REST because the API password is left empty.
+        new ProviderType("netcup_cloud", "Netcup", "netcup", new()
+        {
+            new CredentialField("api_key", "API key"),
+        }),
+        new ProviderType("netcup", "Netcup legacy", "netcup", new()
         {
             new CredentialField("customer_number", "Customer number", Secret: false),
             new CredentialField("api_key", "API key"),
@@ -61,4 +71,9 @@ public static class ProviderTypes
     public static ProviderType? Find(string id) => All.FirstOrDefault(t => t.Id == id);
 
     public static string DisplayName(string id) => Find(id)?.DisplayName ?? id;
+
+    /// <summary>The Caddy DNS module a stored type maps to. A known type uses its CaddyModule
+    /// (so the two netcup Ids both resolve to "netcup"); an unknown Id (a custom module) is the
+    /// module itself.</summary>
+    public static string Module(string id) => Find(id)?.CaddyModule ?? id;
 }

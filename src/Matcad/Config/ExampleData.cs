@@ -31,12 +31,10 @@ public static class ExampleData
         var netcup = new ProviderConfig
         {
             Name = "Netcup (Beispiel)",
-            Type = "netcup",
+            Type = "netcup_cloud",
             Credentials = new()
             {
-                ["customer_number"] = "12345",
-                ["api_key"] = "DEMO-API-KEY",
-                ["api_password"] = "DEMO-API-PASSWORD"
+                ["api_key"] = "DEMO-API-KEY"
             }
         };
         store.UpsertProvider(netcup, actorId);

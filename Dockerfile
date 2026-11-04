@@ -10,10 +10,13 @@
 # otherwise adapting a config that uses e.g. `dns netcup` fails.
 FROM --platform=$BUILDPLATFORM caddy:2-builder AS caddybuild
 ARG CADDY_DNS_MODULES="github.com/caddy-dns/netcup"
+# Keep in sync with caddy/Dockerfile: optional go-module replaces (see .env CADDY_DNS_REPLACES).
+ARG CADDY_DNS_REPLACES=""
 ARG TARGETOS
 ARG TARGETARCH
 RUN set -eu; export GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-amd64}"; \
     args=""; for m in $CADDY_DNS_MODULES; do args="$args --with $m"; done; \
+    for r in $CADDY_DNS_REPLACES; do args="$args --replace $r"; done; \
     eval "xcaddy build $args"
 
 # ---- Build stage (cross-publishes for $TARGETARCH) ----

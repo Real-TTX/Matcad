@@ -89,9 +89,11 @@ lose the YAML-in-your-head part.
 - **Backup / restore** in Matcad's own format, plus a raw Caddy-JSON escape hatch
 
 **DNS providers**
-- netcup, Cloudflare, DigitalOcean, Hetzner, Route53, Gandi, deSEC and OVH baked in,
-  plus a **Custom** type for any compiled-in `caddy-dns` module
-- A **Test credentials** button that checks the provider's API before you rely on it (netcup, Cloudflare)
+- **Netcup** (the new CloudDNS REST API, one API key), Cloudflare, DigitalOcean, Hetzner,
+  Route53, Gandi, deSEC and OVH baked in, plus a **Custom** type for any compiled-in
+  `caddy-dns` module. **Netcup legacy** keeps the older customer-number / API-key / API-password API.
+- A **Test credentials** button that checks the provider's API before you rely on it
+  (Netcup, Netcup legacy, Cloudflare)
 - Stored credentials are never shown again (an empty field keeps them)
 
 ## Screenshots
@@ -249,6 +251,15 @@ The bundled Caddy ships these `caddy-dns` modules: netcup, cloudflare,
 digitalocean, hetzner, route53, gandi, desec, ovh. To use others, build the
 images yourself (see below) with an extended `CADDY_DNS_MODULES`.
 
+**Netcup** comes in two flavours: *Netcup* uses netcup's new CloudDNS REST API with a
+single long-lived API key (CCP → *Master Data → API → "API Keys"*, 64 chars), while
+*Netcup legacy* uses the older API with a customer number, API key and API password.
+There is no released Caddy module for the new API, so the bundled Caddy builds the
+`caddy-dns/netcup` plugin against a libdns fork that adds REST support (it switches to
+REST when the API password is empty). That fork is wired up through `CADDY_DNS_REPLACES`
+in `.env`; if it is left empty, only *Netcup legacy* works. See the comments in `.env`
+for the one-time fork setup.
+
 ### Optional: Docker discovery
 
 To turn running containers into routes via labels
@@ -404,6 +415,9 @@ always gets in with its password.
 
 The set of DNS modules compiled into both images lives once in `.env`
 (`CADDY_DNS_MODULES`); add more from <https://github.com/caddy-dns> and rebuild.
+`CADDY_DNS_REPLACES` in the same file applies Go-module replaces to that build (it is
+how the new *Netcup* CloudDNS provider is wired to a libdns fork); the published GHCR
+images take both from `.github/workflows/release.yml`.
 
 ## Branches and versioning
 
