@@ -43,7 +43,8 @@ src/Matcad
   Platform/             MatcadPlatform (the MatApiDefinition: tiles, settings, actions, provides web.route, consumes identity.oidc (optional); de+en via o.T), MatcadIdentityUsers (MatIdentity -> local user),
                         MatcadRouteBindings (IMatBindingHandler of web.route over RouteBindings, pushes to Caddy; a refusal is MatPlatform's MatBindingRefusedException -> 400/409 at /api/bindings, the message in the Connections area)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest,
-                        ProxyMonitor / ProxyStatusService (Caddy reachability, certificate checks, upstream errors for the platform tiles),
+                        ProxyMonitor / ProxyStatusService (Caddy reachability every 10 s - a Caddy that runs the bootstrap Caddyfile again (restarted, its
+                        container recreated) gets the config pushed again -, certificate checks, upstream errors for the platform tiles),
                         RequestLogQueries (dashboard + statistics: pages never hold the DbContext), AuditLog (who changed what),
                         UpstreamHealthService (health checks of the routes for the routes list)
   Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar;
@@ -70,15 +71,24 @@ an account whose user name or e-mail is the person's address is linked only afte
 created by MatIdentity has no password (`PasswordHash` empty: no local sign-in, allowed in a backup with its `ExternalSubject`). The session
 keeps the ID token (`UserSession.IdToken`) so the sign-out ends at MatIdentity too.
 
-**`web.route` (Matcad provides it):** a binding is a route (`RouteBindings`, called by `MatcadRouteBindings`): host = `params.host` (a name of a domain: no IP,
-wildcard, scheme, path or port), upstream = `consumer.internalUrl` (http(s), no path: Caddy dials host:port only), name = the consumer's, `ManagedBy` = the request's
-(`manual` is stored as null: nobody manages it), `RouteConfig.Binding` = consumer id + since. Built by `RouteEditor.Apply` from the route it replaces (everything but
-host, upstream and name stays) and saved by `TryUpsertRoute`, then `CaddyService.ApplyAsync` (a failure is logged, the binding holds). One route per consumer: a new host
-moves it. A route of the host without a binding is **adopted** only when its `ManagedBy` equals the request's (Mattiverse's routes from `/api/v1` before the bindings;
-moving onto one deletes the consumer's old route); made by hand, by another tool or bound to another consumer = 409. Unbind matches `managedBy` (null = any).
-`/api/v1` POST and the route page keep `Binding` like `ManagedBy`; `/api/v1` answers do not show it (their shape is fixed). A refusal is MatPlatform's
+**`web.route` (Matcad provides it):** a binding is a route (`RouteBindings`, called by `MatcadRouteBindings`), either a **host route**: `params.host` (a name of a
+domain: no IP, wildcard, scheme, path or port), or a **port route** (a Mattiverse without a domain): `params.port` (digits, 1024-65535, not 2019; 80/443/2019 = "Caddy
+itself") = `ListenPort`, empty host, Caddy's server `port_<n>` on `:<n>`, plain HTTP, with the optional `params.publicHost` (the name or IP the browser uses for the
+machine: `nas.local`, `192.168.1.20`, `localhost`, IPv6 stored without brackets; `RouteBindings.NormalizePublicHost`, kept in `RouteBinding.PublicHost`; read only
+with `port`). Both host and port = 400 `port`; neither = 400 `host` (or the name-only cases below). Upstream = `consumer.internalUrl` (http(s), no path: Caddy dials
+host:port only), name = the consumer's, `ManagedBy` = the request's (`manual` is stored as null: nobody manages it), `RouteConfig.Binding` = consumer id + since
+(+ publicHost). The value `publicUrl` (`MAT_PUBLIC_URL`) is `RouteBindings.PublicUrlOf(route)`: `https://<host>` (`http://` under `.localhost`), `http://<publicHost>:<port>`
+(IPv6 in brackets), or for a port route without `publicHost` no value at all - the key stays out of `MatBindResult`, MatPlatform's `Variables` answers `""`, which a
+MatPlatform app reads as not set (never guess `localhost`). Built by `RouteEditor.Apply` from the route it replaces (everything but host/port, upstream and name stays)
+and saved by `TryUpsertRoute`, then `CaddyService.ApplyAsync` (a failure is logged, the binding holds). One route per consumer: a new host or port moves it, also host ->
+port -> host (authentication, guards and options stay; a route with `Locations` cannot become a port route: 409 `port`, nothing is dropped). A route of the host or
+port without a binding is **adopted** only when its `ManagedBy` equals the request's (Mattiverse's routes from `/api/v1` before the bindings; moving onto one deletes
+the consumer's old route); made by hand, by another tool or bound to another consumer = 409 (`host` or `port`). Unbind matches `managedBy` (null = any).
+`/api/v1` POST and the route page keep `Binding` like `ManagedBy`; the `/api/v1` route answers (`/routes`, `/routes/manual`, `/routes/{id}`, the POST) show only
+the consumer as `binding` (null for other routes; ADDED so Mattiverse's cleanup of its own routes by `managedBy` skips bindings) and never take it. A refusal is MatPlatform's
 `MatBindingRefusedException` (2.2.0): 400/409 `{"errors": {...}}` for a broker, the message in the Connections area. "Connect an app by hand" sends a name only and is
-refused that way; a request with neither host nor address for a consumer that has its route ("New key") answers its values unchanged. The Connections area is `/Settings/Connections` (admins; `ConnectionsAccess` = role Admin, `DataDirectory` = the data folder). It is English like Matcad's other pages:
+refused that way; a request with neither host, port nor address for a consumer that has its route ("New key") answers its values unchanged (a port route its stored
+`publicHost`). The route page only deletes a port route ("managed through the API"), so an administrator sets authentication or guards on it while it is a host route. The Connections area is `/Settings/Connections` (admins; `ConnectionsAccess` = role Admin, `DataDirectory` = the data folder). It is English like Matcad's other pages:
 `UiLanguage = _ => "en"` in the AddMatPlatform options (MatPlatform 2.2.0). Never make an "en" culture for it: the image runs with `InvariantGlobalization`, where
 `GetCultureInfo("en")` throws, while the in-memory tests have full culture data and would not notice. *Issue new* is not offered for web.route (no secret).
 

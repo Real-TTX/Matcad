@@ -6,9 +6,11 @@ namespace Matcad.Platform;
 
 /// <summary>
 /// The bindings of <c>web.route</c> for MatPlatform (<c>/api/bindings</c> of a broker and the Connections area): a binding is a route of Matcad
-/// (<see cref="RouteBindings"/> does the work, this class only translates). Parameter <c>host</c>; the target is the consumer's internal address;
-/// the value is <c>publicUrl</c> (<c>MAT_PUBLIC_URL</c>). After a change the config goes to Caddy like after a change through <c>/api/v1</c>: when
-/// Caddy does not take it the route stays stored (it reaches Caddy with the next push) and the binding still holds.
+/// (<see cref="RouteBindings"/> does the work, this class only translates). Parameters <c>host</c> (a name of the domain) or <c>port</c> (a port of its own
+/// on Caddy, 1024-65535) with the optional <c>publicHost</c> (the name or IP address of the machine); the target is the consumer's internal address; the value
+/// is <c>publicUrl</c> (<c>MAT_PUBLIC_URL</c>): the address of the host, or <c>http://&lt;publicHost&gt;:&lt;port&gt;</c>, and none for a port without
+/// <c>publicHost</c> (MatPlatform then answers <c>""</c>, which a consumer reads as not set). After a change the config goes to Caddy like after a change
+/// through <c>/api/v1</c>: when Caddy does not take it the route stays stored (it reaches Caddy with the next push) and the binding still holds.
 /// </summary>
 public sealed class MatcadRouteBindings(
     ConfigStore store,
@@ -30,7 +32,8 @@ public sealed class MatcadRouteBindings(
     public async Task<MatBindResult> BindAsync(MatBindRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var input = new RouteBindInput(request.Consumer.Id, request.Consumer.Name, request.Param("host", ""), request.Consumer.InternalUrl, request.ManagedBy);
+        var input = new RouteBindInput(request.Consumer.Id, request.Consumer.Name, request.Param("host", ""), request.Consumer.InternalUrl, request.ManagedBy,
+            request.Param("port", ""), request.Param("publicHost", ""));
         var (route, refusal) = RouteBindings.Bind(store, input, Language(), time.GetUtcNow().UtcDateTime);
         if (refusal != null)
         {
@@ -38,9 +41,15 @@ public sealed class MatcadRouteBindings(
             throw new MatBindingRefusedException(refusal.Field, refusal.Message, refusal.Conflict);
         }
 
-        log.LogInformation("Route {Host} -> {Upstream} is the binding of {Consumer} ({ManagedBy})", route!.Host, route.Upstream, request.Consumer.Id, request.ManagedBy);
+        log.LogInformation("Route {Target} -> {Upstream} is the binding of {Consumer} ({ManagedBy})",
+            route!.ListenPort is > 0 ? $":{route.ListenPort}" : route.Host, route.Upstream, request.Consumer.Id, request.ManagedBy);
         await ApplyAsync(request.Consumer.Id);
-        return new MatBindResult(new Dictionary<string, string?> { [PublicUrl] = RouteBindings.PublicUrlOf(route.Host) });
+        // A port route whose broker named no machine has no public address: the key stays out, so the consumer gets no MAT_PUBLIC_URL
+        // (MatPlatform answers "" for it) rather than a guess such as localhost.
+        var values = new Dictionary<string, string?>();
+        if (RouteBindings.PublicUrlOf(route) is { } publicUrl)
+            values[PublicUrl] = publicUrl;
+        return new MatBindResult(values);
     }
 
     public async Task<bool> UnbindAsync(string consumer, string? managedBy, CancellationToken ct)

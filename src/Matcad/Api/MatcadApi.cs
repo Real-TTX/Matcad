@@ -194,6 +194,7 @@ public static class MatcadApi
                     requireHeader = RequiredHeaderName(r),
                     allowedIps = r.AllowedIps,
                     managedBy = r.ManagedBy,
+                    binding = r.Binding?.Consumer,
                     source = r.Source ?? "manual",
                     sourceDetail = r.SourceDetail,
                     editable = r.Source == null,
@@ -232,7 +233,7 @@ public static class MatcadApi
             }, route);
             if (error != null) return Results.BadRequest(new { error });
             route.ManagedBy = ResolveManagedBy(inp.ManagedBy, replaced);
-            // A route that is the web.route binding of an app stays its binding (the API does not carry the mark).
+            // A route that is the web.route binding of an app stays its binding (the API shows the mark as "binding" but does not take it).
             route.Binding = replaced?.Binding;
 
             // A host (or a port) belongs to one route. Without an id the call means "make sure this route exists",
@@ -348,7 +349,10 @@ public static class MatcadApi
         upstreamHeaders = HeaderNames(r),
         requireHeader = RequiredHeaderName(r),
         allowedIps = r.AllowedIps,
-        managedBy = r.ManagedBy
+        managedBy = r.ManagedBy,
+        // The app whose web.route binding this route is (null: no binding). Added for Mattiverse: a cleanup of its own routes by managedBy
+        // must leave a binding to the platform contract (DELETE /api/bindings/web.route/{app}).
+        binding = r.Binding?.Consumer
     };
 
     private static object[] HeaderNames(RouteConfig r) =>

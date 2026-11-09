@@ -112,7 +112,8 @@ public sealed class MatcadPlatform(
         o.Role("admin", T("Administrator", "Administrator"));
         o.Role("user", T("Benutzer", "User"));
 
-        // web.route: a route to an app under a name of the domain (MatcadRouteBindings). Matcad signs people in through MatIdentity when it is set.
+        // web.route: a route to an app under a name of the domain (params.host) or on a port of its own (params.port, with params.publicHost for the
+        // address it answers), see MatcadRouteBindings. Matcad signs people in through MatIdentity when it is set.
         o.Provides(MatCapabilities.WebRoute, label: T("Macht erreichbar", "Makes reachable"));
         o.Consumes(MatCapabilities.IdentityOidc, optional: true);
     }

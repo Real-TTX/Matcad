@@ -6,7 +6,7 @@ namespace Matcad.Tests;
 
 /// <summary>
 /// The engine API that Mattiverse drives (<c>/api/v1</c>, <c>Matcad__ApiKey</c>, Mattiverse docs/ENGINES.md) is unchanged by the platform contract:
-/// the same key, the same status codes, the same fields.
+/// the same key, the same status codes, the same fields (new ones only added: <c>binding</c> on a route).
 /// </summary>
 public sealed class EngineApiTests(PlatformFactory site) : IClassFixture<PlatformFactory>
 {
@@ -56,8 +56,10 @@ public sealed class EngineApiTests(PlatformFactory site) : IClassFixture<Platfor
             Assert.Equal(
                 ["id", "name", "host", "wildcard", "upstream", "insecureSkipVerify", "fallbackUrl", "redirectPermanent", "authenticationId",
                  "providerId", "acmeEmail", "enabled", "allowEmbedding", "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps",
-                 "managedBy"],
+                 "managedBy", "binding"],
                 Names(doc.RootElement.GetProperty("route")));
+            // Added for Mattiverse: the app whose web.route binding the route is, null for any other route.
+            Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("route").GetProperty("binding").ValueKind);
             Assert.Equal(["ok", "error"], Names(doc.RootElement.GetProperty("applied")));
         }
 
@@ -66,8 +68,10 @@ public sealed class EngineApiTests(PlatformFactory site) : IClassFixture<Platfor
             var route = doc.RootElement.EnumerateArray().Single(r => r.GetProperty("host").GetString() == "pin.example.com");
             Assert.Equal(
                 ["id", "name", "host", "wildcard", "upstream", "fallbackUrl", "authenticationId", "providerId", "enabled", "allowEmbedding",
-                 "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps", "managedBy", "source", "sourceDetail", "editable", "certKind", "certSubject"],
+                 "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps", "managedBy", "binding", "source", "sourceDetail", "editable",
+                 "certKind", "certSubject"],
                 Names(route));
+            Assert.Equal(JsonValueKind.Null, route.GetProperty("binding").ValueKind);
         }
 
         using (var doc = JsonDocument.Parse(await api.GetStringAsync("/api/v1/settings")))

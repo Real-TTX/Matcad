@@ -135,6 +135,28 @@ public class CaddyService
         }
     }
 
+    /// <summary>The answer of the bootstrap Caddyfile of the image (<c>caddy/Caddyfile</c>): a Caddy that serves it has been started again and has none of Matcad's config.</summary>
+    public const string BootstrapAnswer = "Matcad: Caddy is running, waiting for configuration.";
+
+    /// <summary>
+    /// True when Caddy answers but runs the bootstrap config of its image: it was started again (its container recreated, for example when Mattiverse publishes another
+    /// port on it, or after a crash) and lost what Matcad pushed. False when it runs Matcad's config, or cannot be asked.
+    /// </summary>
+    public async Task<bool> RunsBootstrapConfigAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _http.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(3);
+            var running = await client.GetStringAsync($"{AdminUrl}/config/", ct);
+            return running.Contains(BootstrapAnswer, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or UriFormatException)
+        {
+            return false;
+        }
+    }
+
     public async Task<string?> GetRunningConfigAsync(CancellationToken ct = default)
     {
         try

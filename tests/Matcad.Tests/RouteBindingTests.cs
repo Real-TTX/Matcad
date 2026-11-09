@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Matcad.Config;
 using Matcad.Platform;
+using Matcad.Services;
 using MatPlatform;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,13 +42,13 @@ public sealed class RouteBindingRulesTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "matcad-tests-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly IConfiguration _cfg;
     private readonly ConfigStore _store;
 
     public RouteBindingRulesTests()
     {
-        _store = new ConfigStore(
-            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Matcad:ConfigDir"] = _folder }).Build(),
-            NullLogger<ConfigStore>.Instance);
+        _cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Matcad:ConfigDir"] = _folder }).Build();
+        _store = new ConfigStore(_cfg, NullLogger<ConfigStore>.Instance);
     }
 
     public void Dispose()
@@ -57,6 +58,14 @@ public sealed class RouteBindingRulesTests : IDisposable
 
     private static RouteBindInput Drive(string? host = "drive.example.com", string? upstream = "http://mattiverse-matdrive-web:4810", string managedBy = "mattiverse")
         => new("matdrive", "MatDrive", host, upstream, managedBy);
+
+    // The same app without a domain: a port of its own on Caddy, and the name of the machine for its address.
+    private static RouteBindInput DrivePort(string? port = "8101", string? publicHost = "nas.local", string? upstream = "http://mattiverse-matdrive-web:4810",
+        string managedBy = "mattiverse")
+        => new("matdrive", "MatDrive", null, upstream, managedBy, port, publicHost);
+
+    private JsonNode Caddy()
+        => JsonSerializer.SerializeToNode(new CaddyConfigGenerator(_store, new RouteProvider(_store, new DockerRouteCache(), _cfg), _cfg).Build())!;
 
     private RouteConfig Bind(RouteBindInput input)
     {
@@ -323,11 +332,259 @@ public sealed class RouteBindingRulesTests : IDisposable
         Assert.True(RouteBindings.Unbind(_store, "matdrive", null));
         Assert.Empty(_store.Routes);
     }
+
+    // ---- Port routes: an app of a Mattiverse without a domain gets a port of its own on Caddy.
+
+    [Fact]
+    public void A_port_binding_is_a_route_on_its_own_port_to_the_internal_address_and_caddy_listens_there()
+    {
+        var route = Bind(DrivePort());
+
+        var stored = Assert.Single(_store.Routes);
+        Assert.Equal(route.Id, stored.Id);
+        Assert.Equal(8101, stored.ListenPort);
+        Assert.Equal("", stored.Host);
+        Assert.Equal("http://mattiverse-matdrive-web:4810", stored.Upstream);
+        Assert.Equal("MatDrive", stored.Name);
+        Assert.Equal("mattiverse", stored.ManagedBy);
+        Assert.Equal("matdrive", stored.Binding!.Consumer);
+        Assert.Equal("nas.local", stored.Binding.PublicHost);
+        Assert.Equal(Now, stored.Binding.Since);
+        Assert.False(stored.Wildcard);
+
+        // A server of its own on :8101 that proxies to the app, plain HTTP, and nothing for it on the main server.
+        var config = Caddy();
+        var server = config["apps"]!["http"]!["servers"]!["port_8101"]!;
+        Assert.Equal([":8101"], server["listen"]!.AsArray().Select(l => l!.GetValue<string>()));
+        var proxy = server["routes"]![0]!["handle"]!.AsArray().Last()!;
+        Assert.Equal("reverse_proxy", proxy["handler"]!.GetValue<string>());
+        Assert.Equal("mattiverse-matdrive-web:4810", proxy["upstreams"]![0]!["dial"]!.GetValue<string>());
+        Assert.Empty(config["apps"]!["http"]!["servers"]!["matcad"]!["routes"]!.AsArray());
+
+        // The same request twice is the same route.
+        Assert.Equal(route.Id, Bind(DrivePort()).Id);
+        Assert.Single(_store.Routes);
+    }
+
+    [Theory]
+    [InlineData("nas.local", "http://nas.local:8101")]
+    [InlineData("NAS.Local", "http://nas.local:8101")]
+    [InlineData("localhost", "http://localhost:8101")]
+    [InlineData("192.168.1.20", "http://192.168.1.20:8101")]
+    [InlineData("fe80::1", "http://[fe80::1]:8101")]
+    [InlineData("[FE80:0:0::1]", "http://[fe80::1]:8101")]
+    [InlineData("2001:db8::20", "http://[2001:db8::20]:8101")]
+    public void The_public_address_of_a_port_route_is_plain_http_on_the_machine_the_broker_named(string publicHost, string url)
+        => Assert.Equal(url, RouteBindings.PublicUrlOf(Bind(DrivePort(publicHost: publicHost))));
+
+    [Fact]
+    public void Without_a_machine_a_port_route_has_no_public_address_and_a_host_route_keeps_its_own()
+    {
+        Assert.Null(RouteBindings.PublicUrlOf(Bind(DrivePort(publicHost: null))));
+        Assert.Null(RouteBindings.Find(_store, "matdrive")!.Binding!.PublicHost);
+
+        Assert.Equal("https://drive.example.com", RouteBindings.PublicUrlOf(Bind(Drive())));
+    }
+
+    [Fact]
+    public void A_bound_port_route_asked_again_with_a_name_only_answers_the_same_address_and_a_new_bind_without_machine_forgets_it()
+    {
+        Bind(DrivePort());
+
+        var again = Bind(new RouteBindInput("matdrive", "MatDrive", null, null, "mattiverse"));
+        Assert.Equal("http://nas.local:8101", RouteBindings.PublicUrlOf(again));
+
+        // The request describes the binding: a broker that names no machine now gets no address.
+        Assert.Null(RouteBindings.PublicUrlOf(Bind(DrivePort(publicHost: ""))));
+    }
+
+    [Theory]
+    [InlineData("http://nas.local")]
+    [InlineData("nas.local:8080")]
+    [InlineData("nas.local/path")]
+    [InlineData("[::1]:8080")]
+    [InlineData("::1]")]
+    [InlineData("fe80::1%eth0")]
+    [InlineData("10.1")]
+    [InlineData("192.168.001.020")]
+    [InlineData("*.local")]
+    [InlineData("nas local")]
+    [InlineData("nas.local.")]
+    public void An_invalid_public_host_is_refused(string publicHost)
+    {
+        var refusal = Refuse(DrivePort(publicHost: publicHost));
+
+        Assert.Equal("publicHost", refusal.Field);
+        Assert.False(refusal.Conflict);
+        Assert.Empty(_store.Routes);
+    }
+
+    [Fact]
+    public void From_host_to_port_and_back_is_one_route_that_keeps_what_an_administrator_set()
+    {
+        var first = Bind(Drive());
+        var edited = _store.Routes.Single();
+        edited.AuthenticationId = 7;
+        edited.AllowedIps = ["10.0.0.0/8"];
+        edited.Compress = true;
+        _store.UpsertRoute(edited, null);
+
+        // The domain was removed: the app is reached on its port now.
+        var onPort = Bind(DrivePort());
+        var stored = Assert.Single(_store.Routes);
+        Assert.Equal(first.Id, onPort.Id);
+        Assert.Equal(8101, stored.ListenPort);
+        Assert.Equal("", stored.Host);
+        Assert.Equal(7, stored.AuthenticationId);
+        Assert.Equal(["10.0.0.0/8"], stored.AllowedIps);
+        Assert.True(stored.Compress);
+        Assert.Equal(Now, stored.Binding!.Since);
+
+        // The domain came back.
+        var onHost = Bind(Drive("drive.example.org"));
+        stored = Assert.Single(_store.Routes);
+        Assert.Equal(first.Id, onHost.Id);
+        Assert.Null(stored.ListenPort);
+        Assert.Equal("drive.example.org", stored.Host);
+        Assert.Null(stored.Binding!.PublicHost);
+        Assert.Equal(7, stored.AuthenticationId);
+        Assert.Equal(["10.0.0.0/8"], stored.AllowedIps);
+        Assert.True(stored.Compress);
+        Assert.Equal("https://drive.example.org", RouteBindings.PublicUrlOf(stored));
+
+        // And Caddy has the host again, no port server.
+        var servers = Caddy()["apps"]!["http"]!["servers"]!.AsObject();
+        Assert.Equal(["matcad"], servers.Select(s => s.Key));
+    }
+
+    [Fact]
+    public void A_route_with_locations_does_not_lose_them_to_a_port()
+    {
+        Bind(Drive());
+        var edited = _store.Routes.Single();
+        edited.Locations = [new RouteLocation { Path = "/api", Upstream = "http://api:80" }];
+        _store.UpsertRoute(edited, null);
+
+        var refusal = Refuse(DrivePort());
+
+        Assert.Equal("port", refusal.Field);
+        Assert.True(refusal.Conflict);
+        Assert.Contains("locations", refusal.Message);
+        var stored = Assert.Single(_store.Routes);
+        Assert.Equal("drive.example.com", stored.Host);
+        Assert.Single(stored.Locations);
+    }
+
+    [Fact]
+    public void Host_and_port_together_are_refused()
+    {
+        var refusal = Refuse(new RouteBindInput("matdrive", "MatDrive", "drive.example.com", "http://mattiverse-matdrive-web:4810", "mattiverse", "8101", "nas.local"));
+
+        Assert.Equal("port", refusal.Field);
+        Assert.False(refusal.Conflict);
+        Assert.Empty(_store.Routes);
+    }
+
+    [Theory]
+    [InlineData("80", "Caddy itself")]
+    [InlineData("443", "Caddy itself")]
+    [InlineData("2019", "Caddy itself")]
+    [InlineData("1023", "1024 to 65535")]
+    [InlineData("0", "1024 to 65535")]
+    [InlineData("65536", "1024 to 65535")]
+    [InlineData("-8101", "1024 to 65535")]
+    [InlineData("+8101", "1024 to 65535")]
+    [InlineData("8101.0", "1024 to 65535")]
+    [InlineData("port", "1024 to 65535")]
+    public void Caddys_own_ports_and_ports_out_of_range_are_refused(string port, string said)
+    {
+        var refusal = Refuse(DrivePort(port));
+
+        Assert.Equal("port", refusal.Field);
+        Assert.False(refusal.Conflict);
+        Assert.Contains(said, refusal.Message);
+        Assert.Empty(_store.Routes);
+    }
+
+    [Theory]
+    [InlineData("1024")]
+    [InlineData("65535")]
+    public void The_ends_of_the_range_are_ports_too(string port)
+        => Assert.Equal(int.Parse(port, System.Globalization.CultureInfo.InvariantCulture), Bind(DrivePort(port)).ListenPort);
+
+    [Fact]
+    public void The_port_of_another_consumer_is_refused_and_a_moving_route_stays_where_it_was()
+    {
+        Bind(new RouteBindInput("matoffice", "MatOffice", null, "http://office:4820", "mattiverse", "8102"));
+        Bind(DrivePort());
+
+        var refusal = Refuse(DrivePort("8102"));
+
+        Assert.True(refusal.Conflict);
+        Assert.Equal("port", refusal.Field);
+        Assert.Contains("matoffice", refusal.Message);
+        Assert.Equal(8101, RouteBindings.Find(_store, "matdrive")!.ListenPort);
+        Assert.Equal(8102, RouteBindings.Find(_store, "matoffice")!.ListenPort);
+    }
+
+    [Theory]
+    [InlineData(null, "made by hand")]
+    [InlineData("matos", "managed by matos")]
+    public void A_port_route_made_by_hand_or_by_another_tool_is_not_taken_over(string? managedBy, string said)
+    {
+        _store.UpsertRoute(new RouteConfig { ListenPort = 8101, Host = "", Upstream = "http://mine:80", Name = "Mine", ManagedBy = managedBy, Enabled = true }, null);
+
+        var refusal = Refuse(DrivePort());
+
+        Assert.True(refusal.Conflict);
+        Assert.Equal("port", refusal.Field);
+        Assert.Contains(said, refusal.Message);
+        Assert.Contains("\"Mine\"", refusal.Message);
+        var stored = Assert.Single(_store.Routes);
+        Assert.Null(stored.Binding);
+        Assert.Equal("http://mine:80", stored.Upstream);
+    }
+
+    [Fact]
+    public void An_unbound_port_route_of_the_same_tool_is_adopted_and_the_old_route_of_the_app_goes()
+    {
+        Bind(Drive());
+        _store.UpsertRoute(new RouteConfig
+        {
+            ListenPort = 8101, Host = "", Upstream = "http://old:1", Name = "port 8101", ManagedBy = "mattiverse", Enabled = true, BlockedIps = ["203.0.113.0/24"],
+        }, null);
+        var held = _store.Routes.Single(r => r.ListenPort == 8101);
+
+        var route = Bind(DrivePort());
+
+        var stored = Assert.Single(_store.Routes);
+        Assert.Equal(held.Id, route.Id);
+        Assert.Equal("matdrive", stored.Binding!.Consumer);
+        Assert.Equal("http://mattiverse-matdrive-web:4810", stored.Upstream);
+        Assert.Equal("MatDrive", stored.Name);
+        Assert.Equal(["203.0.113.0/24"], stored.BlockedIps);
+    }
+
+    [Fact]
+    public void A_port_binding_needs_the_address_of_the_app()
+        => Assert.Equal("internalUrl", Refuse(DrivePort(upstream: null)).Field);
+
+    [Fact]
+    public void Unbind_removes_the_port_route_and_its_server()
+    {
+        Bind(DrivePort());
+
+        Assert.True(RouteBindings.Unbind(_store, "matdrive", "mattiverse"));
+
+        Assert.Empty(_store.Routes);
+        Assert.Null(Caddy()["apps"]!["http"]!["servers"]!["port_8101"]);
+    }
 }
 
 /// <summary>
 /// The broker endpoints of MatPlatform with Matcad's handler, the whole app in memory: <c>PUT /api/bindings/web.route/{consumer}</c> with the key
-/// and <c>params.host</c>, the list, the removal by <c>managedBy</c>, the refusals (400, 409), <c>/api/v1</c> unchanged and the Connections area.
+/// and <c>params.host</c> or <c>params.port</c>, the list, the removal by <c>managedBy</c>, the refusals (400, 409), <c>/api/v1</c> with the added
+/// <c>binding</c> and the Connections area.
 /// </summary>
 public sealed class RouteBindingApiTests(PlatformFactory site) : IClassFixture<PlatformFactory>
 {
@@ -341,6 +598,24 @@ public sealed class RouteBindingApiTests(PlatformFactory site) : IClassFixture<P
             consumer = new { name = consumer, url = host is null ? null : "https://" + host, internalUrl },
             @params = host is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["host"] = host },
         });
+
+    // A Mattiverse without a domain: the app on a port of its own, and the name of the machine for its address (both as texts, like every parameter).
+    private static JsonContent PortBody(string consumer, string port, string? publicHost, string? internalUrl, string? host = null)
+    {
+        var parameters = new Dictionary<string, string> { ["port"] = port };
+        if (publicHost != null) parameters["publicHost"] = publicHost;
+        if (host != null) parameters["host"] = host;
+        return JsonContent.Create(new
+        {
+            version = 1,
+            managedBy = "mattiverse",
+            consumer = new { name = consumer, internalUrl },
+            @params = parameters,
+        });
+    }
+
+    private JsonNode CaddyServers()
+        => JsonNode.Parse(site.Services.GetRequiredService<CaddyService>().BuildJson())!["apps"]!["http"]!["servers"]!;
 
     private static async Task<JsonObject> Json(HttpResponseMessage response, HttpStatusCode status)
     {
@@ -430,6 +705,84 @@ public sealed class RouteBindingApiTests(PlatformFactory site) : IClassFixture<P
     }
 
     [Fact]
+    public async Task A_broker_binds_an_app_on_a_port_and_gets_its_address_on_the_machine()
+    {
+        var api = site.Api();
+
+        var answer = await Json(await api.PutAsync("/api/bindings/web.route/matport",
+            PortBody("MatPort", "8131", "nas.local", "http://mattiverse-matport-web:4810")), HttpStatusCode.OK);
+
+        Assert.Equal("http://nas.local:8131", (string?)answer["variables"]![MatPlatformSettings.PublicUrlVariable]);
+        var route = RouteBindings.Find(Store, "matport")!;
+        Assert.Equal(8131, route.ListenPort);
+        Assert.Equal("", route.Host);
+        Assert.Equal("http://mattiverse-matport-web:4810", route.Upstream);
+        Assert.Equal("MatPort", route.Name);
+        Assert.Equal("mattiverse", route.ManagedBy);
+        var server = CaddyServers()["port_8131"]!;
+        Assert.Equal([":8131"], server["listen"]!.AsArray().Select(l => l!.GetValue<string>()));
+        Assert.Equal("mattiverse-matport-web:4810", server["routes"]![0]!["handle"]!.AsArray().Last()!["upstreams"]![0]!["dial"]!.GetValue<string>());
+
+        // The engine API names the app of the port route too.
+        var manual = JsonNode.Parse(await site.Api(PlatformFactory.EngineKey).GetStringAsync("/api/v1/routes/manual"))!.AsArray();
+        Assert.Equal("matport", (string?)manual.Single(r => (int?)r!["listenPort"] == 8131)!["binding"]);
+
+        // An IPv6 address goes in brackets; without a machine there is no address: MatPlatform answers "" for the missing value, never localhost.
+        var v6 = await Json(await api.PutAsync("/api/bindings/web.route/matport",
+            PortBody("MatPort", "8131", "fd00::20", "http://mattiverse-matport-web:4810")), HttpStatusCode.OK);
+        Assert.Equal("http://[fd00::20]:8131", (string?)v6["variables"]![MatPlatformSettings.PublicUrlVariable]);
+        var none = await Json(await api.PutAsync("/api/bindings/web.route/matport",
+            PortBody("MatPort", "8131", null, "http://mattiverse-matport-web:4810")), HttpStatusCode.OK);
+        Assert.Equal("", (string?)none["variables"]![MatPlatformSettings.PublicUrlVariable]);
+        Assert.Single(Store.Routes, r => r.Binding?.Consumer == "matport");
+
+        // The domain came: the same route moves to the host. It went: back to the port.
+        var onHost = await Json(await api.PutAsync("/api/bindings/web.route/matport",
+            Body("MatPort", "port.example.com", "http://mattiverse-matport-web:4810")), HttpStatusCode.OK);
+        Assert.Equal("https://port.example.com", (string?)onHost["variables"]![MatPlatformSettings.PublicUrlVariable]);
+        Assert.Equal(route.Id, Assert.Single(Store.Routes, r => r.Binding?.Consumer == "matport").Id);
+        Assert.Null(CaddyServers()["port_8131"]);
+        await Json(await api.PutAsync("/api/bindings/web.route/matport",
+            PortBody("MatPort", "8131", "nas.local", "http://mattiverse-matport-web:4810")), HttpStatusCode.OK);
+        Assert.Equal(route.Id, Assert.Single(Store.Routes, r => r.Binding?.Consumer == "matport").Id);
+
+        // Removed: the route and its server go.
+        Assert.Equal(HttpStatusCode.NoContent, (await api.DeleteAsync("/api/bindings/web.route/matport?managedBy=mattiverse")).StatusCode);
+        Assert.Null(RouteBindings.Find(Store, "matport"));
+        Assert.DoesNotContain(Store.Routes, r => r.ListenPort == 8131);
+        Assert.Null(CaddyServers()["port_8131"]);
+    }
+
+    [Fact]
+    public async Task A_wrong_port_binding_is_a_bad_request_and_a_taken_port_a_conflict()
+    {
+        var api = site.Api();
+        await Json(await api.PutAsync("/api/bindings/web.route/matportone", PortBody("MatPortOne", "8132", null, "http://one:80")), HttpStatusCode.OK);
+        Store.UpsertRoute(new RouteConfig { ListenPort = 8133, Host = "", Upstream = "http://mine:80", Name = "Mine", Enabled = true }, null);
+
+        var both = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo",
+            PortBody("MatPortTwo", "8134", "nas.local", "http://two:80", host: "two.example.com")), HttpStatusCode.BadRequest);
+        var caddy = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo", PortBody("MatPortTwo", "2019", null, "http://two:80")), HttpStatusCode.BadRequest);
+        var low = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo", PortBody("MatPortTwo", "443", null, "http://two:80")), HttpStatusCode.BadRequest);
+        var high = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo", PortBody("MatPortTwo", "70000", null, "http://two:80")), HttpStatusCode.BadRequest);
+        var machine = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo",
+            PortBody("MatPortTwo", "8134", "http://nas.local:8134", "http://two:80")), HttpStatusCode.BadRequest);
+        var other = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo", PortBody("MatPortTwo", "8132", null, "http://two:80")), HttpStatusCode.Conflict);
+        var byHand = await Json(await api.PutAsync("/api/bindings/web.route/matporttwo", PortBody("MatPortTwo", "8133", null, "http://two:80")), HttpStatusCode.Conflict);
+
+        Assert.NotNull(both["errors"]!["port"]);
+        Assert.Contains("Caddy itself", (string?)caddy["errors"]!["port"]);
+        Assert.Contains("Caddy itself", (string?)low["errors"]!["port"]);
+        Assert.Contains("1024 to 65535", (string?)high["errors"]!["port"]);
+        Assert.NotNull(machine["errors"]!["publicHost"]);
+        Assert.Contains("matportone", (string?)other["errors"]!["port"]);
+        Assert.Contains("Mine", (string?)byHand["errors"]!["port"]);
+        Assert.Null(RouteBindings.Find(Store, "matporttwo"));
+        Assert.Null(Store.Routes.Single(r => r.ListenPort == 8133).Binding);
+        Assert.Equal("http://one:80", RouteBindings.Find(Store, "matportone")!.Upstream);
+    }
+
+    [Fact]
     public async Task A_binding_is_removed_only_by_who_manages_it()
     {
         var api = site.Api();
@@ -456,20 +809,26 @@ public sealed class RouteBindingApiTests(PlatformFactory site) : IClassFixture<P
     }
 
     [Fact]
-    public async Task The_engine_api_shows_a_bound_route_as_before_and_keeps_it_bound()
+    public async Task The_engine_api_names_the_app_of_a_bound_route_and_keeps_it_bound()
     {
         await Json(await site.Api().PutAsync("/api/bindings/web.route/matpaper", Body("MatPaper", "paper.example.com", "http://matpaper:8080")), HttpStatusCode.OK);
         var engine = site.Api(PlatformFactory.EngineKey);
 
         var manual = JsonNode.Parse(await engine.GetStringAsync("/api/v1/routes/manual"))!.AsArray();
         var dto = manual.Single(r => (string?)r!["host"] == "paper.example.com")!.AsObject();
-        // The shape of /api/v1 is unchanged: no field of the binding comes out.
+        // The shape of /api/v1 is the old one plus "binding": the app whose binding the route is, so Mattiverse's cleanup of its routes by
+        // managedBy can leave the bindings alone.
         Assert.Equal(
             ["id", "name", "host", "wildcard", "upstream", "insecureSkipVerify", "fallbackUrl", "redirectPermanent", "authenticationId", "providerId",
-             "acmeEmail", "enabled", "allowEmbedding", "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps", "managedBy"],
+             "acmeEmail", "enabled", "allowEmbedding", "listenPort", "upstreamHost", "upstreamHeaders", "requireHeader", "allowedIps", "managedBy", "binding"],
             dto.Select(p => p.Key));
         Assert.Equal("http://matpaper:8080", (string?)dto["upstream"]);
         Assert.Equal("mattiverse", (string?)dto["managedBy"]);
+        Assert.Equal("matpaper", (string?)dto["binding"]);
+        var single = JsonNode.Parse(await engine.GetStringAsync($"/api/v1/routes/{(long)dto["id"]!}"))!;
+        Assert.Equal("matpaper", (string?)single["binding"]);
+        var overview = JsonNode.Parse(await engine.GetStringAsync("/api/v1/routes"))!.AsArray();
+        Assert.Equal("matpaper", (string?)overview.Single(r => (string?)r!["host"] == "paper.example.com")!["binding"]);
 
         // An old caller that upserts the same host through /api/v1 (without the mark) leaves it the binding of the app.
         var answer = await Json(await engine.PostAsync("/api/v1/routes", JsonContent.Create(new
@@ -477,6 +836,7 @@ public sealed class RouteBindingApiTests(PlatformFactory site) : IClassFixture<P
             host = "paper.example.com", wildcard = false, target = "proxy", upstream = "http://matpaper:8081", enabled = true, name = "MatPaper",
         })), HttpStatusCode.OK);
         Assert.Equal((long)dto["id"]!, (long)answer["route"]!["id"]!);
+        Assert.Equal("matpaper", (string?)answer["route"]!["binding"]);
         var route = RouteBindings.Find(Store, "matpaper")!;
         Assert.Equal("http://matpaper:8081", route.Upstream);
         Assert.Equal("mattiverse", route.ManagedBy);

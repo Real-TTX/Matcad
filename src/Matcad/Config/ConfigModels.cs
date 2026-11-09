@@ -210,6 +210,10 @@ public class RouteBinding
 {
     public string Consumer { get; set; } = "";
     public DateTime Since { get; set; }
+
+    /// <summary>For a port route: the name or IP address the browser reaches this machine under (the parameter <c>publicHost</c>, an IPv6 address
+    /// without brackets), so a request that changes nothing can answer the same <c>publicUrl</c>. Null for a host route or when the broker named none.</summary>
+    public string? PublicHost { get; set; }
 }
 
 public class MatcadSettings

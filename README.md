@@ -390,7 +390,8 @@ engine API above, which does not change:
   it. `/healthz` stays the plain liveness probe.
 
 **Making apps reachable: the capability `web.route`.** Matcad provides `web.route` to the
-other apps: a binding is a route from a name of the domain to the app. A broker
+other apps: a binding is a route to the app, from a name of the domain (`host`) or, for a
+Mattiverse without a domain, from a port of its own on Caddy (`port`). A broker
 (Mattiverse) binds each app it installs with the platform key:
 
 ```http
@@ -404,33 +405,62 @@ X-Api-Key: <MAT_API_KEY>
 200 { "variables": { "MAT_PUBLIC_URL": "https://drive.example.com" } }
 ```
 
-- The route goes from `host` to the app's `internalUrl` (http or https, no path), is named
-  after the app, carries `managedBy` and is built and checked like a route of the REST API;
-  then the config goes to Caddy. Its certificate is Matcad's as for any route (the wildcard
+Without a domain:
+
+```http
+PUT /api/bindings/web.route/matdrive
+X-Api-Key: <MAT_API_KEY>
+
+{ "version": 1, "managedBy": "mattiverse",
+  "consumer": { "name": "MatDrive", "internalUrl": "http://mattiverse-matdrive-web:4810" },
+  "params": { "port": "8101", "publicHost": "nas.local" } }
+
+200 { "variables": { "MAT_PUBLIC_URL": "http://nas.local:8101" } }
+```
+
+- The parameters are texts. Send `host` **or** `port`, not both (`400` on `port`):
+  - `host`: a name of a domain (no IP address, wildcard, scheme, path or port).
+  - `port`: `1024` to `65535`; `2019` (and `80`, `443`) are Caddy's own and refused (`400`).
+    Caddy gets a server of its own on that port (`port_<n>`, listening on `:<n>`, plain HTTP,
+    no host matching); the app's container publishes no port itself, the broker publishes
+    this one on the `caddy` container. `publicHost` (optional, only with `port`) is the name
+    or IP address the browser uses for the machine (`nas.local`, `192.168.1.20`,
+    `localhost`, `fd00::20`): no scheme, path or port (`400` on `publicHost`).
+- The route goes to the app's `internalUrl` (http or https, no path), is named after the app,
+  carries `managedBy` and is built and checked like a route of the REST API; then the config
+  goes to Caddy. A host route's certificate is Matcad's as for any route (the wildcard
   certificate when one covers the name). When Caddy is not reachable the route is stored
   anyway and reaches Caddy with the next push (the binding holds; Matcad logs it).
 - `MAT_PUBLIC_URL` is `https://<host>`, or `http://<host>` for a development name under
-  `.localhost`.
+  `.localhost`; for a port `http://<publicHost>:<port>` (an IPv6 address in brackets:
+  `http://[fd00::20]:8101`). A port without `publicHost` has no public address: the answer
+  carries `"MAT_PUBLIC_URL": ""`, which means "not set" (Matcad does not know the name the
+  browser uses, and `localhost` would be wrong).
 - **One route per app:** the route remembers the app it belongs to. The same request twice is
-  one route; a new `host` moves it; what an administrator added to it (an authentication,
-  guards, options, switched off) stays.
-- **Routes that were there before:** a route for the host that the same tool made
+  one route; a new `host` or `port` moves it, also from a host to a port when the domain is
+  removed and back when it comes; what an administrator added to it (an authentication,
+  guards, options, switched off) stays. A route with locations (paths of their own) cannot
+  become a port route: `409` on `port` until they are removed.
+- **Routes that were there before:** a route for the host or port that the same tool made
   (`managedBy` equal, no app yet: what Mattiverse made through `/api/v1` before the bindings)
   becomes the binding. A route made by hand (no `managedBy`), by another tool or bound to
-  another app is never taken over: `409` with `{"errors": {"host": "..."}}`, nothing changes.
-  A missing or invalid `host` or address is `400`.
+  another app is never taken over: `409` with `{"errors": {"host": "..."}}` (or `"port"`),
+  nothing changes. A missing or invalid `host`, `port` or address is `400`.
 - `GET /api/bindings` lists the bound apps (app, name, `managedBy`, since);
-  `DELETE /api/bindings/web.route/matdrive?managedBy=mattiverse` removes the route, but only
-  one that `managedBy` manages (`404` otherwise; without `managedBy`, any).
-- `/api/v1` does not change: a bound route is a route like any other there (same fields), and
-  an update of it through `/api/v1` or the route page keeps it bound.
+  `DELETE /api/bindings/web.route/matdrive?managedBy=mattiverse` removes the route (and the
+  port's server), but only one that `managedBy` manages (`404` otherwise; without
+  `managedBy`, any).
+- `/api/v1`: a bound route is a route like any other there, and an update of it through
+  `/api/v1` or the route page keeps it bound. Its JSON has the added field `binding`: the app
+  whose binding it is (`"matdrive"`), `null` for every other route, so a tool that cleans up
+  its own routes by `managedBy` can leave the bindings alone.
 
 **Connections** (*System -> Connections*, administrators): the Connections area of the
 platform contract. It shows what Matcad uses (sign-in through MatIdentity, set by the
 `MATIDENTITY_*` variables) and what it offers: the apps bound to `web.route`, who manages
 each, and *Remove*. *Connect an app by hand* asks for a name only, and a route needs a host
-and the app's address: Matcad refuses it with that message. Without Mattiverse, add the
-route on the Routes page. *New key* of a bound app changes nothing (a route has no key) and
+or a port and the app's address: Matcad refuses it with that message. Without Mattiverse, add
+the route on the Routes page. *New key* of a bound app changes nothing (a route has no key) and
 shows its `MAT_PUBLIC_URL`.
 
 **Sign-in through MatIdentity** (only with `MATIDENTITY_AUTHORITY`): the sign-in page

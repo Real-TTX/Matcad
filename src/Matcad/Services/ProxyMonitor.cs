@@ -13,14 +13,15 @@ public sealed record CertificateCheck(string Host, DateTimeOffset? NotAfter, str
 
 /// <summary>
 /// Watches the proxy for the platform status (<c>/api/state</c>, <c>/api/health</c>), so that those answers are cheap and never wait for Caddy:
-/// every minute whether Caddy's admin API answers, and every six hours (and on request) the certificates Caddy really serves - a TLS handshake
+/// every ten seconds whether Caddy's admin API answers (and, when it runs the bootstrap config of its image because it was started again, Matcad's config
+/// is pushed again: its routes would be gone until the next change otherwise), and every six hours (and on request) the certificates Caddy really serves - a TLS handshake
 /// with Caddy for every certificate of <see cref="CertificatePlanner"/> (a short timeout each), reading the expiry and whether it is trusted.
 /// Hosts on Caddy's internal CA (localhost, IPs) and port-bound routes are left out. Caddy is reached at <c>Matcad:Caddy:TlsAddress</c>
 /// (<c>host:port</c>), by default the host of the admin API on port 443.
 /// </summary>
 public sealed class ProxyMonitor : BackgroundService
 {
-    private static readonly TimeSpan CaddyInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan CaddyInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CertificateInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
 
@@ -73,6 +74,11 @@ public sealed class ProxyMonitor : BackgroundService
             try
             {
                 CaddyReachable = await _caddy.IsReachableAsync(stoppingToken);
+                if (CaddyReachable == true && await _caddy.RunsBootstrapConfigAsync(stoppingToken))
+                {
+                    _log.LogInformation("Caddy runs the bootstrap config of its image (it was started again): pushing Matcad's config.");
+                    await _caddy.ApplyAsync(stoppingToken);
+                }
                 if (_certificatesRequested || DateTimeOffset.Now >= nextCertificates)
                 {
                     _certificatesRequested = false;
