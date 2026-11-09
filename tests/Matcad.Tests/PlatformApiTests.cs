@@ -64,7 +64,7 @@ public sealed class PlatformApiTests(PlatformFactory site) : IClassFixture<Platf
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = doc.RootElement;
-        Assert.Equal(1, root.GetProperty("contract").GetInt32());
+        Assert.Equal(2, root.GetProperty("contract").GetInt32());
         Assert.Equal("matcad", root.GetProperty("app").GetProperty("id").GetString());
         Assert.True(root.GetProperty("auth").GetProperty("apiKey").GetBoolean());
         Assert.False(root.GetProperty("auth").TryGetProperty("identity", out _));

@@ -146,8 +146,8 @@ public class EditModel : PageModel
         if (existing?.ListenPort > 0) return Fail("Port bindings are managed through the API. Here they can only be deleted.", existing.ListenPort);
 
         // Work on a copy: a rejected form must not leave half-applied changes in the stored route.
-        // A route that another tool (Mattiverse) writes keeps its mark when it is edited by hand.
-        var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy };
+        // A route that another tool (Mattiverse) writes keeps its mark when it is edited by hand, and so does the route of a binding (web.route).
+        var route = new RouteConfig { Id = existing?.Id ?? 0, ManagedBy = existing?.ManagedBy, Binding = existing?.Binding };
         var (access, accessError) = ReadAccess(existing);
         if (accessError != null) return Fail(accessError);
         var healthStatus = RouteBalancing.ParseStatus(HealthStatus);

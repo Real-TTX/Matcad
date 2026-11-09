@@ -232,6 +232,8 @@ public static class MatcadApi
             }, route);
             if (error != null) return Results.BadRequest(new { error });
             route.ManagedBy = ResolveManagedBy(inp.ManagedBy, replaced);
+            // A route that is the web.route binding of an app stays its binding (the API does not carry the mark).
+            route.Binding = replaced?.Binding;
 
             // A host (or a port) belongs to one route. Without an id the call means "make sure this route exists",
             // so it updates the route that already has the host; with an id it must not take over another host.

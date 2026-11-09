@@ -316,7 +316,8 @@ the UI port.
 ```
 /data
 ├─ matcad.db        SQLite database (users, sessions, request logs)
-├─ config/          JSON configuration (providers, routes, authentications, settings)
+├─ config/          JSON configuration (providers, routes with their app bindings, authentications, settings)
+├─ matplatform/     the store of MatPlatform's Connections area (made only when it keeps something)
 └─ keys/            DataProtection keys (sessions and portal cookies survive restarts)
 ```
 
@@ -330,7 +331,7 @@ without these variables Matcad behaves exactly as described above.
 | Environment variable | Effect |
 |---|---|
 | `Matcad__ApiKey` | Turns on the REST API (`/api/v1`, header `X-Api-Key`). Without a key the API answers `503`. |
-| `MAT_API_KEY` | The key of the platform API (`/api/state`, `/api/configure`, `/api/actions`, header `X-Api-Key`). Not set: the platform API takes `Matcad__ApiKey`, so Mattiverse needs one key only. Neither set: only a token of MatIdentity opens it. |
+| `MAT_API_KEY` | The key of the platform API (`/api/state`, `/api/configure`, `/api/actions`, `/api/bindings`, header `X-Api-Key`). Not set: the platform API takes `Matcad__ApiKey`, so Mattiverse needs one key only. Neither set: only a token of MatIdentity opens it, and nobody can bind an app. |
 | `MAT_FRAME_ANCESTORS` | The addresses (origins) that may show Matcad in a frame, separated by spaces, such as `http://localhost:8030 https://mattiverse.example.com`: Mattiverse sets its own, so it can open Matcad in the window of its home screen. With it, answers carry `frame-ancestors 'self' <origins>` instead of `X-Frame-Options`; anything that is not an origin (a path, `*`) is left out. Not set: nobody may frame Matcad. |
 | `MATIDENTITY_AUTHORITY` | The address of MatIdentity (`https://id.example.com`). Set: sign-in through MatIdentity (see below). Not set: the local sign-in only, as always. |
 | `MATIDENTITY_CLIENT_ID` | The client of Matcad in MatIdentity. Default: `matcad`. |
@@ -360,16 +361,18 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
 ### Platform API and sign-in through MatIdentity
 
 Matcad speaks the platform contract of the Mat apps (MatDesign `docs/PLATFORM.md`,
-shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.5.0), next to the
+shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 2.2.0, contract 2), next to the
 engine API above, which does not change:
 
 | Endpoint | Access | What |
 |---|---|---|
-| `GET /api` | anonymous | the description: pages, tiles, settings, buttons, roles (`admin`, `user`) |
+| `GET /api` | anonymous | the description: pages, tiles, settings, buttons, roles (`admin`, `user`), what Matcad provides (`web.route`) and uses (`identity.oidc`, optional) |
 | `GET /api/health` | anonymous | `ok` / `degraded` / `down` with the checks `database`, `caddy`, `administrators`; `503` only for `down` |
 | `GET /api/state[/{key}]` | key or token | the values of the tiles |
 | `GET`/`PUT /api/configure` | key or token | the few settings |
 | `POST /api/actions/{id}` | key or token | the buttons |
+| `GET /api/bindings`, `PUT`/`DELETE /api/bindings/web.route/{app}` | key only | the routes that make apps reachable (see below) |
+| `GET /api/connections` | key or token | what the Connections page shows, as JSON |
 
 - **Tiles:** active routes (with how many are switched off), hosts whose upstream could
   not be reached in the last hour (Caddy answered `502`/`504`, from the access log),
@@ -385,6 +388,50 @@ engine API above, which does not change:
 - **Health check:** the image's `HEALTHCHECK` asks `/api/health` (`dotnet Matcad.dll
   --healthcheck`); an unreachable Caddy is `degraded`, so Matcad is not restarted for
   it. `/healthz` stays the plain liveness probe.
+
+**Making apps reachable: the capability `web.route`.** Matcad provides `web.route` to the
+other apps: a binding is a route from a name of the domain to the app. A broker
+(Mattiverse) binds each app it installs with the platform key:
+
+```http
+PUT /api/bindings/web.route/matdrive
+X-Api-Key: <MAT_API_KEY>
+
+{ "version": 1, "managedBy": "mattiverse",
+  "consumer": { "name": "MatDrive", "internalUrl": "http://mattiverse-matdrive-web:4810" },
+  "params": { "host": "drive.example.com" } }
+
+200 { "variables": { "MAT_PUBLIC_URL": "https://drive.example.com" } }
+```
+
+- The route goes from `host` to the app's `internalUrl` (http or https, no path), is named
+  after the app, carries `managedBy` and is built and checked like a route of the REST API;
+  then the config goes to Caddy. Its certificate is Matcad's as for any route (the wildcard
+  certificate when one covers the name). When Caddy is not reachable the route is stored
+  anyway and reaches Caddy with the next push (the binding holds; Matcad logs it).
+- `MAT_PUBLIC_URL` is `https://<host>`, or `http://<host>` for a development name under
+  `.localhost`.
+- **One route per app:** the route remembers the app it belongs to. The same request twice is
+  one route; a new `host` moves it; what an administrator added to it (an authentication,
+  guards, options, switched off) stays.
+- **Routes that were there before:** a route for the host that the same tool made
+  (`managedBy` equal, no app yet: what Mattiverse made through `/api/v1` before the bindings)
+  becomes the binding. A route made by hand (no `managedBy`), by another tool or bound to
+  another app is never taken over: `409` with `{"errors": {"host": "..."}}`, nothing changes.
+  A missing or invalid `host` or address is `400`.
+- `GET /api/bindings` lists the bound apps (app, name, `managedBy`, since);
+  `DELETE /api/bindings/web.route/matdrive?managedBy=mattiverse` removes the route, but only
+  one that `managedBy` manages (`404` otherwise; without `managedBy`, any).
+- `/api/v1` does not change: a bound route is a route like any other there (same fields), and
+  an update of it through `/api/v1` or the route page keeps it bound.
+
+**Connections** (*System -> Connections*, administrators): the Connections area of the
+platform contract. It shows what Matcad uses (sign-in through MatIdentity, set by the
+`MATIDENTITY_*` variables) and what it offers: the apps bound to `web.route`, who manages
+each, and *Remove*. *Connect an app by hand* asks for a name only, and a route needs a host
+and the app's address: Matcad refuses it with that message. Without Mattiverse, add the
+route on the Routes page. *New key* of a bound app changes nothing (a route has no key) and
+shows its `MAT_PUBLIC_URL`.
 
 **Sign-in through MatIdentity** (only with `MATIDENTITY_AUTHORITY`): the sign-in page
 goes straight to MatIdentity and comes back signed in (redirect address

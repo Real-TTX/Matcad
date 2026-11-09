@@ -10,7 +10,8 @@ request log, **JSON files** for configuration, plain JavaScript (no build step).
 JSON config to Caddy's admin API after every change.
 
 Siblings that depend on it: **Mattiverse** installs Matcad (it generates `Matcad__ApiKey` and `MATCAD_ADMIN_PASSWORD`) and uses it as
-its engine for routes, certificates and DNS providers (contract: `Mattiverse/docs/ENGINES.md`, client `MatcadClient.cs`), and **MatOS**
+its engine for routes, certificates and DNS providers (contract: `Mattiverse/docs/ENGINES.md`, client `MatcadClient.cs`; the route of each app through the
+binding `PUT /api/bindings/web.route/{app}` of the platform contract), and **MatOS**
 calls the REST API (`/api/v1`, header `X-Api-Key`). Keep those contracts: seeded `admin`/`admin` that must change its password (unless
 `MATCAD_ADMIN_PASSWORD` is set: then that password, no forced change, wizard done), the API routes and their JSON shapes, idempotent
 `POST /api/v1/routes` (same host or port = same route), `/api/v1/status` with `app`/`version`/`apiVersion`, `setupCompleted` in
@@ -35,15 +36,18 @@ src/Matcad
   Program.cs            pipeline, auth (session + sign-in through MatIdentity), health checks, SSE log stream, MapMatcadApi + MapMatPlatform
   Api/                  REST API for matOS / Mattiverse / the Cloud (X-Api-Key); RouteAccessFields reads the tri-state access fields
   Auth/                 session cookie scheme (SessionCookie writes it), account guard (forced password change, first-run wizard)
-  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), RouteGuards (rules for the access properties), RouteLocations, RouteBalancing, certificates, backup
+  Config/               JSON config (ConfigStore: immutable snapshots), RouteEditor (shared route rules), RouteGuards (rules for the access properties), RouteLocations, RouteBalancing, certificates, backup,
+                        RouteBindings (the routes that are web.route bindings: bind/move/adopt/refuse, list, unbind; RouteConfig.Binding marks them)
   Data/                 EF Core context, migrations, DatabaseBootstrapper (also upgrades pre-0.6 databases)
-  MatPlatform/          the platform contract of the Mat apps: a COPY of MatPlatform from MatDesign (tools/matplatform-copy.js) - never edit
-  Platform/             MatcadPlatform (the MatApiDefinition: tiles, settings, actions; de+en via o.T), MatcadIdentityUsers (MatIdentity -> local user)
+  MatPlatform/          the platform contract of the Mat apps: a COPY of MatPlatform 2.2 from MatDesign (tools/matplatform-copy.js) - never edit
+  Platform/             MatcadPlatform (the MatApiDefinition: tiles, settings, actions, provides web.route, consumes identity.oidc (optional); de+en via o.T), MatcadIdentityUsers (MatIdentity -> local user),
+                        MatcadRouteBindings (IMatBindingHandler of web.route over RouteBindings, pushes to Caddy; a refusal is MatPlatform's MatBindingRefusedException -> 400/409 at /api/bindings, the message in the Connections area)
   Services/             Caddy config generator + admin client, login throttle, forward-auth tokens, Docker discovery, log ingest,
                         ProxyMonitor / ProxyStatusService (Caddy reachability, certificate checks, upstream errors for the platform tiles),
                         RequestLogQueries (dashboard + statistics: pages never hold the DbContext), AuditLog (who changed what),
                         UpstreamHealthService (health checks of the routes for the routes list)
-  Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar
+  Pages/                Razor Pages; Shared/ has the layouts (_Layout app, _PlainLayout sign-in/setup, _PortalLayout login portal) and _Toolbar;
+                        Settings/Connections = <mat-connections /> (the Connections area of MatPlatform)
   Controls/             Ui (icons, logo), tag helpers (<icon>, <mat-field>, <mat-form-buttons>), ToolbarModel, BrandAccent
   wwwroot/              matui/ (the toolkit, a copy), css/matcad.css, js/*.js, sw.js, offline.html, manifest.webmanifest, img/
 tests/Matcad.Tests
@@ -58,13 +62,25 @@ object and save only after validation (a rejected form must not change stored st
 a Docker container with an unknown `matcad.auth` label is not published). Sign-in is throttled per account and client
 (`LoginAttemptTracker`). The forward-auth cookie carries a fingerprint of the password hash, so a new password ends old sessions.
 
-**Platform contract and MatIdentity:** `/api`, `/api/health`, `/api/state`, `/api/configure`, `/api/actions` come from `MatPlatform/` (key
+**Platform contract and MatIdentity:** `/api`, `/api/health`, `/api/state`, `/api/configure`, `/api/actions`, `/api/bindings`, `/api/connections` come from `MatPlatform/` (key
 `MAT_API_KEY`, falling back to `Matcad__ApiKey`); `/api/v1` stays the engine API. With `MATIDENTITY_AUTHORITY` the sign-in page goes straight
 to MatIdentity; `/Login?local=1` is always the local way in, and when MatIdentity cannot be reached (Matcad is often the proxy in front of it)
 the page falls back to the local form after at most 10 s (`BackchannelTimeout`). A person is matched by `sub` (`User.ExternalSubject`, unique);
 an account whose user name or e-mail is the person's address is linked only after its own password (`?link=1`, pending-link cookie). A user
 created by MatIdentity has no password (`PasswordHash` empty: no local sign-in, allowed in a backup with its `ExternalSubject`). The session
 keeps the ID token (`UserSession.IdToken`) so the sign-out ends at MatIdentity too.
+
+**`web.route` (Matcad provides it):** a binding is a route (`RouteBindings`, called by `MatcadRouteBindings`): host = `params.host` (a name of a domain: no IP,
+wildcard, scheme, path or port), upstream = `consumer.internalUrl` (http(s), no path: Caddy dials host:port only), name = the consumer's, `ManagedBy` = the request's
+(`manual` is stored as null: nobody manages it), `RouteConfig.Binding` = consumer id + since. Built by `RouteEditor.Apply` from the route it replaces (everything but
+host, upstream and name stays) and saved by `TryUpsertRoute`, then `CaddyService.ApplyAsync` (a failure is logged, the binding holds). One route per consumer: a new host
+moves it. A route of the host without a binding is **adopted** only when its `ManagedBy` equals the request's (Mattiverse's routes from `/api/v1` before the bindings;
+moving onto one deletes the consumer's old route); made by hand, by another tool or bound to another consumer = 409. Unbind matches `managedBy` (null = any).
+`/api/v1` POST and the route page keep `Binding` like `ManagedBy`; `/api/v1` answers do not show it (their shape is fixed). A refusal is MatPlatform's
+`MatBindingRefusedException` (2.2.0): 400/409 `{"errors": {...}}` for a broker, the message in the Connections area. "Connect an app by hand" sends a name only and is
+refused that way; a request with neither host nor address for a consumer that has its route ("New key") answers its values unchanged. The Connections area is `/Settings/Connections` (admins; `ConnectionsAccess` = role Admin, `DataDirectory` = the data folder). It is English like Matcad's other pages:
+`UiLanguage = _ => "en"` in the AddMatPlatform options (MatPlatform 2.2.0). Never make an "en" culture for it: the image runs with `InvariantGlobalization`, where
+`GetCultureInfo("en")` throws, while the in-memory tests have full culture data and would not notice. *Issue new* is not offered for web.route (no secret).
 
 **Route access properties** (all optional, off by default; `RouteConfig`, rules in `Config/RouteGuards.cs`, applied by `RouteEditor.Apply` for the
 page and the API alike, built in `CaddyConfigGenerator`): `UpstreamHost` (Host header to the upstream; for an `https://` upstream also

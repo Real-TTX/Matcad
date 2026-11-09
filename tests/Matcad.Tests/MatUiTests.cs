@@ -189,6 +189,7 @@ public class MatUiPagesTests : IClassFixture<MatcadFactory>
     [InlineData("/Settings?tab=users")]
     [InlineData("/Settings/User")]
     [InlineData("/Settings/Import")]
+    [InlineData("/Settings/Connections")]
     [InlineData("/Account/Profile")]
     public async Task Every_page_of_the_app_has_the_frame_of_the_toolkit(string url)
     {
@@ -215,6 +216,7 @@ public class MatUiPagesTests : IClassFixture<MatcadFactory>
     [InlineData("/Providers")]
     [InlineData("/Statistics")]
     [InlineData("/Settings")]
+    [InlineData("/Settings/Connections")]
     public async Task Every_cell_of_a_table_has_a_label_for_the_phone(string url)
     {
         SeedSomething();

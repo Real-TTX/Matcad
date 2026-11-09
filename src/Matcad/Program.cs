@@ -89,7 +89,17 @@ if (string.IsNullOrWhiteSpace(builder.Configuration[MatPlatformSettings.ApiKeyVa
         [MatPlatformSettings.ApiKeyVariable] = builder.Configuration["Matcad:ApiKey"]
     });
 }
-var platform = builder.AddMatPlatform<MatcadPlatform>(MatcadPlatform.Describe, o => o.DefaultLanguage = "en");
+var platform = builder.AddMatPlatform<MatcadPlatform>(MatcadPlatform.Describe, o =>
+{
+    o.DefaultLanguage = "en";
+    // MatPlatform keeps what is entered in the Connections area (Settings -> Connections) in <data>/matplatform; the web.route bindings are routes.
+    o.DataDirectory = dataDir;
+    o.ConnectionsAccess = http => Task.FromResult(http.User.IsInRole(nameof(UserRole.Admin)));
+    // Matcad's pages are English: so is the Connections area (MatPlatform 2.2.0; Matcad runs with InvariantGlobalization, so no culture is made for it).
+    o.UiLanguage = _ => "en";
+});
+// web.route: a binding is a route of Matcad, not a key of MatPlatform's generic store.
+builder.Services.AddScoped<IMatBindingHandler, MatcadRouteBindings>();
 
 // Persist Data Protection keys on the volume so antiforgery tokens and the forward-auth
 // cookies stay valid across container restarts.
@@ -232,7 +242,6 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AccountGuardMiddleware>();
-
 app.MapRazorPages();
 
 // Reachability probe for the container health check, orchestrators (Mattiverse) and the browser: the offline page

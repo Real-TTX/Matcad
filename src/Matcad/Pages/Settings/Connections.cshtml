@@ -1,0 +1,15 @@
+@page
+@model Matcad.Pages.Settings.ConnectionsModel
+@{
+    ViewData["Title"] = "Connections";
+    ViewData["PageSub"] = "What Matcad gets from other apps and what it gives them.";
+    ViewData["Crumbs"] = Crumbs.Of(("Settings", "/Settings"), ("Connections", null));
+}
+
+<p class="mat-muted">
+    Matcad makes apps reachable (<code>web.route</code>): Mattiverse binds every app it installs, and each binding is a route to the app under its
+    name of the domain, listed here and on the <a asp-page="/Routes/Index">Routes</a> page. A route needs a host and the app's address, which a name
+    alone does not give: without Mattiverse, add the route on the Routes page.
+</p>
+
+<mat-connections />

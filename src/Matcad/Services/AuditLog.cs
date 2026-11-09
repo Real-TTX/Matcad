@@ -37,7 +37,9 @@ public sealed class AuditLog
     {
         var context = _http.HttpContext;
         if (context == null) return ("Matcad", null);
-        if (context.Request.Path.StartsWithSegments("/api")) return ("API", null);
+        // The form of the Connections area posts under /api too, but a signed-in administrator sends it.
+        if (context.Request.Path.StartsWithSegments("/api") && !context.Request.Path.StartsWithSegments(MatPlatform.MatConnectionEndpoints.FormPath))
+            return ("API", null);
         return context.User.Identity is { IsAuthenticated: true, Name: { Length: > 0 } name } ? (name, context.User.GetUserId()) : ("anonymous", null);
     }
 

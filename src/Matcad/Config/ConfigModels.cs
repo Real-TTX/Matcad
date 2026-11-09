@@ -193,12 +193,23 @@ public class RouteConfig : ConfigEntity
     public string? AcmeEmail { get; set; }
     public bool Enabled { get; set; } = true;
 
+    /// <summary>The app this route makes reachable as a binding of the capability <c>web.route</c> (the platform contract, see
+    /// <see cref="RouteBindings"/>); null for every other route. Older files do not have it and load as null.</summary>
+    public RouteBinding? Binding { get; set; }
+
     // --- Derived routes (e.g. from Docker); not persisted to routes.json. ---
     /// <summary>null = manually managed; "docker" = derived from a container.</summary>
     [JsonIgnore] public string? Source { get; set; }
     /// <summary>Origin detail, e.g. the container name.</summary>
     [JsonIgnore] public string? SourceDetail { get; set; }
     [JsonIgnore] public bool IsDerived => Source != null;
+}
+
+/// <summary>The consumer of a <c>web.route</c> binding (its id in the platform, for example <c>matdrive</c>) and since when the route is its binding.</summary>
+public class RouteBinding
+{
+    public string Consumer { get; set; } = "";
+    public DateTime Since { get; set; }
 }
 
 public class MatcadSettings
