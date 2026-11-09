@@ -71,6 +71,7 @@ public class PlatformFactory : WebApplicationFactory<Program>
         builder.UseSetting(MatPlatformSettings.ClientIdVariable, "");
         builder.UseSetting(MatPlatformSettings.ClientSecretVariable, _authority is null ? "" : "test-secret");
         builder.UseSetting(MatPlatformSettings.InternalUrlVariable, "");
+        builder.UseSetting(MatFrameAncestors.Variable, "");
 
         if (_authority is not null && _reachable)
         {

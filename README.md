@@ -331,6 +331,7 @@ without these variables Matcad behaves exactly as described above.
 |---|---|
 | `Matcad__ApiKey` | Turns on the REST API (`/api/v1`, header `X-Api-Key`). Without a key the API answers `503`. |
 | `MAT_API_KEY` | The key of the platform API (`/api/state`, `/api/configure`, `/api/actions`, header `X-Api-Key`). Not set: the platform API takes `Matcad__ApiKey`, so Mattiverse needs one key only. Neither set: only a token of MatIdentity opens it. |
+| `MAT_FRAME_ANCESTORS` | The addresses (origins) that may show Matcad in a frame, separated by spaces, such as `http://localhost:8030 https://mattiverse.example.com`: Mattiverse sets its own, so it can open Matcad in the window of its home screen. With it, answers carry `frame-ancestors 'self' <origins>` instead of `X-Frame-Options`; anything that is not an origin (a path, `*`) is left out. Not set: nobody may frame Matcad. |
 | `MATIDENTITY_AUTHORITY` | The address of MatIdentity (`https://id.example.com`). Set: sign-in through MatIdentity (see below). Not set: the local sign-in only, as always. |
 | `MATIDENTITY_CLIENT_ID` | The client of Matcad in MatIdentity. Default: `matcad`. |
 | `MATIDENTITY_CLIENT_SECRET` | Its secret. |
@@ -359,7 +360,7 @@ docker run -d -p 4433:4433 -v matcad-data:/data \
 ### Platform API and sign-in through MatIdentity
 
 Matcad speaks the platform contract of the Mat apps (MatDesign `docs/PLATFORM.md`,
-shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.4.0), next to the
+shared code in `src/Matcad/MatPlatform/`, a copy of MatPlatform 1.5.0), next to the
 engine API above, which does not change:
 
 | Endpoint | Access | What |
